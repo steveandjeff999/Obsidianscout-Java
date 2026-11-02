@@ -153,7 +153,7 @@ export async function requireAuth() {
 
     // Verify page-level access permissions
     const currentPage = typeof document !== 'undefined' && document.body && document.body.getAttribute("data-page");
-    const superAdminPages = ["cluster-management", "storage-manager", "error-reports", "load-profiler", "server-insights", "fcm-settings", "migration"];
+    const superAdminPages = ["cluster-management", "storage-manager", "error-reports", "load-profiler", "server-insights", "fcm-settings", "migration", "redis-status"];
 
     const showToast = (msg, tone) => {
         if (window.Obsidianscout && typeof window.Obsidianscout.showToast === 'function') {

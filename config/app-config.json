@@ -95,5 +95,15 @@
             "gemma4e4b"
         ],
         "min_free_disk_mb": 2048
+    },
+    "redis": {
+        "enabled": false,
+        "host": "",
+        "port": 6379,
+        "password": "",
+        "require_password": false,
+        "max_memory_percent": 0.4,
+        "min_memory_mb": 64,
+        "max_memory_mb": 8192
     }
 }

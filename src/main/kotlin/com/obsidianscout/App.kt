@@ -157,6 +157,7 @@ fun main(args: Array<String>) {
         try {
             println("[ObsidianScout] JVM shutdown signal received. Running cleanup and database flush...")
             com.obsidianscout.admin.MdnsService.stop()
+            com.obsidianscout.cache.RedisClusterCoordinator.stop()
             DatabaseFactory.close()
             cockroachOrchestrator?.stop()
         } catch (_: Exception) {}
@@ -736,6 +737,7 @@ fun Application.module(appConfig: AppConfig) {
                 com.obsidianscout.slack.SlackNotificationRelay.start()
                 com.obsidianscout.db.LiveInvalidationRelay.start()
                 com.obsidianscout.slack.SlackSocketSupervisor.start()
+                com.obsidianscout.cache.RedisClusterCoordinator.init(appConfig)
                 consoleLog.info("[Database] Background database initialization completed successfully.")
                 
                 // Mark update boot successful once startup completes
@@ -757,6 +759,7 @@ fun Application.module(appConfig: AppConfig) {
 
     environment.monitor.subscribe(ApplicationStopped) {
         com.obsidianscout.auth.SessionCleanupScheduler.stop()
+        com.obsidianscout.cache.RedisClusterCoordinator.stop()
         com.obsidianscout.slack.SlackSocketSupervisor.stop()
         com.obsidianscout.slack.SlackNotificationRelay.stop()
         com.obsidianscout.db.LiveInvalidationRelay.stop()

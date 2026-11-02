@@ -286,6 +286,7 @@ fun Route.authRoutes() {
                         if (userUuid != null && sessionUuid != null) {
                             AuthService.revokeSession(userUuid, sessionUuid)
                         }
+                        com.obsidianscout.cache.RedisCache.evictAndBroadcast("obsidian:auth:session:${session.sessionId}")
                     }
                     call.sessions.clear<UserSession>()
                     call.respond(HttpStatusCode.NoContent)

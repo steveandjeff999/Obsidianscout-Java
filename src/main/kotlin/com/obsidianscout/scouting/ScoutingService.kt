@@ -352,6 +352,7 @@ object ScoutingService {
             }
         }
         RecentSubmissions.remember(kindKey, session, request.clientId, id.value.toString())
+        com.obsidianscout.cache.RedisCache.bumpEventVersion(meta.eventKey)
 
         completeAssignments()
 
@@ -389,7 +390,10 @@ object ScoutingService {
                 username = session.username,
                 completenessPct = completeness
             )
-        }.also { entriesChanged(session) }
+        }.also {
+            entriesChanged(session)
+            com.obsidianscout.cache.RedisCache.bumpEventVersion(it.eventKey)
+        }
     }
 
     private fun extractMeta(data: JsonObject): ScoutingEntryMeta {
@@ -509,7 +513,7 @@ object ScoutingService {
         val entryUuid = runCatching { UUID.fromString(entryId) }.getOrElse {
             throw ApiException(HttpStatusCode.BadRequest, "Invalid entry ID format")
         }
-        transaction {
+        val evKey = transaction {
             val row = ScoutingEntries.selectAll().where { ScoutingEntries.id eq entryUuid }.firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "Scouting entry not found")
 
@@ -540,7 +544,9 @@ object ScoutingService {
 
             // Recalculate discrepancies
             recalculateDiscrepancies(eventKey, matchKey, targetTeamNumber, isPrescout)
+            eventKey
         }
+        com.obsidianscout.cache.RedisCache.bumpEventVersion(evKey)
         entriesChanged(session)
     }
 

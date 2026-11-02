@@ -313,6 +313,12 @@ object SettingsService {
 
     /** The team's stored settings, never adjusted for a public data request. Use this for anything that is cached or saved. */
     fun getSettingsRaw(teamNumber: Int, program: String = "FRC"): ApiSettings {
+        val cacheKey = "obsidian:settings:$teamNumber:$program"
+        if (com.obsidianscout.cache.RedisClusterCoordinator.isReady) {
+            val cached = com.obsidianscout.cache.RedisCache.readFromRedis<ApiSettings>(cacheKey)
+            if (cached != null) return cached
+        }
+
         val (jsonText, isTeamSpecific) = readTransaction {
             // Try team-specific settings first
             val teamSettings = AppSettings
@@ -340,11 +346,15 @@ object SettingsService {
             JsonSupport.json.decodeFromString(ApiSettings.serializer(), jsonText)
         }
         val normalized = normalize(parsed)
-        return if (teamNumber != 0 && !isTeamSpecific) {
+        val result = if (teamNumber != 0 && !isTeamSpecific) {
             normalized.copy(eventCode = "", alternateEventCode = "", eventKey = "")
         } else {
             normalized
         }
+        if (com.obsidianscout.cache.RedisClusterCoordinator.isReady) {
+            com.obsidianscout.cache.RedisCache.writeToRedis(cacheKey, 300L, result)
+        }
+        return result
     }
 
     fun updateSettings(teamNumber: Int, settings: ApiSettings): ApiSettings =
@@ -417,6 +427,16 @@ object SettingsService {
                     it[settingsJson] = jsonText
                     it[updatedAt] = Instant.now()
                 }
+            }
+        }
+        com.obsidianscout.db.PostCommitHook.afterCommit {
+            if (teamNumber == 0) {
+                com.obsidianscout.cache.RedisCache.deleteByPattern("obsidian:settings:*")
+            } else {
+                com.obsidianscout.cache.RedisCache.evictAndBroadcast(
+                    "obsidian:settings:$teamNumber:$program",
+                    "obsidian:settings:0:$program"
+                )
             }
         }
         com.obsidianscout.scouting.AllianceService.clearEffectiveSettingsCache()

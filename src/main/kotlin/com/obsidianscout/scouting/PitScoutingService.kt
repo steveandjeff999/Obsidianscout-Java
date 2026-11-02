@@ -315,6 +315,7 @@ object PitScoutingService {
             }
         }
         RecentSubmissions.remember(kindKey, session, request.clientId, id.value.toString())
+        com.obsidianscout.cache.RedisCache.bumpEventVersion(meta.eventKey)
 
         completeAssignments()
 
@@ -337,7 +338,10 @@ object PitScoutingService {
                 username = session.username,
                 completenessPct = completeness
             )
-        }.also { entriesChanged(session) }
+        }.also {
+            entriesChanged(session)
+            com.obsidianscout.cache.RedisCache.bumpEventVersion(it.eventKey)
+        }
     }
 
     private fun extractMeta(data: JsonObject): PitScoutingEntryMeta {
@@ -440,7 +444,7 @@ object PitScoutingService {
         val entryUuid = runCatching { UUID.fromString(entryId) }.getOrElse {
             throw ApiException(HttpStatusCode.BadRequest, "Invalid entry ID format")
         }
-        transaction {
+        val evKey = transaction {
             val row = PitScoutingEntries.selectAll().where { PitScoutingEntries.id eq entryUuid }.firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "Pit scouting entry not found")
 
@@ -469,7 +473,9 @@ object PitScoutingService {
             EntrySync.recordDeletions(EntrySync.KIND_PIT, listOf(entryId), ownerTeam, row[PitScoutingEntries.program])
 
             recalculateDiscrepancies(eventKey, targetTeamNumber, isPrescout)
+            eventKey
         }
+        com.obsidianscout.cache.RedisCache.bumpEventVersion(evKey)
         entriesChanged(session)
     }
 

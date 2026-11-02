@@ -101,6 +101,13 @@ suspend fun ApplicationCall.requireSession(): UserSession {
             sessions.clear<UserSession>()
             throw ApiException(HttpStatusCode.Unauthorized, "Invalid user")
         }
+        val sessionCacheKey = if (!session.sessionId.isNullOrBlank()) "obsidian:auth:session:${session.sessionId}" else null
+        if (sessionCacheKey != null && com.obsidianscout.cache.RedisClusterCoordinator.isReady) {
+            val cached = com.obsidianscout.cache.RedisCache.readFromRedis<UserSession>(sessionCacheKey)
+            if (cached != null) {
+                return cached
+            }
+        }
         // If quorum is lost, trust the cryptographically HMAC-signed session cookie,
         // and only check that the user exists in Users without touching other range tables.
         if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
@@ -244,6 +251,9 @@ suspend fun ApplicationCall.requireSession(): UserSession {
         // cookie still lapses at its original time and signs an active user out mid-session.
         if (!effectiveSession.sessionId.isNullOrBlank() && AuthService.touchSession(effectiveSession.sessionId)) {
             runCatching { sessions.set(effectiveSession) }
+        }
+        if (sessionCacheKey != null && com.obsidianscout.cache.RedisClusterCoordinator.isReady) {
+            com.obsidianscout.cache.RedisCache.writeToRedis(sessionCacheKey, 5L, effectiveSession)
         }
         return effectiveSession
     }

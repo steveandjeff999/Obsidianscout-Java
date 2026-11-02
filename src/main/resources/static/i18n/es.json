@@ -1736,6 +1736,7 @@
   "nav.default_configs": "Configuraciones Predeterminadas",
   "nav.docs": "Documentación",
   "nav.error-reports": "Informes de Errores",
+  "nav.redis-status": "Caché Redis",
   "nav.load-profiler": "Perfil de Carga",
   "nav.server-insights": "Información del Servidor",
   "nav.error_reports": "Informes de Errores",

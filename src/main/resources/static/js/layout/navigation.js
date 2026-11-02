@@ -228,7 +228,7 @@ export function updateSectionHeaderVisibility(sidebar) {
 export function adjustNavForRole(user) {
     if (!user || isPublicMode()) return;
     const role = user.role;
-    const superAdminPages = ["cluster-management", "storage-manager", "error-reports", "load-profiler", "server-insights", "fcm-settings", "migration", "default-configs"];
+    const superAdminPages = ["cluster-management", "storage-manager", "error-reports", "load-profiler", "server-insights", "fcm-settings", "migration", "default-configs", "redis-status"];
 
     // Reset all standard links to visible first before applying role restrictions
     document.querySelectorAll('.sidebar-link[data-page]').forEach((link) => {

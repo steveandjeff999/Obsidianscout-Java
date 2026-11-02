@@ -29,7 +29,8 @@ data class AppConfig(
     val gist_update: GistUpdateConfig = GistUpdateConfig(),
     val quorum_fallback: QuorumFallbackConfig = QuorumFallbackConfig(),
     val auto_backup: AutoBackupConfig = AutoBackupConfig(),
-    val local_ai: LocalAiConfig = LocalAiConfig()
+    val local_ai: LocalAiConfig = LocalAiConfig(),
+    val redis: RedisConfig = RedisConfig()
 ) {
     fun getEffectiveSiteUrl(): String {
         val trimmed = site_url.trim()
@@ -68,6 +69,19 @@ data class LocalAiConfig(
     val auto_install_tiers: List<String> = listOf("lite", "gemma4e2b", "gemma4e4b"),
     /** Installs are refused when they would leave less than this much free disk space. */
     val min_free_disk_mb: Long = 2048
+)
+
+@Serializable
+data class RedisConfig(
+    val enabled: Boolean = false,
+    val host: String = "",
+    val port: Int = 6379,
+    val password: String = "",
+    /** False runs Redis with no password, relying on it only listening on loopback and the Tailscale IP. */
+    val require_password: Boolean = true,
+    val max_memory_percent: Double = 0.40,
+    val min_memory_mb: Long = 64L,
+    val max_memory_mb: Long = 8192L
 )
 
 @Serializable
@@ -285,6 +299,26 @@ object AppConfigLoader {
                 consoleLog.info("[ObsidianScout] Saved updated auto backup configuration to ${path.toAbsolutePath()}")
             } catch (e: Exception) {
                 consoleLog.error("[ObsidianScout] Warning: Failed to save auto backup configuration: ${e.message}")
+            }
+        }
+    }
+
+    /** Writes [newConfig] as the redis section of app-config.json. Returns the saved config, or null if the write failed. */
+    fun saveRedisConfig(newConfig: RedisConfig, path: Path = defaultPath): AppConfig? {
+        synchronized(this) {
+            return try {
+                val current = load(path, forceReload = true)
+                val updated = current.copy(redis = newConfig)
+                val updatedText = JsonSupport.json.encodeToString(stripSecrets(updated))
+                com.obsidianscout.utils.SafeFileUtils.atomicWriteString(path, updatedText)
+                if (path == defaultPath) {
+                    cachedConfig = updated
+                }
+                consoleLog.info("[ObsidianScout] Saved updated Redis configuration to ${path.toAbsolutePath()}")
+                updated
+            } catch (e: Exception) {
+                consoleLog.error("[ObsidianScout] Warning: Failed to save Redis configuration: ${e.message}")
+                null
             }
         }
     }

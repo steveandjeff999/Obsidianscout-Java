@@ -1736,6 +1736,7 @@
   "nav.default_configs": "הגדרות ברירת מחדל",
   "nav.docs": "תיעוד",
   "nav.error-reports": "דוחות שגיאות",
+  "nav.redis-status": "מטמון Redis",
   "nav.load-profiler": "מדידת עומס",
   "nav.server-insights": "תובנות שרת",
   "nav.error_reports": "דוחות שגיאות",

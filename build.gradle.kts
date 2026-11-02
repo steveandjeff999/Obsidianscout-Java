@@ -61,6 +61,7 @@ dependencies {
     implementation("org.apache.httpcomponents:httpclient:4.5.14")
     implementation("com.webauthn4j:webauthn4j-core:0.31.11.RELEASE")
     implementation("org.jmdns:jmdns:3.6.1")
+    implementation("redis.clients:jedis:5.2.0")
     testImplementation(kotlin("test"))
 }
 

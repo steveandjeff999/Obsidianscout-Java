@@ -1353,6 +1353,137 @@ object ClusterManagementService {
         }
     }
 
+    /** This node's saved Redis settings plus whether its cache is up. */
+    fun getLocalRedisConfig(): com.obsidianscout.routes.RedisNodeConfigDto {
+        val redis = AppConfigLoader.load().redis
+        return com.obsidianscout.routes.RedisNodeConfigDto(
+            nodeIp = getLocalTailscaleIp(),
+            isLocal = true,
+            enabled = redis.enabled,
+            requirePassword = redis.require_password,
+            host = redis.host,
+            port = redis.port,
+            passwordSet = redis.password.isNotBlank(),
+            maxMemoryPercent = redis.max_memory_percent,
+            minMemoryMb = redis.min_memory_mb,
+            maxMemoryMb = redis.max_memory_mb,
+            isReady = com.obsidianscout.cache.RedisClusterCoordinator.isReady,
+            isHost = com.obsidianscout.cache.RedisClusterCoordinator.isHost
+        )
+    }
+
+    /** Every node's Redis settings, so the Redis Cache page can show nodes that disagree. */
+    suspend fun getClusterRedisConfig(): List<com.obsidianscout.routes.RedisNodeConfigDto> = withContext(Dispatchers.IO) {
+        val cluster = getClusterNodes()
+        val localIp = getLocalTailscaleIp()
+
+        coroutineScope {
+            cluster.nodes.map { node ->
+                async {
+                    if (node.isLocal || node.ip == localIp) {
+                        getLocalRedisConfig()
+                    } else {
+                        val appPort = if (node.appPort > 0) node.appPort else AppConfigLoader.load().server.port
+                        val url = "http://${node.ip}:$appPort/api/admin/cluster/nodes/local/redis/config"
+                        try {
+                            val req = buildSignedClusterRequest(url, "GET")
+                                .timeout(Duration.ofSeconds(4))
+                                .GET()
+                                .build()
+                            val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
+                            if (resp.statusCode() == 200) {
+                                JsonSupport.json.decodeFromString<com.obsidianscout.routes.RedisNodeConfigDto>(resp.body())
+                                    .copy(isLocal = false, nodeIp = node.ip)
+                            } else {
+                                com.obsidianscout.routes.RedisNodeConfigDto(nodeIp = node.ip, isLocal = false, reachable = false, error = "HTTP ${resp.statusCode()}")
+                            }
+                        } catch (e: Exception) {
+                            com.obsidianscout.routes.RedisNodeConfigDto(nodeIp = node.ip, isLocal = false, reachable = false, error = e.message ?: "Offline")
+                        }
+                    }
+                }
+            }.awaitAll()
+        }
+    }
+
+    /** Merges [req] onto [current], or returns why it can't be saved. */
+    private fun mergeRedisConfig(current: com.obsidianscout.config.RedisConfig, req: com.obsidianscout.routes.RedisConfigUpdateRequest): Result<com.obsidianscout.config.RedisConfig> {
+        val merged = current.copy(
+            enabled = req.enabled ?: current.enabled,
+            require_password = req.requirePassword ?: current.require_password,
+            host = req.host?.trim() ?: current.host,
+            port = req.port ?: current.port,
+            password = when {
+                req.clearPassword -> ""
+                !req.password.isNullOrBlank() -> req.password
+                else -> current.password
+            },
+            max_memory_percent = req.maxMemoryPercent ?: current.max_memory_percent,
+            min_memory_mb = req.minMemoryMb ?: current.min_memory_mb,
+            max_memory_mb = req.maxMemoryMb ?: current.max_memory_mb
+        )
+        val problem = when {
+            merged.port !in 1..65535 -> "Port must be between 1 and 65535."
+            merged.max_memory_percent !in 0.01..0.95 -> "Memory percent must be between 1% and 95%."
+            merged.min_memory_mb < 16 -> "Minimum memory must be at least 16 MB."
+            merged.max_memory_mb < merged.min_memory_mb -> "Maximum memory must be at least the minimum."
+            merged.host.any { it.isWhitespace() || it == ':' } -> "Host must be a hostname or IP address without a port."
+            else -> null
+        }
+        return if (problem != null) Result.failure(IllegalArgumentException(problem)) else Result.success(merged)
+    }
+
+    /** Saves [req] into this node's app-config.json and restarts its Redis coordination with it. */
+    fun applyLocalRedisConfig(req: com.obsidianscout.routes.RedisConfigUpdateRequest): ActionResultResponse {
+        val localIp = getLocalTailscaleIp()
+        val merged = mergeRedisConfig(AppConfigLoader.load(forceReload = true).redis, req)
+            .getOrElse { return ActionResultResponse(false, it.message ?: "Invalid Redis settings.", localIp) }
+        val saved = AppConfigLoader.saveRedisConfig(merged)
+            ?: return ActionResultResponse(false, "Could not write app-config.json on $localIp.", localIp)
+        com.obsidianscout.cache.RedisClusterCoordinator.applyConfig(saved)
+        return ActionResultResponse(true, "Saved and applied on $localIp.", localIp)
+    }
+
+    /** Applies [req] on every node. Each node merges it onto its own settings, so unset fields stay per node. */
+    suspend fun pushRedisConfigToCluster(req: com.obsidianscout.routes.RedisConfigUpdateRequest): List<ActionResultResponse> = withContext(Dispatchers.IO) {
+        // Check it once here so a bad value fails up front instead of on every node.
+        mergeRedisConfig(AppConfigLoader.load().redis, req).onFailure {
+            return@withContext listOf(ActionResultResponse(false, it.message ?: "Invalid Redis settings.", getLocalTailscaleIp()))
+        }
+        val cluster = getClusterNodes()
+        val localIp = getLocalTailscaleIp()
+        val bodyBytes = JsonSupport.json.encodeToString(com.obsidianscout.routes.RedisConfigUpdateRequest.serializer(), req)
+            .toByteArray(StandardCharsets.UTF_8)
+
+        coroutineScope {
+            cluster.nodes.map { node ->
+                async {
+                    if (node.isLocal || node.ip == localIp) {
+                        applyLocalRedisConfig(req)
+                    } else {
+                        val appPort = if (node.appPort > 0) node.appPort else AppConfigLoader.load().server.port
+                        val url = "http://${node.ip}:$appPort/api/admin/cluster/nodes/local/redis/config"
+                        try {
+                            val httpReq = buildSignedClusterRequest(url, "PUT", bodyBytes)
+                                .timeout(Duration.ofSeconds(6))
+                                .header("Content-Type", "application/json")
+                                .PUT(HttpRequest.BodyPublishers.ofByteArray(bodyBytes))
+                                .build()
+                            val resp = getHttpClient().send(httpReq, HttpResponse.BodyHandlers.ofString())
+                            if (resp.statusCode() == 200) {
+                                JsonSupport.json.decodeFromString<ActionResultResponse>(resp.body())
+                            } else {
+                                ActionResultResponse(false, "Remote server returned HTTP ${resp.statusCode()}", node.ip)
+                            }
+                        } catch (e: Exception) {
+                            ActionResultResponse(false, "Failed to update ${node.ip}: ${e.message}", node.ip)
+                        }
+                    }
+                }
+            }.awaitAll()
+        }
+    }
+
     suspend fun createNodeSnapshot(targetIp: String): com.obsidianscout.db.SnapshotResult = withContext(Dispatchers.IO) {
         val localIp = getLocalTailscaleIp()
         val isLocal = (targetIp == localIp || targetIp == "127.0.0.1" || targetIp == "local" || targetIp.isBlank())

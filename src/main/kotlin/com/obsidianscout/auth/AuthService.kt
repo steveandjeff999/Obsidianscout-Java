@@ -622,6 +622,16 @@ object AuthService {
                 }
             }
 
+            if (changesUserRow) {
+                runCatching {
+                    val userSessionIds = UserSessions.select(UserSessions.id).where { UserSessions.userId eq targetUuid }
+                        .map { it[UserSessions.id].value.toString() }
+                    if (userSessionIds.isNotEmpty()) {
+                        val keys = userSessionIds.map { "obsidian:auth:session:$it" }.toTypedArray()
+                        com.obsidianscout.cache.RedisCache.evictAndBroadcast(*keys)
+                    }
+                }
+            }
             val updated = Users.selectAll().where { Users.id eq targetUuid }.first()
             if (clearProfilePicture || newProfilePicture != null) com.obsidianscout.db.ChatService.forgetAvatar(targetUuid)
             if (newRole != null || newNonScoutingToolsEnabled != null || newTeamNumber != null) {
@@ -748,7 +758,15 @@ object AuthService {
             // Delete password reset tokens, sessions, push tokens, and passkeys for the target user
             PasswordResetTokens.deleteWhere { userId eq targetUuid }
             com.obsidianscout.db.WidgetTokens.deleteWhere { com.obsidianscout.db.WidgetTokens.userId eq targetUuid }
-            UserSessions.deleteWhere { userId eq targetUuid }
+            val targetSessionIds = runCatching {
+                UserSessions.select(UserSessions.id).where { UserSessions.userId eq targetUuid }
+                    .map { it[UserSessions.id].value.toString() }
+            }.getOrDefault(emptyList())
+            runCatching { UserSessions.deleteWhere { userId eq targetUuid } }
+            if (targetSessionIds.isNotEmpty()) {
+                val keys = targetSessionIds.map { "obsidian:auth:session:$it" }.toTypedArray()
+                com.obsidianscout.cache.RedisCache.evictAndBroadcast(*keys)
+            }
             PushSubscriptions.deleteWhere { userId eq targetUuid }
             FcmDeviceTokens.deleteWhere { userId eq targetUuid }
             PasskeyCredentials.deleteWhere { userId eq targetUuid }
@@ -892,38 +910,66 @@ object AuthService {
     }
 
     fun revokeSession(userId: UUID, sessionId: UUID): Boolean {
-        return transaction {
+        val deleted = transaction {
             // The device's home-screen widget token dies with its login.
             com.obsidianscout.db.WidgetTokens.deleteWhere { com.obsidianscout.db.WidgetTokens.sessionId eq sessionId }
             UserSessions.deleteWhere {
                 (UserSessions.id eq sessionId) and (UserSessions.userId eq userId)
             } > 0
         }
+        if (deleted) {
+            com.obsidianscout.cache.RedisCache.evictAndBroadcast("obsidian:auth:session:$sessionId")
+        }
+        return deleted
     }
 
     fun revokeAllOtherSessions(userId: UUID, currentSessionId: String?): Int {
         val currentUuid = currentSessionId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
         com.obsidianscout.widgets.WidgetTokenService.revokeForUser(userId, keepSessionId = currentUuid)
-        return transaction {
-            if (currentUuid != null) {
-                UserSessions.deleteWhere {
-                    (UserSessions.userId eq userId) and (UserSessions.id neq currentUuid)
+        val revokedIds = transaction {
+            runCatching {
+                val query = if (currentUuid != null) {
+                    UserSessions.select(UserSessions.id).where { (UserSessions.userId eq userId) and (UserSessions.id neq currentUuid) }
+                } else {
+                    UserSessions.select(UserSessions.id).where { UserSessions.userId eq userId }
                 }
-            } else {
-                UserSessions.deleteWhere {
-                    UserSessions.userId eq userId
+                val ids = query.map { it[UserSessions.id].value.toString() }
+                if (currentUuid != null) {
+                    UserSessions.deleteWhere {
+                        (UserSessions.userId eq userId) and (UserSessions.id neq currentUuid)
+                    }
+                } else {
+                    UserSessions.deleteWhere {
+                        UserSessions.userId eq userId
+                    }
                 }
-            }
+                ids
+            }.getOrDefault(emptyList())
         }
+        if (revokedIds.isNotEmpty()) {
+            val keys = revokedIds.map { "obsidian:auth:session:$it" }.toTypedArray()
+            com.obsidianscout.cache.RedisCache.evictAndBroadcast(*keys)
+        }
+        return revokedIds.size
     }
 
     fun revokeAllSessions(userId: UUID): Int {
         com.obsidianscout.widgets.WidgetTokenService.revokeForUser(userId)
-        return transaction {
-            UserSessions.deleteWhere {
-                UserSessions.userId eq userId
-            }
+        val revokedIds = transaction {
+            runCatching {
+                val ids = UserSessions.select(UserSessions.id).where { UserSessions.userId eq userId }
+                    .map { it[UserSessions.id].value.toString() }
+                UserSessions.deleteWhere {
+                    UserSessions.userId eq userId
+                }
+                ids
+            }.getOrDefault(emptyList())
         }
+        if (revokedIds.isNotEmpty()) {
+            val keys = revokedIds.map { "obsidian:auth:session:$it" }.toTypedArray()
+            com.obsidianscout.cache.RedisCache.evictAndBroadcast(*keys)
+        }
+        return revokedIds.size
     }
 
     /**

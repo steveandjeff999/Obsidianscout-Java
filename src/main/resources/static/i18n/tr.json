@@ -1736,6 +1736,7 @@
   "nav.default_configs": "Varsayılan Yapılandırmalar",
   "nav.docs": "Belgeler",
   "nav.error-reports": "Hata Raporları",
+  "nav.redis-status": "Redis Önbelleği",
   "nav.load-profiler": "Yük Profili",
   "nav.server-insights": "Sunucu Bilgileri",
   "nav.error_reports": "Hata Raporları",

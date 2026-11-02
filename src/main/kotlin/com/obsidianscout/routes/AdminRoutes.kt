@@ -66,6 +66,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
@@ -1020,6 +1021,105 @@ fun Route.adminRoutes() {
                         call.requireSuperAdminOrClusterAuth()
                         val minutes = call.request.queryParameters["minutes"]?.toIntOrNull() ?: 15
                         call.respond(com.obsidianscout.admin.LoadProfiler.localProfile(minutes))
+                    }
+
+                    // Redis Cluster Status & Management
+                    get("/redis/status") {
+                        call.requireSuperAdminOrClusterAuth()
+                        val isReady = com.obsidianscout.cache.RedisClusterCoordinator.isReady
+                        val isHost = com.obsidianscout.cache.RedisClusterCoordinator.isHost
+                        val activeEndpoint = com.obsidianscout.cache.RedisClusterCoordinator.activeEndpoint
+                        val canHost = com.obsidianscout.cache.RedisClusterCoordinator.canHostRedis
+                        val holder = com.obsidianscout.integrations.ClusterLease.holderOf("redis_host")
+                        val assessment = com.obsidianscout.cache.RedisMemoryAutoSizer.calculateOptimalMaxMemory()
+
+                        var usedMemMb = 0L
+                        if (isReady) {
+                            runCatching {
+                                com.obsidianscout.cache.RedisClusterCoordinator.getJedis().use { jedis ->
+                                    val info = jedis.info("memory")
+                                    val usedBytes = info.lineSequence()
+                                        .firstOrNull { it.startsWith("used_memory:") }
+                                        ?.substringAfter(":")?.trim()?.toLongOrNull() ?: 0L
+                                    usedMemMb = usedBytes / (1024 * 1024)
+                                }
+                            }
+                        }
+
+                        call.respond(
+                            buildJsonObject {
+                                put("is_ready", isReady)
+                                put("is_host", isHost)
+                                put("can_host_redis", canHost)
+                                put("active_endpoint", activeEndpoint ?: "None")
+                                put("lease_holder", holder ?: "None")
+                                put("hits", com.obsidianscout.cache.RedisCache.hits.sum())
+                                put("misses", com.obsidianscout.cache.RedisCache.misses.sum())
+                                put("stampedes_avoided", com.obsidianscout.cache.RedisCache.stampedesAvoided.sum())
+                                put("evictions", com.obsidianscout.cache.RedisCache.evictions.sum())
+                                put("used_memory_mb", usedMemMb)
+                                putJsonObject("memory_assessment") {
+                                    put("totalOsMb", assessment.totalOsMb)
+                                    put("availableOsMb", assessment.availableOsMb)
+                                    put("jvmMaxMb", assessment.jvmMaxMb)
+                                    put("recommendedRedisMb", assessment.recommendedRedisMb)
+                                    put("evictionPolicy", assessment.evictionPolicy)
+                                }
+                            }
+                        )
+                    }
+
+                    post("/redis/purge") {
+                        call.requireSuperAdmin()
+                        if (com.obsidianscout.cache.RedisClusterCoordinator.isReady) {
+                            runCatching {
+                                com.obsidianscout.cache.RedisClusterCoordinator.getJedis().use { jedis ->
+                                    jedis.flushAll()
+                                }
+                            }
+                        }
+                        com.obsidianscout.cache.RedisCache.evictAndBroadcast("*")
+                        call.respond(mapOf("status" to "ok", "message" to "Redis cache successfully flushed and invalidation broadcast."))
+                    }
+
+                    post("/redis/failover") {
+                        call.requireSuperAdmin()
+                        com.obsidianscout.cache.RedisClusterCoordinator.triggerFailover()
+                        call.respond(mapOf("status" to "ok", "message" to "Lease resigned. Standby failover initiated."))
+                    }
+
+                    post("/redis/resize") {
+                        call.requireSuperAdmin()
+                        val assessment = com.obsidianscout.cache.RedisMemoryAutoSizer.calculateOptimalMaxMemory()
+                        if (com.obsidianscout.cache.RedisClusterCoordinator.isHost && com.obsidianscout.cache.RedisClusterCoordinator.isReady) {
+                            runCatching {
+                                com.obsidianscout.cache.RedisClusterCoordinator.getJedis().use { jedis ->
+                                    jedis.configSet("maxmemory", (assessment.recommendedRedisMb * 1024 * 1024).toString())
+                                    jedis.configSet("maxmemory-policy", "allkeys-lru")
+                                }
+                            }
+                        }
+                        call.respond(mapOf("status" to "ok", "maxmemory_mb" to assessment.recommendedRedisMb.toString()))
+                    }
+
+                    // Redis settings in app-config.json, read and written on every node at once
+                    get("/redis/config") {
+                        call.requireSuperAdmin()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.getClusterRedisConfig())
+                    }
+                    put("/redis/config") {
+                        call.requireSuperAdmin()
+                        val req = call.receive<RedisConfigUpdateRequest>()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.pushRedisConfigToCluster(req))
+                    }
+                    get("/nodes/local/redis/config") {
+                        call.requireSuperAdminOrClusterAuth()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.getLocalRedisConfig())
+                    }
+                    put("/nodes/local/redis/config") {
+                        call.requireSuperAdminOrClusterAuth()
+                        val req = call.receive<RedisConfigUpdateRequest>()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.applyLocalRedisConfig(req))
                     }
 
                     // Quorum Fallback Mirror Management

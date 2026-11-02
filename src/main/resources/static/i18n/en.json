@@ -1736,6 +1736,7 @@
   "nav.default_configs": "Default Configs",
   "nav.docs": "Docs",
   "nav.error-reports": "Error Reports",
+  "nav.redis-status": "Redis Cache",
   "nav.load-profiler": "Load Profiler",
   "nav.server-insights": "Server Insights",
   "nav.error_reports": "Error Reports",

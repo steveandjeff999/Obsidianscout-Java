@@ -1879,10 +1879,13 @@ fun <T> writeTransactionWithRetry(
     val targetDb = db ?: DatabaseFactory.primaryDatabase
     var lastException: Throwable? = null
     for (attempt in 0 until maxAttempts) {
+        val postCommitActions = PostCommitHook.pushScope()
         try {
-            return transaction(db = targetDb) {
+            val result = transaction(db = targetDb) {
                 statement()
             }
+            postCommitActions.forEach { runCatching { it() } }
+            return result
         } catch (e: Throwable) {
             val msg = e.message?.lowercase() ?: ""
             val isBusyOrLocked = msg.contains("sqlite_busy") ||
@@ -1901,6 +1904,8 @@ fun <T> writeTransactionWithRetry(
             } else {
                 throw e
             }
+        } finally {
+            PostCommitHook.popScope()
         }
     }
     throw lastException ?: IllegalStateException("Transaction failed after $maxAttempts attempts")

@@ -1190,6 +1190,40 @@ data class UpdateAutoBackupConfigRequest(
     val targetIp: String? = null
 )
 
+/** A change to the redis section of app-config.json. Null fields keep the node's current value. */
+@Serializable
+data class RedisConfigUpdateRequest(
+    val enabled: Boolean? = null,
+    val requirePassword: Boolean? = null,
+    val host: String? = null,
+    val port: Int? = null,
+    /** A new password. Null or blank keeps the stored one; use [clearPassword] to remove it. */
+    val password: String? = null,
+    val clearPassword: Boolean = false,
+    val maxMemoryPercent: Double? = null,
+    val minMemoryMb: Long? = null,
+    val maxMemoryMb: Long? = null
+)
+
+/** One node's saved Redis settings and live state. The password itself is never sent, only whether one is set. */
+@Serializable
+data class RedisNodeConfigDto(
+    val nodeIp: String,
+    val isLocal: Boolean,
+    val reachable: Boolean = true,
+    val error: String? = null,
+    val enabled: Boolean = false,
+    val requirePassword: Boolean = true,
+    val host: String = "",
+    val port: Int = 6379,
+    val passwordSet: Boolean = false,
+    val maxMemoryPercent: Double = 0.40,
+    val minMemoryMb: Long = 64L,
+    val maxMemoryMb: Long = 8192L,
+    val isReady: Boolean = false,
+    val isHost: Boolean = false
+)
+
 @Serializable
 data class ToggleAutoBackupRequest(
     val targetIp: String = "local",
