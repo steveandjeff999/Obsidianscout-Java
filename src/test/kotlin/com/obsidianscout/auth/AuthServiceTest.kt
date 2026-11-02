@@ -41,6 +41,49 @@ class AuthServiceTest {
     }
 
     @Test
+    fun theProfileCarriesAPictureLinkNotTheImage() {
+        val user = AuthService.register(username = "pictured", teamNumber = 1234, password = "Password123!")
+        val uuid = java.util.UUID.fromString(user.id)
+        val image = "data:image/png;base64," + "A".repeat(400_000)
+        transaction { Users.update({ Users.id eq uuid }) { it[profilePicture] = image } }
+
+        val profile = AuthService.getUserProfile(user.id)
+
+        assertNotNull(profile)
+        assertEquals("pictured", profile.username)
+        assertEquals(com.obsidianscout.db.ChatService.avatarUrl(uuid, image), profile.profilePicture)
+        assertEquals(true, profile.profilePicture!!.length < 100)
+        assertEquals(profile.profilePicture, AuthService.avatarReference(user.copy(profilePicture = image)))
+    }
+
+    @Test
+    fun aProfileWithoutAPictureHasNoLink() {
+        val user = AuthService.register(username = "plain", teamNumber = 1234, password = "Password123!")
+
+        assertNull(AuthService.getUserProfile(user.id)?.profilePicture)
+        assertNull(AuthService.getUserProfile("not-a-uuid"))
+    }
+
+    @Test
+    fun aMigratedPictureThatIsAlreadyAPathStaysAsItIs() {
+        val user = AuthService.register(username = "legacy", teamNumber = 1234, password = "Password123!")
+        val uuid = java.util.UUID.fromString(user.id)
+        transaction { Users.update({ Users.id eq uuid }) { it[profilePicture] = "img/avatars/legacy.png" } }
+
+        assertEquals("img/avatars/legacy.png", AuthService.getUserProfile(user.id)?.profilePicture)
+    }
+
+    @Test
+    fun noAuthResponseEmbedsTheStoredImage() {
+        val projectDir = System.getProperty("obsidianscout.projectDir")
+        val routes = File(projectDir, "src/main/kotlin/com/obsidianscout/routes/AuthRoutes.kt").readText()
+
+        // The single remaining use is /me, whose record comes from getUserProfile and already holds the link.
+        assertEquals(1, Regex("profilePicture = user\\.profilePicture").findAll(routes).count())
+        assertEquals(false, "call.respond(updated)" in routes)
+    }
+
+    @Test
     fun testCrossProgramAuthenticationIsolation() {
         try {
             // Register an FRC user

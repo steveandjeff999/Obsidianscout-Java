@@ -234,6 +234,17 @@ class ServerAnalyticsServiceTest {
     }
 
     @Test
+    fun `a refused request counts with the status it was refused with, not as a server error`() {
+        fun refused(status: io.ktor.http.HttpStatusCode) = com.obsidianscout.auth.ApiException(status, "no")
+
+        assertEquals(401, com.obsidianscout.finalStatus(null, refused(io.ktor.http.HttpStatusCode.Unauthorized)))
+        assertEquals(429, com.obsidianscout.finalStatus(null, refused(io.ktor.http.HttpStatusCode.TooManyRequests)))
+        assertEquals(500, com.obsidianscout.finalStatus(null, IllegalStateException("broken")))
+        assertEquals(404, com.obsidianscout.finalStatus(null, null))
+        assertEquals(200, com.obsidianscout.finalStatus(200, null))
+    }
+
+    @Test
     fun `analytics routes open to a browser accept superadmins only`() {
         val projectDir = System.getProperty("obsidianscout.projectDir")
         val routes = java.io.File(projectDir, "src/main/kotlin/com/obsidianscout/routes/AdminRoutes.kt").readText()
@@ -242,6 +253,14 @@ class ServerAnalyticsServiceTest {
             val firstLine = routes.substringAfter("get(\"$path\") {").trim().lineSequence().first().trim()
             assertEquals("call.requireSuperAdmin()", firstLine, path)
         }
+    }
+
+    @Test
+    fun `the fallback thread dump lists real threads and stacks`() {
+        val dump = ServerAnalyticsService.getPlainThreadDump()
+
+        assertTrue("\"${Thread.currentThread().name}\"" in dump)
+        assertTrue("getPlainThreadDump" in dump)
     }
 
     @Test

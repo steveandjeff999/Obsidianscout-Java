@@ -1027,6 +1027,25 @@ object AuthService {
         }
     }
 
+    /**
+     * The user as their own client sees them: the picture is a URL rather than the image, which can be up to 1 MB and
+     * would otherwise go out with every /api/auth/me. Only reads the stored picture when its length changed.
+     */
+    fun getUserProfile(userId: String): UserRecord? {
+        val uuid = runCatching { UUID.fromString(userId) }.getOrNull() ?: return null
+        return readTransaction {
+            Users.select(Users.columns - Users.profilePicture).where { Users.id eq uuid }
+                .limit(1)
+                .map { rowToUser(it) }
+                .firstOrNull()
+                ?.copy(profilePicture = com.obsidianscout.db.ChatService.avatarUrls(listOf(uuid))[uuid])
+        }
+    }
+
+    /** [user]'s picture as a URL, for responses built from a record that already holds the image. */
+    fun avatarReference(user: UserRecord): String? =
+        com.obsidianscout.db.ChatService.avatarUrl(UUID.fromString(user.id), user.profilePicture)
+
     internal fun rowToUser(row: ResultRow): UserRecord {
         return UserRecord(
             id = row[Users.id].value.toString(),
@@ -1040,7 +1059,7 @@ object AuthService {
             },
             createdAt = row[Users.createdAt].toString(),
             email = row[Users.email],
-            profilePicture = row[Users.profilePicture],
+            profilePicture = row.getOrNull(Users.profilePicture),
             notificationPreference = row[Users.notificationPreference],
             tourProgress = row[Users.tourProgress],
             nodeAlertsEnabled = row.getOrNull(Users.nodeAlertsEnabled) ?: false,

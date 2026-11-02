@@ -264,6 +264,7 @@ fun Route.staticWebRoutes() {
             "storage-manager" to "storage-manager.html",
             "error-reports" to "error-reports.html",
             "load-profiler" to "load-profiler.html",
+            "server-insights" to "server-insights.html",
             "fcm-settings" to "fcm-settings.html",
             "default-configs" to "default-configs.html",
             "backup" to "backup.html",

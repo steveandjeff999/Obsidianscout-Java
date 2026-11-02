@@ -1737,6 +1737,7 @@
   "nav.docs": "Docs",
   "nav.error-reports": "Error Reports",
   "nav.load-profiler": "Load Profiler",
+  "nav.server-insights": "Server Insights",
   "nav.error_reports": "Error Reports",
   "nav.event-predictor": "Event Predictor",
   "nav.event_predictor": "Event Predictor",

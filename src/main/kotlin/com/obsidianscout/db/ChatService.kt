@@ -97,9 +97,12 @@ object ChatService {
     /**
      * Chat messages reference the sender's picture by URL (served by GET /api/users/{id}/avatar)
      * instead of embedding the image in every message. The version changes when the picture does.
+     * Only a data URL can be served from there; anything else (a migrated path, say) is already a reference.
      */
     internal fun avatarUrl(userId: UUID, picture: String?): String? =
-        picture?.takeIf { it.isNotBlank() }?.let { "/api/users/$userId/avatar?v=${Integer.toHexString(it.hashCode())}" }
+        picture?.takeIf { it.isNotBlank() }?.let {
+            if (it.startsWith("data:")) "/api/users/$userId/avatar?v=${Integer.toHexString(it.hashCode())}" else it
+        }
 
     /** userId -> (picture length, avatar URL), so a picture (up to 1 MB) is only read again when its length changes. */
     private val avatarUrlCache = java.util.concurrent.ConcurrentHashMap<UUID, Pair<Int, String?>>()

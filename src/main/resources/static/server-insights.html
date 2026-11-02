@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>ObsidianScout | Server Insights</title>
+
+    <link rel="stylesheet" href="/css/app.css" />
+    <style>
+        .si-controls {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+
+        .si-field label {
+            display: block;
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 4px;
+        }
+
+        .si-section {
+            margin-top: 20px;
+        }
+
+        .si-section h2 {
+            margin-top: 0;
+            font-size: 18px;
+        }
+
+        .si-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .si-stat {
+            background: var(--surface-2);
+            padding: 14px;
+            border-radius: var(--radius-sm, 12px);
+            border: 1px solid var(--border);
+            min-width: 0;
+        }
+
+        .si-stat-label,
+        .si-stat-detail {
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .si-stat-value {
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--ink);
+            margin: 4px 0;
+            font-variant-numeric: tabular-nums;
+            overflow-wrap: anywhere;
+        }
+
+        .si-alert .si-stat-value {
+            color: #d92d20;
+        }
+
+        .si-breakdown {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .si-chip {
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            color: var(--ink);
+        }
+
+        .si-number {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .si-dump {
+            width: min(900px, calc(100vw - 32px));
+            max-height: 85vh;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm, 12px);
+            background: var(--surface);
+            color: var(--ink);
+            padding: 16px;
+        }
+
+        .si-dump-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .si-dump pre {
+            margin: 0;
+            max-height: 65vh;
+            overflow: auto;
+            font-size: 12px;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+    </style>
+    <link rel="manifest" href="/manifest.json" />
+</head>
+<body data-page="server-insights">
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+
+    <div class="app-shell">
+        <aside class="sidebar"></aside>
+
+        <main class="main-content">
+            <div id="superadmin-locked" class="card hidden">
+                <h2>Superadmin Access Required</h2>
+                <p class="notice">Server Insights is restricted to system superadministrators.</p>
+                <div class="mt-16">
+                    <a href="/admin-settings" class="btn secondary">&larr; Return to Admin Settings</a>
+                </div>
+            </div>
+
+            <div id="insights-panel">
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
+                        <div>
+                            <h1 style="margin: 0; font-size: 24px;">Server Insights</h1>
+                            <p class="notice" style="margin-top: 4px; margin-bottom: 0;">
+                                Database pool, sockets, client fleet, JVM and security, refreshed every 10 seconds. Held in memory, so a restart clears it.
+                            </p>
+                        </div>
+                        <div class="si-controls">
+                            <div class="si-field hidden" id="insights-node-field">
+                                <label for="insights-node">Node</label>
+                                <select id="insights-node"></select>
+                            </div>
+                            <a href="/load-profiler" class="btn ghost" style="text-decoration: none;">Load Profiler</a>
+                            <a href="/cluster-management" class="btn ghost" style="text-decoration: none;">&larr; Server Management</a>
+                        </div>
+                    </div>
+                    <p id="insights-error" class="notice hidden" style="margin-top: 12px;"></p>
+                    <p id="insights-unreachable" class="notice hidden" style="margin-top: 12px;"></p>
+                </div>
+
+                <div class="card si-section">
+                    <h2>Overview</h2>
+                    <div id="insights-overview" class="si-stats"></div>
+                </div>
+
+                <div class="card si-section">
+                    <h2>Database pool</h2>
+                    <p id="insights-pool-note" class="notice"></p>
+                    <div id="insights-pool" class="si-stats"></div>
+                </div>
+
+                <div class="card si-section">
+                    <h2>WebSockets</h2>
+                    <p id="insights-socket-note" class="notice"></p>
+                    <div id="insights-sockets" class="si-stats"></div>
+                </div>
+
+                <div class="card si-section">
+                    <h2>Client fleet and offline uploads</h2>
+                    <p class="notice">Queue time is how long saved entries waited on a device before reaching the server.</p>
+                    <div id="insights-fleet" class="si-stats"></div>
+                    <h3 style="font-size: 14px; margin: 16px 0 0;">By platform</h3>
+                    <div id="insights-platforms" class="si-breakdown"></div>
+                    <h3 style="font-size: 14px; margin: 16px 0 0;">By app version</h3>
+                    <div id="insights-versions" class="si-breakdown"></div>
+                </div>
+
+                <div class="card si-section">
+                    <h2>API latency</h2>
+                    <p id="insights-latency-note" class="notice hidden">Percentiles show the slowest node.</p>
+                    <div id="insights-latency" class="si-stats"></div>
+                </div>
+
+                <div class="card si-section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                        <h2 style="margin: 0;">JVM</h2>
+                        <button id="insights-dump-open" class="btn secondary" type="button">View live thread dump</button>
+                    </div>
+                    <div id="insights-jvm" class="si-stats"></div>
+                </div>
+
+                <div class="card si-section">
+                    <h2>Security events and superadmin actions</h2>
+                    <div id="insights-security" class="si-stats"></div>
+                    <div class="table-scroll" style="margin-top: 12px;">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Action</th>
+                                    <th>User</th>
+                                    <th>Details</th>
+                                    <th>IP</th>
+                                </tr>
+                            </thead>
+                            <tbody id="insights-audit"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <dialog id="insights-dump" class="si-dump">
+                <div class="si-dump-head">
+                    <strong id="insights-dump-title">JVM thread dump</strong>
+                    <div style="display: flex; gap: 8px;">
+                        <button id="insights-dump-copy" class="btn ghost" type="button">Copy</button>
+                        <button id="insights-dump-refresh" class="btn ghost" type="button">Refresh</button>
+                        <button id="insights-dump-close" class="btn secondary" type="button">Close</button>
+                    </div>
+                </div>
+                <pre id="insights-dump-text"></pre>
+            </dialog>
+        </main>
+    </div>
+
+    <script type="module" src="/js/common.js"></script>
+    <script type="module" src="/js/server-insights.js"></script>
+</body>
+</html>

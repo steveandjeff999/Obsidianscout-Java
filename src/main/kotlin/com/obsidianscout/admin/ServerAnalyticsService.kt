@@ -576,6 +576,8 @@ object ServerAnalyticsService {
     fun getThreadDump(): String {
         val threadBean = ManagementFactory.getThreadMXBean()
         val threadInfos = threadBean.dumpAllThreads(true, true)
+        // Native images return nothing here, though they do know their threads' stacks.
+        if (threadInfos.isEmpty()) return getPlainThreadDump()
         val sb = StringBuilder()
         sb.append("JVM Thread Dump Generated At: ${java.time.Instant.now()}\n")
         sb.append("Total Threads: ${threadInfos.size}\n\n")
@@ -592,6 +594,23 @@ object ServerAnalyticsService {
                 sb.append("    (in native)\n")
             }
             for (elem in info.stackTrace) {
+                sb.append("    at $elem\n")
+            }
+            sb.append("\n")
+        }
+        return sb.toString()
+    }
+
+    /** The thread dump without lock details, from what every runtime offers. */
+    internal fun getPlainThreadDump(): String {
+        val stacks = Thread.getAllStackTraces()
+        val sb = StringBuilder()
+        sb.append("JVM Thread Dump Generated At: ${java.time.Instant.now()}\n")
+        sb.append("Total Threads: ${stacks.size}\n\n")
+
+        for ((thread, stack) in stacks) {
+            sb.append("\"${thread.name}\" Id=${thread.threadId()} ${thread.state}\n")
+            for (elem in stack) {
                 sb.append("    at $elem\n")
             }
             sb.append("\n")

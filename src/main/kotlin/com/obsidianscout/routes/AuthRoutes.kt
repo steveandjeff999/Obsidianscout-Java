@@ -190,7 +190,7 @@ fun Route.authRoutes() {
                         program = user.program,
                         role = user.role,
                         email = user.email,
-                        profilePicture = user.profilePicture,
+                        profilePicture = AuthService.avatarReference(user),
                         notificationPreference = user.notificationPreference,
                         tourProgress = user.tourProgress,
                         nodeAlertsEnabled = user.nodeAlertsEnabled,
@@ -267,7 +267,7 @@ fun Route.authRoutes() {
                         program = user.program,
                         role = user.role,
                         email = user.email,
-                        profilePicture = user.profilePicture,
+                        profilePicture = AuthService.avatarReference(user),
                         notificationPreference = user.notificationPreference,
                         tourProgress = user.tourProgress,
                         nodeAlertsEnabled = user.nodeAlertsEnabled,
@@ -293,7 +293,7 @@ fun Route.authRoutes() {
                 get("/me") {
                     val session = call.requireSession()
                     val user = call.measure("user-db", "Get User DB Query") {
-                        AuthService.getUserById(session.userId)
+                        AuthService.getUserProfile(session.userId)
                     }
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.Unauthorized, "User not found")
                     val responseSession = UserSession(
@@ -445,7 +445,7 @@ fun Route.authRoutes() {
                             program = user.program,
                             role = user.role,
                             email = user.email,
-                            profilePicture = user.profilePicture,
+                            profilePicture = AuthService.avatarReference(user),
                             notificationPreference = user.notificationPreference,
                             tourProgress = user.tourProgress,
                             nodeAlertsEnabled = user.nodeAlertsEnabled,
@@ -761,7 +761,7 @@ fun Route.authRoutes() {
                     nonScoutingToolsEnabled = updated.nonScoutingToolsEnabled
                 )
                 call.sessions.set(updatedSession)
-                call.respond(updated)
+                call.respond(updated.copy(profilePicture = AuthService.avatarReference(updated)))
             }
 
             put("/user") {
@@ -795,7 +795,7 @@ fun Route.authRoutes() {
                     nonScoutingToolsEnabled = updated.nonScoutingToolsEnabled
                 )
                 call.sessions.set(updatedSession)
-                call.respond(updated)
+                call.respond(updated.copy(profilePicture = AuthService.avatarReference(updated)))
             }
 
             // Profile pictures of teammates, referenced by URL from chat messages.
