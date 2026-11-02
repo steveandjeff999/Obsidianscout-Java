@@ -8,6 +8,20 @@ import java.io.File
 class RedisOrchestrator(private val appConfig: AppConfig) {
     companion object {
         private const val INSTALL_TIMEOUT_SECONDS = 600L
+        private const val NO_PACKAGE_MANAGER = 3
+
+        /** Installs redis-server with whatever package manager the distro has; exits [NO_PACKAGE_MANAGER] if none. */
+        private const val WSL_INSTALL_SCRIPT =
+            "if command -v apt-get >/dev/null 2>&1; then export DEBIAN_FRONTEND=noninteractive; apt-get update && apt-get install -y redis-server; " +
+            "elif command -v dnf >/dev/null 2>&1; then dnf install -y redis || dnf install -y valkey-compat-redis; " +
+            "elif command -v yum >/dev/null 2>&1; then yum install -y redis; " +
+            "elif command -v zypper >/dev/null 2>&1; then zypper --non-interactive install redis; " +
+            "elif command -v apk >/dev/null 2>&1; then apk add redis; " +
+            "else exit 3; fi"
+
+        /** Distro packages start their own Redis on 127.0.0.1:6379; this node runs its own, so turn that one off. */
+        private const val DISABLE_SERVICE_SCRIPT =
+            "systemctl disable --now redis-server redis valkey 2>/dev/null; service redis-server stop 2>/dev/null; true"
         private val installing = java.util.concurrent.atomic.AtomicBoolean(false)
 
         /** Last install step or result on this node, shown on the Redis Cache page. */
@@ -201,7 +215,7 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
         }
         if (isDockerContainer) {
             runCatching {
-                ProcessBuilder("docker", "stop", "obsidianscout-redis").start().waitFor()
+                ProcessBuilder(dockerExe, "stop", "obsidianscout-redis").start().waitFor()
             }
             isDockerContainer = false
         }
@@ -225,10 +239,47 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
         p.waitFor(3, java.util.concurrent.TimeUnit.SECONDS) && p.exitValue() == 0
     }.getOrDefault(false)
 
-    private fun isDockerAvailable(): Boolean = runCatching {
-        val p = ProcessBuilder("docker", "info").start()
-        p.waitFor(2, java.util.concurrent.TimeUnit.SECONDS) && p.exitValue() == 0
-    }.getOrDefault(false)
+    /**
+     * The docker CLI. A Docker Desktop installed after the app started is not on the app's PATH yet,
+     * so fall back to its standard location.
+     */
+    private val dockerExe: String by lazy {
+        val desktopCli = File("C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe")
+        if (isWindows && probe(listOf("docker", "--version"), 10) != 0 && desktopCli.exists()) desktopCli.absolutePath else "docker"
+    }
+
+    /** Why the last Docker / WSL check failed, for the install status on the Redis Cache page. */
+    @Volatile private var dockerCheckResult: String = "not checked"
+    @Volatile private var wslCheckResult: String = "not checked"
+
+    // `docker info` can take several seconds on Docker Desktop and prints more than a pipe holds.
+    private fun isDockerAvailable(): Boolean {
+        val code = probe(listOf(dockerExe, "info"), 20)
+        dockerCheckResult = describeProbe(code, 20)
+        return code == 0
+    }
+
+    /**
+     * Runs a check command with its output discarded (so it can never fill a pipe and stall) and returns
+     * its exit code, -1 on timeout, or -2 when it could not be started at all.
+     */
+    private fun probe(cmd: List<String>, timeoutSeconds: Long): Int = try {
+        val p = ProcessBuilder(cmd)
+            .redirectErrorStream(true)
+            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            .redirectInput(ProcessBuilder.Redirect.from(File(if (isWindows) "NUL" else "/dev/null")))
+            .start()
+        if (p.waitFor(timeoutSeconds, java.util.concurrent.TimeUnit.SECONDS)) p.exitValue() else { p.destroyForcibly(); -1 }
+    } catch (_: Exception) {
+        -2
+    }
+
+    private fun describeProbe(code: Int, timeoutSeconds: Long): String = when (code) {
+        0 -> "ok"
+        -1 -> "timed out after ${timeoutSeconds}s"
+        -2 -> "not found"
+        else -> "exited with code $code"
+    }
 
     /** Loopback plus the Tailscale IP, so peers on the tailnet can connect but nothing else can. */
     private fun bindAddresses(tailscaleIp: String): String = listOf("127.0.0.1", tailscaleIp).distinct().joinToString(" ")
@@ -336,7 +387,7 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
         rootDir.mkdirs()
         // A Redis left over from a crash would still hold the port inside WSL.
         stopWslRedis(port)
-        val cmd = listOf("wsl", "redis-server", "--bind", "127.0.0.1", "--protected-mode", "yes", "--save", "", "--appendonly", "no") + args
+        val cmd = listOf("wsl", "-e", "redis-server", "--bind", "127.0.0.1", "--protected-mode", "yes", "--save", "", "--appendonly", "no") + args
         val logFile = File(rootDir, logName)
         process = ProcessBuilder(cmd)
             .directory(rootDir)
@@ -353,7 +404,7 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
 
     /** Killing wsl.exe does not reliably stop the Linux process, so stop it inside WSL by its listen address. */
     private fun stopWslRedis(port: Int) {
-        runCapture(listOf("wsl", "-u", "root", "pkill", "-f", "redis-server 127.0.0.1:$port"), 15)
+        runCapture(listOf("wsl", "-u", "root", "-e", "pkill", "-f", "(redis|valkey)-server 127.0.0.1:$port"), 15)
     }
 
     private fun setupWindowsPortproxy(listenIp: String, port: Int) {
@@ -394,7 +445,7 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
                 "Updating apt package list..." to listOf("env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "update"),
                 "Downloading & installing redis-server (apt)..." to listOf("env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", "redis-server")
             )
-            isCommandAvailable("dnf") -> listOf("Downloading & installing redis (dnf)..." to listOf("dnf", "install", "-y", "redis"))
+            isCommandAvailable("dnf") -> listOf("Downloading & installing redis (dnf)..." to listOf("sh", "-c", "dnf install -y redis || dnf install -y valkey-compat-redis"))
             isCommandAvailable("yum") -> listOf("Downloading & installing redis (yum)..." to listOf("yum", "install", "-y", "redis"))
             else -> {
                 installProgress = "Failed: No supported package manager found (apt, dnf, yum)."
@@ -417,7 +468,7 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
             }
         }
         // Distro packages start their own Redis on 127.0.0.1:6379. This node runs its own, so turn that one off.
-        runSudoCommand(listOf("sh", "-c", "systemctl disable --now redis-server redis 2>/dev/null; service redis-server stop 2>/dev/null; true"), sudoPassword)
+        runSudoCommand(listOf("sh", "-c", DISABLE_SERVICE_SCRIPT), sudoPassword)
 
         installProgress = "Verifying redis-server..."
         val candidatePaths = listOf(
@@ -440,21 +491,20 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
 
     private fun installOnWindows(): Boolean {
         if (isWslAvailable()) {
-            val steps = listOf(
-                "Updating WSL package list..." to listOf("wsl", "-u", "root", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "update"),
-                "Installing redis-server in WSL..." to listOf("wsl", "-u", "root", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", "redis-server")
-            )
-            for ((label, cmd) in steps) {
-                installProgress = label
-                val (code, out) = runCapture(cmd, INSTALL_TIMEOUT_SECONDS)
-                if (code != 0) {
-                    installProgress = "Failed: WSL apt-get exited with code $code. See .redis/redis-install.log."
-                    log.error("[RedisOrchestrator] '{}' failed with code {}: {}", cmd.joinToString(" "), code, out.takeLast(2000))
-                    return false
+            installProgress = "Installing redis-server in the default WSL distro..."
+            val cmd = listOf("wsl", "-u", "root", "-e", "sh", "-c", WSL_INSTALL_SCRIPT)
+            val (code, out) = runCapture(cmd, INSTALL_TIMEOUT_SECONDS)
+            if (code != 0) {
+                installProgress = when (code) {
+                    NO_PACKAGE_MANAGER -> "Failed: the default WSL distro has no apt, dnf, yum, zypper or apk. Set an Ubuntu/Debian/Fedora distro as default (wsl -s <name>)."
+                    -1 -> "Failed: WSL install timed out. See .redis/redis-install.log."
+                    else -> "Failed: WSL package install exited with code $code. See .redis/redis-install.log."
                 }
+                log.error("[RedisOrchestrator] WSL install failed with code {}: {}", code, out.takeLast(2000))
+                return false
             }
             // With systemd enabled in WSL, the package's own service would take 6379 inside WSL.
-            runCapture(listOf("wsl", "-u", "root", "sh", "-c", "systemctl disable --now redis-server 2>/dev/null; service redis-server stop 2>/dev/null; true"), 30)
+            runCapture(listOf("wsl", "-u", "root", "-e", "sh", "-c", DISABLE_SERVICE_SCRIPT), 30)
             if (isWslRedisInstalled()) {
                 installProgress = "Installed & Verified in WSL"
                 log.info("[RedisOrchestrator] redis-server installed in WSL.")
@@ -465,7 +515,7 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
         }
         if (isDockerAvailable()) {
             installProgress = "Pulling Docker redis:7-alpine image..."
-            val (code, out) = runCapture(listOf("docker", "pull", "redis:7-alpine"), INSTALL_TIMEOUT_SECONDS)
+            val (code, out) = runCapture(listOf(dockerExe, "pull", "redis:7-alpine"), INSTALL_TIMEOUT_SECONDS)
             if (code == 0) {
                 installProgress = "Docker image pulled & ready"
                 return true
@@ -474,7 +524,8 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
             log.error("[RedisOrchestrator] docker pull failed with code {}: {}", code, out.takeLast(2000))
             return false
         }
-        installProgress = "Failed: Windows requires Docker or WSL."
+        installProgress = "Failed: no usable Docker or WSL. Docker: $dockerCheckResult. WSL: $wslCheckResult."
+        log.warn("[RedisOrchestrator] Cannot install Redis: docker info {}, wsl {}", dockerCheckResult, wslCheckResult)
         return false
     }
 
@@ -521,23 +572,20 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
     }.getOrDefault(false)
 
     /** True only when WSL has a distro that starts; `wsl --status` succeeds even with none installed. */
-    private fun isWslAvailable(): Boolean = runCatching {
-        val p = ProcessBuilder("wsl", "-e", "true").redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start()
-        p.waitFor(20, java.util.concurrent.TimeUnit.SECONDS) && p.exitValue() == 0
-    }.getOrDefault(false)
+    // Generous timeouts: the first wsl call after boot has to start the distro, which can take ~20s.
+    private fun isWslAvailable(): Boolean {
+        val code = probe(listOf("wsl", "-e", "true"), 60)
+        wslCheckResult = describeProbe(code, 60)
+        return code == 0
+    }
 
-    private fun isWslRedisInstalled(): Boolean = runCatching {
-        // Generous timeout: the first wsl call after boot has to start the distro.
-        val p = ProcessBuilder("wsl", "-e", "sh", "-c", "command -v redis-server")
-            .redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start()
-        p.waitFor(20, java.util.concurrent.TimeUnit.SECONDS) && p.exitValue() == 0
-    }.getOrDefault(false)
+    private fun isWslRedisInstalled(): Boolean = probe(listOf("wsl", "-e", "sh", "-c", "command -v redis-server"), 60) == 0
 
     private fun startDockerMaster(tailscaleIp: String, port: Int, maxMemoryBytes: Long, password: String) {
-        runCatching { ProcessBuilder("docker", "rm", "-f", "obsidianscout-redis").start().waitFor() }
+        probe(listOf(dockerExe, "rm", "-f", "obsidianscout-redis"), 30)
         // Clients reach the container through Docker's bridge, which Redis sees as non-local, so protected
         // mode stays off inside it. The published ports from dockerPortArgs are what limit it to the tailnet.
-        val cmd = mutableListOf("docker", "run", "-d", "--name", "obsidianscout-redis")
+        val cmd = mutableListOf(dockerExe, "run", "-d", "--name", "obsidianscout-redis")
         cmd.addAll(dockerPortArgs(tailscaleIp, port))
         cmd.addAll(listOf(
             "redis:7-alpine",
@@ -551,8 +599,7 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
         if (password.isNotBlank()) {
             cmd.addAll(listOf("--requirepass", password))
         }
-        val p = ProcessBuilder(cmd).start()
-        if (p.waitFor(10, java.util.concurrent.TimeUnit.SECONDS) && p.exitValue() == 0) {
+        if (runCapture(cmd, 300).first == 0) {
             isDockerContainer = true
             log.info("[RedisOrchestrator] Started Docker Redis Master container on port {}", port)
         } else {
@@ -561,8 +608,8 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
     }
 
     private fun startDockerReplica(tailscaleIp: String, replicaPort: Int, masterHost: String, masterPort: Int, password: String) {
-        runCatching { ProcessBuilder("docker", "rm", "-f", "obsidianscout-redis").start().waitFor() }
-        val cmd = mutableListOf("docker", "run", "-d", "--name", "obsidianscout-redis")
+        probe(listOf(dockerExe, "rm", "-f", "obsidianscout-redis"), 30)
+        val cmd = mutableListOf(dockerExe, "run", "-d", "--name", "obsidianscout-redis")
         cmd.addAll(dockerPortArgs(tailscaleIp, replicaPort))
         cmd.addAll(listOf(
             "redis:7-alpine",
@@ -575,8 +622,7 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
         if (password.isNotBlank()) {
             cmd.addAll(listOf("--requirepass", password, "--masterauth", password))
         }
-        val p = ProcessBuilder(cmd).start()
-        if (p.waitFor(10, java.util.concurrent.TimeUnit.SECONDS) && p.exitValue() == 0) {
+        if (runCapture(cmd, 300).first == 0) {
             isDockerContainer = true
             log.info("[RedisOrchestrator] Started Docker Redis Replica container on port {}", replicaPort)
         } else {
