@@ -216,13 +216,17 @@ object DatabaseFactory {
             }
             val isLowMem = System.getenv("LOW_RAM") == "1" || System.getenv("LOW_MEM") == "1"
             if (isPostgresCompatible) {
-                // Fixed pool size (minimumIdle == maximumPoolSize) ensures all connections stay perpetually
-                // connected to the local CockroachDB daemon and never get closed/recycled during quorum failovers.
-                val poolSize = if (isLowMem) 16 else 64
+                // Fixed pool size (minimumIdle == maximumPoolSize) keeps every connection open to the local
+                // CockroachDB daemon, sized to the CPU: more connections than cores only queue inside the database.
+                val cores = Runtime.getRuntime().availableProcessors()
+                val poolSize = if (isLowMem) (cores * 2).coerceIn(8, 16) else (cores * 4).coerceIn(16, 64)
                 maximumPoolSize = poolSize
                 minimumIdle = poolSize
                 idleTimeout = 0L // 0 = never retire/close idle connections
-                maxLifetime = 0L // 0 = never expire live connections
+                // Hikari only retires a connection once it is idle and replaces it in the background, so a
+                // connection broken by a failover is recycled instead of failing requests indefinitely.
+                maxLifetime = 1_800_000L
+                keepaliveTime = 120_000L
                 isAutoCommit = true
                 val (user, pass) = getCredentials(config)
                 if (!user.isNullOrBlank()) username = user

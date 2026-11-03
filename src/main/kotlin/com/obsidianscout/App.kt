@@ -47,6 +47,7 @@ import io.ktor.server.plugins.cachingheaders.CachingHeaders
 import io.ktor.http.content.CachingOptions
 import io.ktor.http.CacheControl
 import io.ktor.server.request.path
+import io.ktor.server.request.contentType
 import io.ktor.server.response.respond
 import io.ktor.server.sessions.Sessions
 import io.ktor.server.sessions.cookie
@@ -118,6 +119,8 @@ fun main(args: Array<String>) {
             return
         }
     }
+
+    com.obsidianscout.utils.AsyncConsoleLogging.install()
 
     Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
         var isOom = false
@@ -207,7 +210,19 @@ fun Application.module(appConfig: AppConfig) {
         }
     }
 
-    install(DoubleReceive)
+    install(DoubleReceive) {
+        // Upload bodies (backups, snapshots, photos) are streamed once by their handler; caching them would hold
+        // the whole file in memory. Cluster-signed calls hash the body before the handler reads it, and the peer
+        // router reads it before falling back to local handling, so both always keep the cache.
+        excludeFromCache { call, _ ->
+            val type = call.request.contentType()
+            val isUpload = type.match(ContentType.MultiPart.Any) || type.match(ContentType.Application.OctetStream) ||
+                    type.match(ContentType.Image.Any) || type.match(ContentType.Video.Any)
+            isUpload &&
+                call.request.headers["X-Cluster-Signature"] == null &&
+                !com.obsidianscout.admin.PeerLoadRouter.cachedSettings.enabled
+        }
+    }
     install(PartialContent)
     install(AutoHeadResponse)
     install(com.obsidianscout.utils.ServerTimingPlugin)

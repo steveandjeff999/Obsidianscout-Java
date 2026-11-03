@@ -273,6 +273,12 @@ const ASSETS = [
     '/i18n/he.json'
 ];
 
+/** Whether the URL's `?v=` is the app version this worker was served with (CACHE_NAME carries it, dots as dashes). */
+function isShellVersion(url) {
+    const v = url.searchParams.get('v');
+    return !!v && `obsidianscout-shell-v${v.replace(/\./g, '-')}` === CACHE_NAME;
+}
+
 function cachedPage(request, url) {
     return caches.match(request, { ignoreSearch: true })
         .then((hit) => hit || caches.match(url.pathname, { ignoreSearch: true }));
@@ -391,8 +397,16 @@ self.addEventListener('fetch', (event) => {
     // If request has query parameters (e.g. ?v=... or ?t=... cache-busters), check exact cache match first
     // so new versions fetch fresh from the network immediately instead of serving old stale cache.
     const matchOptions = url.search ? {} : { ignoreSearch: true };
+    const versioned = url.searchParams.has('v');
     event.respondWith(
-        caches.match(event.request, matchOptions).then((cachedResponse) => {
+        caches.match(event.request, matchOptions).then((hit) => {
+            // The shell is precached under clean URLs; a request for this worker's own version may use that copy.
+            if (hit || !isShellVersion(url)) return hit;
+            return caches.match(url.pathname);
+        }).then((cachedResponse) => {
+            // A versioned URL's content never changes, so there is nothing to revalidate.
+            if (cachedResponse && versioned) return cachedResponse;
+
             const fetchPromise = fetch(event.request).then((networkResponse) => {
                 if (networkResponse.status === 200) {
                     const responseClone = networkResponse.clone();

@@ -144,7 +144,22 @@ object ClusterManagementService {
         }
     }
 
+    @Volatile private var cachedTailscaleIp: Pair<String, Long>? = null
+
+    /**
+     * Walking every network interface is slow (notably on Windows) and the peer router asks on every request, so the
+     * answer is kept for a minute; the loopback fallback only briefly, so a node picks up Tailscale soon after it connects.
+     */
     fun getLocalTailscaleIp(): String {
+        val now = System.nanoTime()
+        cachedTailscaleIp?.let { (ip, expiresAt) -> if (now < expiresAt) return ip }
+        val ip = lookupLocalTailscaleIp()
+        val ttlMs = if (ip == "127.0.0.1") 5_000L else 60_000L
+        cachedTailscaleIp = ip to (now + ttlMs * 1_000_000L)
+        return ip
+    }
+
+    private fun lookupLocalTailscaleIp(): String {
         try {
             val interfaces = NetworkInterface.getNetworkInterfaces()
             if (interfaces != null) {
