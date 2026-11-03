@@ -82,7 +82,7 @@ export function setUserBadge(user) {
         if (user.program === "FTC") {
             apiAttribution.innerHTML = `Match data provided by:<br><a href="https://ftc-events.firstinspires.org/services/API" target="_blank" rel="noopener noreferrer">FIRST FTC API</a> and <a href="https://ftcscout.org/api" target="_blank" rel="noopener noreferrer">FTC Scout API</a>`;
         } else {
-            apiAttribution.innerHTML = `Match data provided by:<br><a href="https://frc-events.firstinspires.org/services/api" target="_blank" rel="noopener noreferrer">FIRST FRC API</a> and <a href="https://www.thebluealliance.com/apidocs" target="_blank" rel="noopener noreferrer">The Blue Alliance API</a>.<br>EPA provided by <a href="https://www.statbotics.io/docs/rest" target="_blank" rel="noopener noreferrer">Statbotics</a>.`;
+            apiAttribution.innerHTML = `Match data provided by:<br><a href="https://frc-events.firstinspires.org/services/api" target="_blank" rel="noopener noreferrer">FIRST FRC API</a> and <a href="https://www.thebluealliance.com/apidocs" target="_blank" rel="noopener noreferrer">The Blue Alliance API</a>.<br>EPA provided by <a href="https://www.statbotics.io/docs/rest" target="_blank" rel="noopener noreferrer">Statbotics</a>.<br>xP provided by <a href="https://match13.com" target="_blank" rel="noopener noreferrer">match13.com</a>.`;
         }
     }
 }
