@@ -113,6 +113,8 @@ object AllianceService {
 
     private data class CachedSettings(
         val settings: com.obsidianscout.integrations.ApiSettings,
+        /** The tables it was read from and their versions; null when Redis was down, and then only [isExpired] retires it. */
+        val dependencies: Map<String, Long>?,
         val cachedAt: Long = System.currentTimeMillis()
     ) {
         fun isExpired(ttlMs: Long = 60_000L) = System.currentTimeMillis() - cachedAt > ttlMs
@@ -120,8 +122,42 @@ object AllianceService {
 
     private val effectiveSettingsCache = ConcurrentHashMap<String, CachedSettings>()
 
-    fun clearEffectiveSettingsCache() {
+    /** Bumped on every clear, so a computation that started before a clear doesn't put its stale result back. */
+    private val effectiveSettingsGeneration = java.util.concurrent.atomic.AtomicLong()
+
+    /** Published when a node clears the cache, so the other nodes clear theirs too. */
+    private const val EFFECTIVE_SETTINGS_CLEAR_MESSAGE = "obsidian:alliance:effective-settings"
+
+    init {
+        // Settings saves already publish their Redis key; alliance changes publish the message above.
+        com.obsidianscout.cache.RedisPubSubListener.addListener { message ->
+            if (message == EFFECTIVE_SETTINGS_CLEAR_MESSAGE || message.contains("obsidian:settings:")) {
+                clearLocalEffectiveSettingsCache()
+            }
+        }
+    }
+
+    /** Drops this node's copies only; [clearEffectiveSettingsCache] also tells the other nodes. */
+    fun clearLocalEffectiveSettingsCache() {
+        effectiveSettingsGeneration.incrementAndGet()
         effectiveSettingsCache.clear()
+    }
+
+    /**
+     * Clears every node's cached effective settings. Called inside a transaction, it clears again once that commits,
+     * so a read that ran between the change and the commit doesn't keep the old value for the rest of the minute.
+     */
+    fun clearEffectiveSettingsCache() {
+        clearLocalEffectiveSettingsCache()
+        com.obsidianscout.cache.RedisCache.evictAndBroadcast(EFFECTIVE_SETTINGS_CLEAR_MESSAGE)
+        org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.currentOrNull()?.registerInterceptor(
+            object : org.jetbrains.exposed.v1.core.statements.StatementInterceptor {
+                override fun afterCommit(transaction: org.jetbrains.exposed.v1.core.Transaction) {
+                    clearLocalEffectiveSettingsCache()
+                    com.obsidianscout.cache.RedisCache.evictAndBroadcast(EFFECTIVE_SETTINGS_CLEAR_MESSAGE)
+                }
+            }
+        )
     }
 
     fun evictEffectiveSettingsCache(teamNumber: Int, program: String = "FRC") {
@@ -1129,19 +1165,17 @@ object AllianceService {
         val allianceRow = ScoutingAlliances
             .selectAll().where { ScoutingAlliances.id eq allianceId }
             .firstOrNull() ?: return@readTransaction null
-        val members = AllianceMemberships
-            .selectAll().where { AllianceMemberships.allianceId eq allianceId }
-            .map { m ->
-                AllianceMemberRecord(
-                    teamNumber = m[AllianceMemberships.teamNumber],
-                    status = m[AllianceMemberships.status],
-                    invitedAt = m[AllianceMemberships.invitedAt].toString(),
-                    respondedAt = m[AllianceMemberships.respondedAt]?.toString(),
-                    disabled = m[AllianceMemberships.disabled],
-                    active = m[AllianceMemberships.active]
-                )
-            }
-        validateAllianceRow(allianceRow, members)
+        // validateAllianceRow only looks at the alliance row, so the membership rows aren't read.
+        validateAllianceRow(allianceRow, emptyList())
+    }
+
+    /**
+     * The team's active alliance and its validation, read in one transaction (the banners poll calls this, and every
+     * separate transaction is another round trip to the cluster). Null when the team has no active alliance.
+     */
+    fun getActiveAllianceValidation(teamNumber: Int, program: String = "FRC"): Pair<UUID, AllianceValidationDto?>? = readTransaction {
+        val activeAllianceId = getActiveAllianceId(teamNumber, program) ?: return@readTransaction null
+        activeAllianceId to validateAlliance(activeAllianceId)
     }
 
     /**
@@ -1219,9 +1253,21 @@ object AllianceService {
     private fun getEffectiveSettingsCached(teamNumber: Int, program: String): com.obsidianscout.integrations.ApiSettings {
         val key = "$program-$teamNumber"
         val cached = effectiveSettingsCache[key]
-        if (cached != null && !cached.isExpired()) return cached.settings
+        if (cached != null && !cached.isExpired()) {
+            val dependencies = cached.dependencies
+            if (dependencies != null && com.obsidianscout.db.DataVersion.stillCurrent(dependencies)) {
+                com.obsidianscout.db.DataVersion.noteDependencies(dependencies)
+                return cached.settings
+            }
+            // Read while Redis was down: good only until Redis is back and writes can be seen again.
+            if (dependencies == null && com.obsidianscout.db.DataVersion.snapshot() == null) return cached.settings
+        }
 
-        val computed = readTransaction {
+        // Versions before the data: a write that lands while computing retires what's stored here.
+        val snapshot = com.obsidianscout.db.DataVersion.snapshot()
+        val tracker = com.obsidianscout.db.DataVersion.newTracker()
+        val generation = effectiveSettingsGeneration.get()
+        val computed = com.obsidianscout.db.DataVersion.withTracker(tracker) { readTransaction {
             val localSettings = com.obsidianscout.integrations.SettingsService.getSettingsRaw(teamNumber, program)
             val activeAllianceId = getActiveAllianceId(teamNumber, program) ?: return@readTransaction localSettings
 
@@ -1292,8 +1338,10 @@ object AllianceService {
                     firstKey = firstKey
                 )
             )
+        } }
+        if (effectiveSettingsGeneration.get() == generation) {
+            effectiveSettingsCache[key] = CachedSettings(computed, snapshot?.let { com.obsidianscout.db.DataVersion.dependencies(tracker, it) })
         }
-        effectiveSettingsCache[key] = CachedSettings(computed)
         return computed
     }
 

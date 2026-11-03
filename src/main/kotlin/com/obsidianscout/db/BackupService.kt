@@ -1445,6 +1445,11 @@ object BackupService {
                 message = "Backup imported successfully"
             )
         }.also { report ->
+            // Imported settings or alliances would otherwise be served from the caches until they expired.
+            if (report.settingsImported > 0 || report.settingsUpdated > 0 || report.alliancesImported > 0) {
+                com.obsidianscout.cache.RedisCache.deleteByPattern("obsidian:settings:*")
+                com.obsidianscout.scouting.AllianceService.clearEffectiveSettingsCache()
+            }
             if (report.slackIntegrationsImported > 0 || report.slackPreferencesImported > 0) {
                 com.obsidianscout.slack.SlackIntegrationService.clearAllCaches()
                 com.obsidianscout.slack.SlackSocketSupervisor.poke()

@@ -114,23 +114,25 @@ fun Route.analyticsRoutes() {
             route("/analytics") {
                 get {
                     val session = call.requireSession()
-                    val config = ConfigService.getConfig(session.teamNumber, session.program)
                     val forcePrescout = call.request.queryParameters["usePrescout"]?.toBoolean() ?: false
-                    
-                    val regularEntries = ScoutingService.listEntries(session, includePrescout = false)
-                    val prescoutEntries = ScoutingService.listEntries(session, includePrescout = true).filter { it.isPrescout }
-                    
-                    val settings = AllianceService.getEffectiveSettings(session.teamNumber, session.program)
-                    val currentEventKey = settings.resolvedEventKey()
-                    
-                    val mergedEntries = AnalyticsService.mergePrescoutEntries(
-                        regularEntries,
-                        prescoutEntries,
-                        currentEventKey,
-                        forcePrescout
-                    )
-                    
-                    val response = AnalyticsService.generate(config, mergedEntries)
+                    val response = com.obsidianscout.cache.DataCache.getOrCompute("analytics", com.obsidianscout.cache.DataCache.scope(session), forcePrescout) {
+                        val config = ConfigService.getConfig(session.teamNumber, session.program)
+
+                        val regularEntries = ScoutingService.listEntries(session, includePrescout = false)
+                        val prescoutEntries = ScoutingService.listEntries(session, includePrescout = true).filter { it.isPrescout }
+
+                        val settings = AllianceService.getEffectiveSettings(session.teamNumber, session.program)
+                        val currentEventKey = settings.resolvedEventKey()
+
+                        val mergedEntries = AnalyticsService.mergePrescoutEntries(
+                            regularEntries,
+                            prescoutEntries,
+                            currentEventKey,
+                            forcePrescout
+                        )
+
+                        AnalyticsService.generate(config, mergedEntries)
+                    }
                     call.respond(response)
                 }
 
@@ -206,11 +208,15 @@ fun Route.analyticsRoutes() {
                     val session = call.requireSession()
                     val eventKey = call.request.queryParameters["eventKey"]
                     val includePrescout = call.request.queryParameters["includePrescout"]?.toBoolean() ?: true
-                    val dataset = com.obsidianscout.analytics.AnalyticsReportService.generateDataset(
-                        session = session,
-                        eventKeyFilter = eventKey,
-                        includePrescout = includePrescout
-                    )
+                    val dataset = com.obsidianscout.cache.DataCache.getOrCompute(
+                        "analytics_dataset", com.obsidianscout.cache.DataCache.scope(session), eventKey, includePrescout
+                    ) {
+                        com.obsidianscout.analytics.AnalyticsReportService.generateDataset(
+                            session = session,
+                            eventKeyFilter = eventKey,
+                            includePrescout = includePrescout
+                        )
+                    }
                     call.respond(dataset)
                 }
             }

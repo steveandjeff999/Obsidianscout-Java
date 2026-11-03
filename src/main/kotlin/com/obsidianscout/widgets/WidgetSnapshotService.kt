@@ -212,7 +212,10 @@ object WidgetSnapshotService {
     /** An assignment whose match started longer ago than this counts as played (same as the app). */
     private const val PLAYED_GRACE_SECONDS = 10 * 60L
 
-    private data class Cached<T>(val value: T, val at: Long)
+    /** [dataVersion] is the version it was computed at: a write since then retires it before its TTL is up. */
+    private data class Cached<T>(val value: T, val at: Long, val dataVersion: Long?) {
+        fun isFresh(ttlMs: Long, currentVersion: Long?) = System.currentTimeMillis() - at < ttlMs && dataVersion == currentVersion
+    }
     private val predictionCache = ConcurrentHashMap<String, Cached<WidgetPrediction?>>()
     private val rankingCache = ConcurrentHashMap<String, Cached<WidgetRankings?>>()
     private const val PREDICTION_TTL_MS = 60_000L
@@ -340,10 +343,11 @@ object WidgetSnapshotService {
     private suspend fun prediction(session: UserSession, eventKey: String, next: MatchRecord?): WidgetPrediction? {
         next ?: return null
         val cacheKey = "${session.program}-${session.teamNumber}-${next.matchKey}"
-        predictionCache[cacheKey]?.takeIf { System.currentTimeMillis() - it.at < PREDICTION_TTL_MS }?.let { return it.value }
+        val dataVersion = com.obsidianscout.db.DataVersion.current()
+        predictionCache[cacheKey]?.takeIf { it.isFresh(PREDICTION_TTL_MS, dataVersion) }?.let { return it.value }
         val response = PredictorService.predict(session, next.matchKey, false, eventKey)
         val result = summarizePrediction(response, allianceOf(next, session.teamNumber)).copy(match = refOf(next))
-        predictionCache[cacheKey] = Cached(result, System.currentTimeMillis())
+        predictionCache[cacheKey] = Cached(result, System.currentTimeMillis(), dataVersion)
         return result
     }
 
@@ -546,7 +550,8 @@ object WidgetSnapshotService {
 
     private fun rankings(session: UserSession, eventKey: String): WidgetRankings? {
         val cacheKey = "${session.program}-${session.teamNumber}-$eventKey"
-        rankingCache[cacheKey]?.takeIf { System.currentTimeMillis() - it.at < RANKINGS_TTL_MS }?.let { return it.value }
+        val dataVersion = com.obsidianscout.db.DataVersion.current()
+        rankingCache[cacheKey]?.takeIf { it.isFresh(RANKINGS_TTL_MS, dataVersion) }?.let { return it.value }
         val projection = RankingProjectionService.project(session, eventKey, RankingProjectionService.DEFAULT_SIMULATIONS, seed = null)
         fun row(t: com.obsidianscout.analytics.TeamRankingProjection) = WidgetRankRow(
             team = t.teamNumber,
@@ -572,7 +577,7 @@ object WidgetSnapshotService {
             top = top,
             qualsComplete = projection.qualsComplete,
         )
-        rankingCache[cacheKey] = Cached(result, System.currentTimeMillis())
+        rankingCache[cacheKey] = Cached(result, System.currentTimeMillis(), dataVersion)
         return result
     }
 

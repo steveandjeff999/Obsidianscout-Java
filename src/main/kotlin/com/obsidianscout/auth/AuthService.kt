@@ -626,10 +626,7 @@ object AuthService {
                 runCatching {
                     val userSessionIds = UserSessions.select(UserSessions.id).where { UserSessions.userId eq targetUuid }
                         .map { it[UserSessions.id].value.toString() }
-                    if (userSessionIds.isNotEmpty()) {
-                        val keys = userSessionIds.map { "obsidian:auth:session:$it" }.toTypedArray()
-                        com.obsidianscout.cache.RedisCache.evictAndBroadcast(*keys)
-                    }
+                    evictSessionChecks(userSessionIds)
                 }
             }
             val updated = Users.selectAll().where { Users.id eq targetUuid }.first()
@@ -763,10 +760,7 @@ object AuthService {
                     .map { it[UserSessions.id].value.toString() }
             }.getOrDefault(emptyList())
             runCatching { UserSessions.deleteWhere { userId eq targetUuid } }
-            if (targetSessionIds.isNotEmpty()) {
-                val keys = targetSessionIds.map { "obsidian:auth:session:$it" }.toTypedArray()
-                com.obsidianscout.cache.RedisCache.evictAndBroadcast(*keys)
-            }
+            evictSessionChecks(targetSessionIds)
             PushSubscriptions.deleteWhere { userId eq targetUuid }
             FcmDeviceTokens.deleteWhere { userId eq targetUuid }
             PasskeyCredentials.deleteWhere { userId eq targetUuid }
@@ -808,9 +802,13 @@ object AuthService {
                 // 2. Deduplicate / supersede previous session for this physical device
                 val cleanDeviceId = deviceId?.trim()?.takeIf { it.isNotBlank() }
                 if (cleanDeviceId != null) {
+                    val supersededIds = UserSessions.select(UserSessions.id).where {
+                        (UserSessions.userId eq userId) and (UserSessions.deviceId eq cleanDeviceId)
+                    }.map { it[UserSessions.id].value.toString() }
                     UserSessions.deleteWhere {
                         (UserSessions.userId eq userId) and (UserSessions.deviceId eq cleanDeviceId)
                     }
+                    evictSessionChecks(supersededIds)
                 }
 
                 // 3. Insert new active session
@@ -904,6 +902,7 @@ object AuthService {
 
             if (toDelete.isNotEmpty()) {
                 deleted += UserSessions.deleteWhere { UserSessions.id inList toDelete }
+                evictSessionChecks(toDelete.map { it.toString() })
             }
             deleted
         }
@@ -980,6 +979,23 @@ object AuthService {
         expiresAt == null || java.time.Duration.between(createdAt, expiresAt).toHours() > 48
 
     /** Pushes the session's expiry forward (at most every 5 minutes). Returns true when it did. */
+    /**
+     * Drops the cached session checks for these sessions on every node. Inside a transaction it drops them again once
+     * that commits, so a check that read the old rows before the commit can't cache them for the next minute.
+     */
+    private fun evictSessionChecks(sessionIds: Collection<String>) {
+        if (sessionIds.isEmpty()) return
+        val keys = sessionIds.map { "obsidian:auth:session:$it" }.toTypedArray()
+        com.obsidianscout.cache.RedisCache.evictAndBroadcast(*keys)
+        org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.currentOrNull()?.registerInterceptor(
+            object : org.jetbrains.exposed.v1.core.statements.StatementInterceptor {
+                override fun afterCommit(transaction: org.jetbrains.exposed.v1.core.Transaction) {
+                    com.obsidianscout.cache.RedisCache.evictAndBroadcast(*keys)
+                }
+            }
+        )
+    }
+
     fun touchSession(sessionIdStr: String): Boolean {
         if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) return false
         val sessionUuid = runCatching { UUID.fromString(sessionIdStr) }.getOrNull() ?: return false

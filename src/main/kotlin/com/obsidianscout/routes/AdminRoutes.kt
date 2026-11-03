@@ -396,6 +396,8 @@ fun Route.adminRoutes() {
 
                     // The key's row is gone, so a copy left in memory would encrypt data nothing can read after a restart.
                     com.obsidianscout.auth.ClusterSecretService.forgetDataEncryptionKey()
+                    // Every other session row is gone; Redis outlives the restart, so drop the cached session checks too.
+                    com.obsidianscout.cache.RedisCache.deleteByPattern("obsidian:auth:session:*")
                     // Every node still holds caches of what was just deleted, and presets only load at startup.
                     call.respond(com.obsidianscout.admin.ClusterManagementService.restartAllProcesses())
                 }

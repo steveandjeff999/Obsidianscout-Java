@@ -337,10 +337,10 @@ object PredictorService {
 
     suspend fun predictAll(session: UserSession, eventKeyParam: String, forcePrescout: Boolean = false): List<MatchPredictionResponse> {
         val eventKeyLower = eventKeyParam.lowercase().trim()
-        val eventVer = com.obsidianscout.cache.RedisCache.getEventVersion(eventKeyLower)
-        val cacheKey = "obsidian:predict_all:$eventKeyLower:v$eventVer:${session.teamNumber}:${session.program}:$forcePrescout"
-
-        return com.obsidianscout.cache.RedisCache.getOrSet(cacheKey, 120L) {
+        // Keyed on the data version: any write (a submission, a match edit, an API sync, a settings change) retires it.
+        return com.obsidianscout.cache.DataCache.getOrCompute(
+            "predict_all", com.obsidianscout.cache.DataCache.scope(session), eventKeyLower, forcePrescout
+        ) {
             readTransaction {
             val matches = TeamCacheOverrideService.matchRows(eventKeyLower, session.teamNumber, session.program)
                 .sortedWith(

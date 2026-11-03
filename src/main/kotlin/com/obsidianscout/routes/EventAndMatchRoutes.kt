@@ -184,7 +184,11 @@ fun Route.eventAndMatchRoutes() {
                         ?: AllianceService.getEffectiveSettings(session.teamNumber, session.program).resolvedEventKey()
                     val eventKeyLower = eventKey.lowercase().trim()
                     // Serve what's cached; syncing happens on settings change and via SyncScheduler.
-                    call.respond(IntegrationService.listTeams(eventKeyLower, session))
+                    call.respond(
+                        com.obsidianscout.cache.DataCache.getOrCompute("teams", com.obsidianscout.cache.DataCache.scope(session), eventKeyLower) {
+                            IntegrationService.listTeams(eventKeyLower, session)
+                        }
+                    )
                 }
                 post {
                     val session = call.requireAdmin()
@@ -212,7 +216,11 @@ fun Route.eventAndMatchRoutes() {
                         ?: AllianceService.getEffectiveSettings(session.teamNumber, session.program).resolvedEventKey()
                     val eventKeyLower = eventKey.lowercase().trim()
                     // Serve what's cached; syncing happens on settings change and via SyncScheduler.
-                    call.respond(IntegrationService.listMatches(eventKeyLower, session.program, session.teamNumber))
+                    call.respond(
+                        com.obsidianscout.cache.DataCache.getOrCompute("matches", com.obsidianscout.cache.DataCache.scope(session), eventKeyLower) {
+                            IntegrationService.listMatches(eventKeyLower, session.program, session.teamNumber)
+                        }
+                    )
                 }
                 get("/predict") {
                     val session = call.requireSession()

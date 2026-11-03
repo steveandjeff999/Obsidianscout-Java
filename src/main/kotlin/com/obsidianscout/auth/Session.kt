@@ -59,6 +59,13 @@ data class UserSession(
     val actingCustomPages: List<String>? = null
 )
 
+/** A passed session check as Redis holds it, with the cookie lifetime a re-issued cookie must keep. */
+@Serializable
+data class CachedSessionCheck(val session: UserSession, val keepMeLoggedIn: Boolean, val authVersion: Long)
+
+/** How long a passed session check is reused. Pages poll every 10-30 seconds, so a few seconds missed almost every time. */
+private const val SESSION_CHECK_CACHE_SECONDS = 60L
+
 class ApiException(val status: HttpStatusCode, override val message: String) : RuntimeException(message)
 
 /**
@@ -102,10 +109,13 @@ suspend fun ApplicationCall.requireSession(): UserSession {
             throw ApiException(HttpStatusCode.Unauthorized, "Invalid user")
         }
         val sessionCacheKey = if (!session.sessionId.isNullOrBlank()) "obsidian:auth:session:${session.sessionId}" else null
-        if (sessionCacheKey != null && com.obsidianscout.cache.RedisClusterCoordinator.isReady) {
-            val cached = com.obsidianscout.cache.RedisCache.readFromRedis<UserSession>(sessionCacheKey)
-            if (cached != null) {
-                return cached
+        // Read before the user and session rows: any change to either after this point retires what gets cached below.
+        val authVersion = if (sessionCacheKey != null) com.obsidianscout.db.DataVersion.authVersion() else null
+        if (sessionCacheKey != null && authVersion != null) {
+            val cached = com.obsidianscout.cache.RedisCache.readFromRedis<CachedSessionCheck>(sessionCacheKey)
+            if (cached != null && cached.authVersion == authVersion) {
+                attributes.put(KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY, cached.keepMeLoggedIn)
+                return cached.session
             }
         }
         // If quorum is lost, trust the cryptographically HMAC-signed session cookie,
@@ -201,10 +211,8 @@ suspend fun ApplicationCall.requireSession(): UserSession {
         }
 
         // Any cookie re-issued during this call (here or by the route) keeps the lifetime picked at sign-in.
-        attributes.put(
-            KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY,
-            AuthService.isLongLivedSession(sessionRow[UserSessions.createdAt], sessionRow[UserSessions.expiresAt])
-        )
+        val keepMeLoggedIn = AuthService.isLongLivedSession(sessionRow[UserSessions.createdAt], sessionRow[UserSessions.expiresAt])
+        attributes.put(KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY, keepMeLoggedIn)
 
         val dbRole = runCatching { UserRole.valueOf(userRow[Users.role]) }.getOrDefault(session.role)
         val dbTeamNumber = userRow[Users.teamNumber]
@@ -252,8 +260,15 @@ suspend fun ApplicationCall.requireSession(): UserSession {
         if (!effectiveSession.sessionId.isNullOrBlank() && AuthService.touchSession(effectiveSession.sessionId)) {
             runCatching { sessions.set(effectiveSession) }
         }
-        if (sessionCacheKey != null && com.obsidianscout.cache.RedisClusterCoordinator.isReady) {
-            com.obsidianscout.cache.RedisCache.writeToRedis(sessionCacheKey, 5L, effectiveSession)
+        if (sessionCacheKey != null && authVersion != null) {
+            // Every change to the user or the session (role, team, preferences, logout, revoke, delete) evicts this
+            // key, and any write to users or deleted session moves [authVersion], so it can outlive a poll interval.
+            // It never outlives the session itself.
+            val secondsLeft = sessionRow[UserSessions.expiresAt]?.let { java.time.Duration.between(Instant.now(), it).seconds }
+            val ttl = minOf(SESSION_CHECK_CACHE_SECONDS, secondsLeft ?: SESSION_CHECK_CACHE_SECONDS)
+            if (ttl > 0) {
+                com.obsidianscout.cache.RedisCache.writeToRedis(sessionCacheKey, ttl, CachedSessionCheck(effectiveSession, keepMeLoggedIn, authVersion))
+            }
         }
         return effectiveSession
     }

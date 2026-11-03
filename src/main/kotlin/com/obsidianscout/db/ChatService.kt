@@ -730,33 +730,25 @@ object ChatService {
         var totalUnreadCount = 0
         var totalMentionCount = 0
 
-        val groupStatuses = groups.map { groupName ->
-            val lastRead = lastReads[groupName] ?: sevenDaysAgo
-            val groupUnreadCount = ChatMessages.selectAll().where {
-                (ChatMessages.teamNumber eq teamNumber) and
-                (ChatMessages.program eq program) and
+        // One query for every channel's unread messages instead of two per channel: each round trip to the
+        // cluster costs far more than reading the rows, and this route is polled.
+        val unreadByGroup = ChatMessages.select(ChatMessages.groupName, ChatMessages.content).where {
+            (ChatMessages.teamNumber eq teamNumber) and
+            (ChatMessages.program eq program) and
+            (ChatMessages.userId neq userUuid) and
+            groups.map { groupName ->
                 (ChatMessages.groupName eq groupName) and
-                (ChatMessages.userId neq userUuid) and
-                (ChatMessages.createdAt greater lastRead)
-            }.count().toInt()
+                (ChatMessages.createdAt greater (lastReads[groupName] ?: sevenDaysAgo))
+            }.reduce { acc, op -> acc or op }
+        }.groupBy({ it[ChatMessages.groupName] }, { it[ChatMessages.content].lowercase() })
 
-            var groupMentionCount = 0
-            if (groupUnreadCount > 0) {
-                val unreadContents = ChatMessages.select(ChatMessages.content).where {
-                    (ChatMessages.teamNumber eq teamNumber) and
-                    (ChatMessages.program eq program) and
-                    (ChatMessages.groupName eq groupName) and
-                    (ChatMessages.userId neq userUuid) and
-                    (ChatMessages.createdAt greater lastRead)
-                }.map { it[ChatMessages.content].lowercase() }
-
-                for (contentLower in unreadContents) {
-                    if (contentLower.contains(userMentionLower) ||
-                        contentLower.contains("@everyone") ||
-                        contentLower.contains("@channel")) {
-                        groupMentionCount++
-                    }
-                }
+        val groupStatuses = groups.map { groupName ->
+            val unreadContents = unreadByGroup[groupName].orEmpty()
+            val groupUnreadCount = unreadContents.size
+            val groupMentionCount = unreadContents.count { contentLower ->
+                contentLower.contains(userMentionLower) ||
+                    contentLower.contains("@everyone") ||
+                    contentLower.contains("@channel")
             }
 
             totalUnreadCount += groupUnreadCount

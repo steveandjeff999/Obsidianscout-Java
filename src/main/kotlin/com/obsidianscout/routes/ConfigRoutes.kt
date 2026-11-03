@@ -545,12 +545,15 @@ fun Route.configRoutes() {
                             // Effective settings are cached per node and a save only clears the cache on the
                             // node that handled it, so read the theme fresh: open pages poll this to pick up a
                             // theme change, and other nodes would otherwise serve the old one for up to a minute.
-                            val fresh = SettingsService.getSettings(session.teamNumber, session.program)
-                            AllianceService.getEffectiveSettings(session.teamNumber, session.program).copy(
-                                theme = fresh.theme,
-                                themes = fresh.themes,
-                                activeThemeName = fresh.activeThemeName
-                            )
+                            // Both reads share one transaction: this route is polled and each transaction is a round trip.
+                            com.obsidianscout.db.readTransaction {
+                                val fresh = SettingsService.getSettings(session.teamNumber, session.program)
+                                AllianceService.getEffectiveSettings(session.teamNumber, session.program).copy(
+                                    theme = fresh.theme,
+                                    themes = fresh.themes,
+                                    activeThemeName = fresh.activeThemeName
+                                )
+                            }
                         }
                     }
                     val payload = when {

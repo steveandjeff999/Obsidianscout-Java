@@ -237,6 +237,8 @@ object EventTeamCanonical {
         QualitativeScoutingEntries.update({ QualitativeScoutingEntries.eventKey eq oldKey }) { it[QualitativeScoutingEntries.eventKey] = newKey; it[QualitativeScoutingEntries.updatedAt] = java.time.Instant.now() }
         ScoutingAssignments.update({ ScoutingAssignments.eventKey eq oldKey }) { it[ScoutingAssignments.eventKey] = newKey }
         ScoutingAlliances.update({ ScoutingAlliances.eventKey eq oldKey }) { it[ScoutingAlliances.eventKey] = newKey }
+        // Effective settings carry the alliance's event key.
+        com.obsidianscout.scouting.AllianceService.clearEffectiveSettingsCache()
         SharedLinks.update({ SharedLinks.targetEventKey eq oldKey }) { it[SharedLinks.targetEventKey] = newKey }
 
         moveSelections(oldKey, newKey)

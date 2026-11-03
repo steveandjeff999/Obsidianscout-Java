@@ -683,6 +683,8 @@ object TeamCacheOverrideService {
         ScoutingAlliances.update({ (ScoutingAlliances.eventKey eq oldKey) and (ScoutingAlliances.ownerTeamNumber eq team) and (ScoutingAlliances.program eq prog) }) {
             it[eventKey] = newKey
         }
+        // Effective settings carry the alliance's event key.
+        com.obsidianscout.scouting.AllianceService.clearEffectiveSettingsCache()
         SharedLinks.update({ (SharedLinks.targetEventKey eq oldKey) and (SharedLinks.ownerTeamNumber eq team) and (SharedLinks.program eq prog) }) {
             it[targetEventKey] = newKey
         }

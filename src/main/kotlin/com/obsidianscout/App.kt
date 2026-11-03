@@ -700,6 +700,8 @@ fun Application.module(appConfig: AppConfig) {
                     runMigration = true,
                     isCockroach = isCockroach
                 )
+                // Before anything else writes: every committed write from here on moves the cache version.
+                com.obsidianscout.db.DataVersion.install()
                 ConfigService.ensureDefaultConfig()
                 ConfigService.syncFromDatabaseToLocalDisk()
                 ConfigService.startBackgroundClusterSync(30)

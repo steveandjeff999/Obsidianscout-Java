@@ -460,6 +460,36 @@ class TeamIsolationTest {
     }
 
     @Test
+    fun testUnreadStatusCountsPerChannel() {
+        val reader = createUser("reader", 100, "FRC", UserRole.ADMIN)
+        val poster = createUser("poster", 100, "FRC", UserRole.ADMIN)
+        val otherTeam = createUser("other", 200, "FRC", UserRole.ADMIN)
+
+        ChatService.sendMessage(100, "FRC", "general", poster.userId, poster.username, "Read before", UserRole.ADMIN)
+        ChatService.createGroup(100, "FRC", "strategy", poster.userId)
+        ChatService.createGroup(100, "FRC", "quiet", poster.userId)
+        ChatService.updateLastRead(reader.userId, "general")
+        Thread.sleep(5)
+
+        ChatService.sendMessage(100, "FRC", "general", poster.userId, poster.username, "hey @Reader look", UserRole.ADMIN)
+        ChatService.sendMessage(100, "FRC", "general", poster.userId, poster.username, "no mention", UserRole.ADMIN)
+        ChatService.sendMessage(100, "FRC", "general", reader.userId, reader.username, "my own @everyone", UserRole.ADMIN)
+        ChatService.sendMessage(100, "FRC", "strategy", poster.userId, poster.username, "@CHANNEL plan", UserRole.ADMIN)
+        ChatService.sendMessage(200, "FRC", "general", otherTeam.userId, otherTeam.username, "@reader other team", UserRole.ADMIN)
+
+        val status = ChatService.getUnreadStatus(reader.userId, 100, reader.username, UserRole.ADMIN, "FRC")
+        val byGroup = status.groups.associateBy { it.groupName }
+
+        assertEquals(2, byGroup.getValue("general").unreadCount)
+        assertEquals(1, byGroup.getValue("general").mentionCount)
+        assertEquals(1, byGroup.getValue("strategy").unreadCount)
+        assertEquals(1, byGroup.getValue("strategy").mentionCount)
+        assertEquals(0, byGroup.getValue("quiet").unreadCount)
+        assertEquals(3, status.unreadCount)
+        assertEquals(2, status.mentionCount)
+    }
+
+    @Test
     fun testShareLinkAllianceScopeEnforcesProgramMatch(): Unit = runBlocking {
         val frc100 = createUser("frc100", 100, "FRC", UserRole.ADMIN)
         val ftc100 = createUser("ftc100", 100, "FTC", UserRole.ADMIN)

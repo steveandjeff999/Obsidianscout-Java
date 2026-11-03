@@ -137,9 +137,9 @@ fun Route.bannerRoutes() {
 
                         // If user is an admin on an affected team with an active alliance, validate the alliance configuration
                         if (session.role.isAtLeast(com.obsidianscout.auth.UserRole.ADMIN)) {
-                            val activeAllianceId = com.obsidianscout.scouting.AllianceService.getActiveAllianceId(session.teamNumber, session.program)
-                            if (activeAllianceId != null) {
-                                val validation = com.obsidianscout.scouting.AllianceService.validateAlliance(activeAllianceId)
+                            val activeAlliance = com.obsidianscout.scouting.AllianceService.getActiveAllianceValidation(session.teamNumber, session.program)
+                            if (activeAlliance != null) {
+                                val (activeAllianceId, validation) = activeAlliance
                                 if (validation != null && validation.isMisconfigured) {
                                     val count = validation.issues.size
                                     val issuesSummary = validation.issues.joinToString(", ") { it.category }

@@ -550,12 +550,16 @@ fun Route.scoutingRoutes() {
                     }
                     val eventKeyParam = call.request.queryParameters["eventKey"]
 
-                    val summary = call.measure("summary-db", "Summary DB Query") {
-                        IntegrationService.summary(
-                            session = session,
-                            targetTeamNumber = targetTeamNumber,
-                            eventKey = eventKeyParam
-                        )
+                    val summary = call.measureSuspend("summary-db", "Summary DB Query") {
+                        com.obsidianscout.cache.DataCache.getOrCompute(
+                            "summary", com.obsidianscout.cache.DataCache.scope(session), targetTeamNumber, eventKeyParam
+                        ) {
+                            IntegrationService.summary(
+                                session = session,
+                                targetTeamNumber = targetTeamNumber,
+                                eventKey = eventKeyParam
+                            )
+                        }
                     }
                     call.respond(summary)
                 }

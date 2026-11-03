@@ -316,7 +316,11 @@ object SettingsService {
         val cacheKey = "obsidian:settings:$teamNumber:$program"
         if (com.obsidianscout.cache.RedisClusterCoordinator.isReady) {
             val cached = com.obsidianscout.cache.RedisCache.readFromRedis<ApiSettings>(cacheKey)
-            if (cached != null) return cached
+            if (cached != null) {
+                // A cached computation built on these settings must be retired when they change.
+                com.obsidianscout.db.DataVersion.noteRead(AppSettings)
+                return cached
+            }
         }
 
         val (jsonText, isTeamSpecific) = readTransaction {

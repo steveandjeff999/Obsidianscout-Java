@@ -149,6 +149,7 @@ object DatabaseFactory {
             }
             return result
         } catch (e: Throwable) {
+            DataVersion.failures.incrementAndGet()
             if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLossException(e)) {
                 com.obsidianscout.db.orchestration.CockroachOrchestrator.markQuorumLost(e.message ?: "Database cluster quorum lost.")
                 consoleLog.warn("[Database] CockroachDB quorum lost during read (${e.message?.substringBefore("\n")?.take(120)}). Routing read to local SQLite fallback snapshot...")
