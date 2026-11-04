@@ -198,6 +198,7 @@ export const PAGE_SEARCH_KEYWORDS = {
     "settings": ["preferences", "config", "dark mode", "theme", "language", "color", "configuracion"],
     "backup": ["export", "import", "data sharing", "json export", "copia de seguridad"],
     "migration": ["database migration", "postgres", "sqlite", "transfer", "migracion"],
+    "redis-status": ["redis", "cache", "memory", "cluster cache", "failover", "estado de redis"],
     "tutorials": ["onboarding", "guide", "walkthrough", "help", "tutoriales", "guias"],
     "docs": ["documentation", "api docs", "manual", "documentacion"],
     "contact": ["support", "email", "bug report", "feedback", "contacto"]
