@@ -1,5 +1,6 @@
 package com.obsidianscout.admin
 
+import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.auth.UserRole
@@ -42,9 +43,9 @@ class NodeMonitoringServiceTest {
     }
 
     @Test
-    fun testSuperAdminEnrollmentSetting() {
-        val superAdmin = transaction {
-            Users.deleteAll()
+    fun testSuperAdminEnrollmentSetting() = runBlocking<Unit> {
+        val superAdmin = run {
+            transaction { Users.deleteAll() }
             AuthService.createUser(
                 callerSession = UserSession("seed", "superadmin", 0, "FRC", UserRole.SUPERADMIN),
                 username = "super_test_user",
@@ -77,11 +78,11 @@ class NodeMonitoringServiceTest {
     }
 
     @Test
-    fun testHasEnrolledSuperadminsOptimization() {
+    fun testHasEnrolledSuperadminsOptimization() = runBlocking<Unit> {
         transaction { Users.deleteAll() }
         assertFalse(NodeMonitoringService.hasEnrolledSuperadmins(), "Should return false when no superadmins are enrolled")
 
-        val superAdmin = transaction {
+        val superAdmin = run {
             AuthService.createUser(
                 callerSession = UserSession("seed", "superadmin", 0, "FRC", UserRole.SUPERADMIN),
                 username = "super_enrolled_user",

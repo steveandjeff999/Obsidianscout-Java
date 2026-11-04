@@ -1,5 +1,6 @@
 package com.obsidianscout.admin
 
+import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.auth.ApiException
@@ -117,13 +118,13 @@ class ServerErrorAlertServiceTest {
     }
 
     @Test
-    fun testGetEnrolledSuperadminMailingList() {
+    fun testGetEnrolledSuperadminMailingList() = runBlocking<Unit> {
         transaction { Users.deleteAll() }
 
         val superCaller = UserSession("seed", "superadmin", 0, "FRC", UserRole.SUPERADMIN)
 
         // Create regular user
-        val regularUser = transaction {
+        val regularUser = run {
             AuthService.createUser(
                 callerSession = superCaller,
                 username = "regular_scout",
@@ -136,7 +137,7 @@ class ServerErrorAlertServiceTest {
         }
 
         // Create superadmin without email
-        val superNoEmail = transaction {
+        val superNoEmail = run {
             AuthService.createUser(
                 callerSession = superCaller,
                 username = "super_no_email",
@@ -157,7 +158,7 @@ class ServerErrorAlertServiceTest {
         )
 
         // Create superadmin with email but alerts disabled
-        val superAlertsDisabled = transaction {
+        val superAlertsDisabled = run {
             AuthService.createUser(
                 callerSession = superCaller,
                 username = "super_alerts_off",
@@ -170,7 +171,7 @@ class ServerErrorAlertServiceTest {
         }
 
         // Create enrolled superadmin
-        val superEnrolled = transaction {
+        val superEnrolled = run {
             AuthService.createUser(
                 callerSession = superCaller,
                 username = "super_enrolled",

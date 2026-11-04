@@ -1,5 +1,6 @@
 package com.obsidianscout.integrations
 
+import kotlinx.coroutines.runBlocking
 import com.obsidianscout.db.TeamCacheOverrides
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
@@ -57,7 +58,7 @@ class SettingsTeamIsolationTest {
     }
 
     @Test
-    fun testNewTeamDoesNotInheritTeamZeroEventCode() {
+    fun testNewTeamDoesNotInheritTeamZeroEventCode() = runBlocking<Unit> {
         // Set event code on global team 0 settings
         val teamZeroSettings = SettingsService.getSettings(0, "FRC")
         SettingsService.updateSettings(0, teamZeroSettings.copy(eventCode = "2025txis"))

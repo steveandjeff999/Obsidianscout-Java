@@ -1,5 +1,6 @@
 package com.obsidianscout.auth
 
+import kotlinx.coroutines.runBlocking
 import com.obsidianscout.db.AppSettings
 import com.obsidianscout.db.Users
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -32,7 +33,8 @@ class LocalAiPreferenceTest {
         }
     }
 
-    private fun createScout(username: String): UserRecord = transaction {
+    // createUser opens its own transaction; it suspends, so it can't run inside one.
+    private fun createScout(username: String): UserRecord = runBlocking {
         AuthService.createUser(
             callerSession = UserSession("seed", "superadmin", 0, "FRC", UserRole.SUPERADMIN),
             username = username,
@@ -56,7 +58,7 @@ class LocalAiPreferenceTest {
     }
 
     @Test
-    fun testToggleLocalAi() {
+    fun testToggleLocalAi() = runBlocking<Unit> {
         transaction { Users.deleteAll() }
 
         val user = createScout("test_local_ai_toggle")

@@ -346,7 +346,7 @@ fun Route.adminRoutes() {
                     } ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.Unauthorized, "Superadmin user not found")
 
                     val hash = userRecord[com.obsidianscout.db.Users.passwordHash]
-                    val verified = runCatching { at.favre.lib.crypto.bcrypt.BCrypt.verifyer().verify(req.password.toCharArray(), hash).verified }.getOrDefault(false)
+                    val verified = com.obsidianscout.auth.AuthService.verifyPassword(req.password, hash)
                     if (!verified) {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.Unauthorized, "Invalid password")
                     }
@@ -417,7 +417,7 @@ fun Route.adminRoutes() {
                     } ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.Unauthorized, "User not found")
 
                     val hash = userRecord[com.obsidianscout.db.Users.passwordHash]
-                    val verified = runCatching { at.favre.lib.crypto.bcrypt.BCrypt.verifyer().verify(req.password.toCharArray(), hash).verified }.getOrDefault(false)
+                    val verified = com.obsidianscout.auth.AuthService.verifyPassword(req.password, hash)
                     if (!verified) {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.Unauthorized, "Invalid password")
                     }

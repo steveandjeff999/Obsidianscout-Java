@@ -1517,7 +1517,12 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 } else {
                     throw MobileApiException(HttpStatusCode.BadRequest, "Invalid reset token.", "INVALID_TOKEN")
                 }
-                
+
+                // Validate and hash before the transaction: hashing suspends on CryptoDispatcher.
+                if (request.newPassword.isBlank()) throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Password cannot be blank")
+                AuthService.validatePassword(request.newPassword)
+                val newPasswordHash = AuthService.hashPassword(request.newPassword)
+
                 transaction {
                     // Claim the token first so concurrent requests cannot both use it.
                     val claimed = PasswordResetTokens.update({
@@ -1529,7 +1534,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                         throw MobileApiException(HttpStatusCode.BadRequest, "Invalid or expired reset token.", "INVALID_TOKEN")
                     }
 
-                    AuthService.updateUser(
+                    AuthService.updateUserWithHash(
                         callerSession = UserSession(
                             userId = finalUserId,
                             username = "SYSTEM",
@@ -1538,7 +1543,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                         ),
                         targetUserId = finalUserId,
                         newUsername = request.newUsername?.takeIf { it.isNotBlank() },
-                        newPassword = request.newPassword,
+                        newPasswordHash = newPasswordHash,
                         newRole = null
                     )
                 }

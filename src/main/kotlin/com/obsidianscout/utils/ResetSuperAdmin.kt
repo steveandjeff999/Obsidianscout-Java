@@ -73,7 +73,7 @@ fun runResetSuperAdmin(args: Array<String>) {
 
     // Hash the new password
     println("Hashing new password...")
-    val newHash = BCrypt.withDefaults().hashToString(12, newPassword.toCharArray())
+    val newHash = BCrypt.withDefaults().hashToString(com.obsidianscout.auth.AuthService.BCRYPT_COST, newPassword.toCharArray())
 
     // Update all superadmin accounts
     val updatedCount = transaction {

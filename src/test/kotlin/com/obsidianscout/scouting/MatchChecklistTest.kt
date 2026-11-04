@@ -1,5 +1,6 @@
 package com.obsidianscout.scouting
 
+import kotlinx.coroutines.runBlocking
 import com.obsidianscout.auth.ApiException
 import com.obsidianscout.auth.AuthService
 import com.obsidianscout.auth.UserRole
@@ -44,8 +45,8 @@ class MatchChecklistTest {
         UserSession("u-$team", username, team, "FRC", UserRole.SCOUT)
 
     @Test
-    fun testNonScoutingToolsPreferenceDefaultsOffAndToggles() {
-        val user = transaction {
+    fun testNonScoutingToolsPreferenceDefaultsOffAndToggles() = runBlocking<Unit> {
+        val user = run {
             AuthService.createUser(
                 callerSession = UserSession("seed", "superadmin", 0, "FRC", UserRole.SUPERADMIN),
                 username = "drive_coach",

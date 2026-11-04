@@ -1,5 +1,6 @@
 package com.obsidianscout.auth
 
+import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.db.AppSettings
@@ -35,10 +36,10 @@ class BugReportingPreferenceTest {
     }
 
     @Test
-    fun testDefaultBugReportPreferenceIsAsk() {
+    fun testDefaultBugReportPreferenceIsAsk() = runBlocking<Unit> {
         transaction { Users.deleteAll() }
 
-        val user = transaction {
+        val user = run {
             AuthService.createUser(
                 callerSession = UserSession("seed", "superadmin", 0, "FRC", UserRole.SUPERADMIN),
                 username = "test_user_pref",
@@ -57,10 +58,10 @@ class BugReportingPreferenceTest {
     }
 
     @Test
-    fun testUpdateBugReportPreferenceToAlwaysAndNever() {
+    fun testUpdateBugReportPreferenceToAlwaysAndNever() = runBlocking<Unit> {
         transaction { Users.deleteAll() }
 
-        val user = transaction {
+        val user = run {
             AuthService.createUser(
                 callerSession = UserSession("seed", "superadmin", 0, "FRC", UserRole.SUPERADMIN),
                 username = "test_user_pref2",

@@ -37,6 +37,8 @@ import com.obsidianscout.db.FcmDeviceTokens
 import com.obsidianscout.db.AnalyticsReports
 import com.obsidianscout.db.PasskeyCredentials
 import com.obsidianscout.db.PasskeyChallenges
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.UUID
@@ -111,7 +113,8 @@ object AuthService {
 
         val isDefaultPassword = seed.adminPassword.isBlank() || seed.adminPassword.lowercase() in DEFAULT_SEED_PASSWORDS
         val password = if (isDefaultPassword) generateInitialPassword() else seed.adminPassword
-        val hash = hashPassword(password)
+        // Runs once at startup outside any coroutine, so block for the hash here.
+        val hash = runBlocking { hashPassword(password) }
         transaction {
             Users.insertAndGetId {
                 it[username] = seed.adminUsername
@@ -135,7 +138,7 @@ object AuthService {
         return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
     }
 
-    fun login(username: String, teamNumber: Int, password: String, program: String = "FRC"): UserRecord? {
+    suspend fun login(username: String, teamNumber: Int, password: String, program: String = "FRC"): UserRecord? {
         val cleanUsername = username.trim()
         val cleanProgram = program.trim()
 
@@ -173,11 +176,10 @@ object AuthService {
                 false
             }
         } else {
-            // BCrypt verification is CPU-heavy (~400 ms). Run it OUTSIDE the transaction
-            // so it does not hold a HikariCP connection for its full duration.
-            // Over-long passwords can never have been stored, and the verifier throws on them.
-            password.toByteArray(Charsets.UTF_8).size <= MAX_PASSWORD_BYTES &&
-                BCrypt.verifyer().verify(password.toCharArray(), hash).verified
+            // BCrypt verification is CPU-heavy. Run it OUTSIDE the transaction
+            // so it does not hold a HikariCP connection for its full duration,
+            // and on CryptoDispatcher so it does not saturate all CPU cores.
+            verifyPassword(password, hash)
         }
         if (verified) {
             val userUuid = runCatching { UUID.fromString(record.id) }.getOrNull()
@@ -203,7 +205,7 @@ object AuthService {
      * may pick any of these; after that, the team's registration lock and its allowed
      * self-registration roles (admin settings, all roles by default) apply.
      */
-    fun register(username: String, teamNumber: Int, password: String, program: String = "FRC", role: UserRole = UserRole.SCOUT, email: String? = null): UserRecord {
+    suspend fun register(username: String, teamNumber: Int, password: String, program: String = "FRC", role: UserRole = UserRole.SCOUT, email: String? = null): UserRecord {
         if (username.isBlank() || password.isBlank()) {
             throw ApiException(HttpStatusCode.BadRequest, "Username and password are required")
         }
@@ -393,7 +395,7 @@ object AuthService {
      * - ADMIN can create SCOUT, ANALYTICS, ADMIN on their own team
      * - SUPERADMIN can create any role on any team
      */
-    fun createUser(
+    suspend fun createUser(
         callerSession: UserSession,
         username: String,
         teamNumber: Int,
@@ -461,7 +463,7 @@ object AuthService {
      * - ADMIN can only edit users on their own team and cannot touch SUPERADMIN accounts
      *   or grant the SUPERADMIN role.
      */
-    fun updateUser(
+    suspend fun updateUser(
         callerSession: UserSession,
         targetUserId: String,
         newUsername: String?,
@@ -479,19 +481,61 @@ object AuthService {
         newNonScoutingToolsEnabled: Boolean? = null,
         newCustomPages: List<String>? = null
     ): UserRecord {
-        val targetUuid = runCatching { UUID.fromString(targetUserId) }.getOrElse {
-            throw ApiException(HttpStatusCode.BadRequest, "Invalid user ID format")
-        }
-
         if (newPassword != null && newPassword.isBlank()) {
             throw ApiException(HttpStatusCode.BadRequest, "Password cannot be blank")
         }
         newPassword?.let { validatePassword(it) }
-        if (newProfilePicture != null && !clearProfilePicture) validateProfilePicture(newProfilePicture)
 
-        // Hash outside the transaction if needed
-        val newHash = newPassword?.takeIf { it.isNotBlank() }
-            ?.let { hashPassword(it) }
+        // Hash before any transaction: hashing suspends on CryptoDispatcher and is CPU-heavy.
+        val newHash = newPassword?.takeIf { it.isNotBlank() }?.let { hashPassword(it) }
+        return updateUserWithHash(
+            callerSession = callerSession,
+            targetUserId = targetUserId,
+            newUsername = newUsername,
+            newPasswordHash = newHash,
+            newRole = newRole,
+            newEmail = newEmail,
+            newTeamNumber = newTeamNumber,
+            newProfilePicture = newProfilePicture,
+            clearProfilePicture = clearProfilePicture,
+            newNotificationPreference = newNotificationPreference,
+            newTourProgress = newTourProgress,
+            newNodeAlertsEnabled = newNodeAlertsEnabled,
+            newBugReportPreference = newBugReportPreference,
+            newLocalAiEnabled = newLocalAiEnabled,
+            newNonScoutingToolsEnabled = newNonScoutingToolsEnabled,
+            newCustomPages = newCustomPages
+        )
+    }
+
+    /**
+     * Blocking core of [updateUser] that takes an already-computed BCrypt hash, so it can run
+     * inside an enclosing `transaction {}` (e.g. password reset, which claims its token atomically
+     * with the update). Hash with [hashPassword] and validate with [validatePassword] first.
+     */
+    fun updateUserWithHash(
+        callerSession: UserSession,
+        targetUserId: String,
+        newUsername: String?,
+        newPasswordHash: String?,
+        newRole: UserRole?,
+        newEmail: String? = null,
+        newTeamNumber: Int? = null,
+        newProfilePicture: String? = null,
+        clearProfilePicture: Boolean = false,
+        newNotificationPreference: String? = null,
+        newTourProgress: String? = null,
+        newNodeAlertsEnabled: Boolean? = null,
+        newBugReportPreference: String? = null,
+        newLocalAiEnabled: Boolean? = null,
+        newNonScoutingToolsEnabled: Boolean? = null,
+        newCustomPages: List<String>? = null
+    ): UserRecord {
+        val targetUuid = runCatching { UUID.fromString(targetUserId) }.getOrElse {
+            throw ApiException(HttpStatusCode.BadRequest, "Invalid user ID format")
+        }
+        if (newProfilePicture != null && !clearProfilePicture) validateProfilePicture(newProfilePicture)
+        val newHash = newPasswordHash
 
         var customPagesChange: Pair<Boolean, UserRecord>? = null
         val result = transaction {
@@ -1182,8 +1226,27 @@ object AuthService {
         }
     }
 
-    private fun hashPassword(password: String): String {
-        return BCrypt.withDefaults().hashToString(12, password.toCharArray())
+    const val BCRYPT_COST = 11
+
+    /**
+     * Verifies a BCrypt hash on [CryptoDispatcher]. Suspends (rather than blocks) while waiting
+     * for a crypto slot, so the calling request thread is free to serve other requests.
+     * Must not be called inside an Exposed `transaction {}`; check the password before opening one.
+     */
+    suspend fun verifyPassword(password: String, hash: String): Boolean {
+        if (password.toByteArray(Charsets.UTF_8).size > MAX_PASSWORD_BYTES) return false
+        return withContext(CryptoDispatcher.dispatcher) {
+            try {
+                BCrypt.verifyer().verify(password.toCharArray(), hash).verified
+            } catch (_: Exception) {
+                false
+            }
+        }
+    }
+
+    /** Hashes on [CryptoDispatcher]; see [verifyPassword] for the threading contract. */
+    suspend fun hashPassword(password: String): String = withContext(CryptoDispatcher.dispatcher) {
+        BCrypt.withDefaults().hashToString(BCRYPT_COST, password.toCharArray())
     }
 
     private fun verifyScrypt(password: String, hash: String): Boolean {

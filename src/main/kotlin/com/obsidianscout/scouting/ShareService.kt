@@ -130,18 +130,26 @@ object ShareService {
         return sb.toString()
     }
 
-    private fun hashPin(pin: String): String {
+    /** PIN cost stays below [com.obsidianscout.auth.AuthService.BCRYPT_COST]: PINs are rate limited per link and client. */
+    private const val PIN_BCRYPT_COST = 10
+
+    // Suspend on CryptoDispatcher; never call inside an Exposed transaction {}.
+    private suspend fun hashPin(pin: String): String {
         if (pin.toByteArray(Charsets.UTF_8).size > com.obsidianscout.auth.AuthService.MAX_PASSWORD_BYTES) {
             throw ApiException(HttpStatusCode.BadRequest, "PIN is too long (maximum ${com.obsidianscout.auth.AuthService.MAX_PASSWORD_BYTES} bytes)")
         }
-        return BCrypt.withDefaults().hashToString(10, pin.toCharArray())
+        return kotlinx.coroutines.withContext(com.obsidianscout.auth.CryptoDispatcher.dispatcher) {
+            BCrypt.withDefaults().hashToString(PIN_BCRYPT_COST, pin.toCharArray())
+        }
     }
 
-    private fun verifyPin(pin: String, hash: String): Boolean {
-        return try {
-            BCrypt.verifyer().verify(pin.toCharArray(), hash).verified
-        } catch (_: Exception) {
-            false
+    private suspend fun verifyPin(pin: String, hash: String): Boolean {
+        return kotlinx.coroutines.withContext(com.obsidianscout.auth.CryptoDispatcher.dispatcher) {
+            try {
+                BCrypt.verifyer().verify(pin.toCharArray(), hash).verified
+            } catch (_: Exception) {
+                false
+            }
         }
     }
 
@@ -167,7 +175,7 @@ object ShareService {
         }
     }
 
-    fun createShare(session: UserSession, request: CreateShareRequest, baseUrl: String = ""): ShareLinkDTO {
+    suspend fun createShare(session: UserSession, request: CreateShareRequest, baseUrl: String = ""): ShareLinkDTO {
         if (session.role != UserRole.SUPERADMIN && !session.role.isAtLeast(UserRole.ANALYTICS)) {
             throw ApiException(HttpStatusCode.Forbidden, "Analytics or admin role is required to create share links")
         }
@@ -648,7 +656,9 @@ object ShareService {
         }
     }
 
-    fun updateShare(token: String, req: UpdateShareRequest, session: UserSession, baseUrl: String = ""): ShareLinkDTO {
+    suspend fun updateShare(token: String, req: UpdateShareRequest, session: UserSession, baseUrl: String = ""): ShareLinkDTO {
+        // Hash the new PIN before opening the transaction: hashing suspends and is CPU-heavy.
+        val newPinHash = req.pin?.trim()?.takeIf { it.isNotBlank() }?.let { hashPin(it) }
         transaction {
             val target = SharedLinks.selectAll().where { SharedLinks.token eq token }.firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "Share link not found")
@@ -685,7 +695,7 @@ object ShareService {
                     if (req.pin.isBlank()) {
                         it[pinHash] = null
                     } else {
-                        it[pinHash] = hashPin(req.pin.trim())
+                        it[pinHash] = newPinHash
                     }
                 }
                 if (req.redactPrivateNotes != null) {

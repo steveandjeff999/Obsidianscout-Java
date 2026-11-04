@@ -1,5 +1,6 @@
 package com.obsidianscout.auth
 
+import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.db.AppSettings
@@ -83,7 +84,7 @@ class UserSessionsTest {
     }
 
     @Test
-    fun testCreateAndListSessions() {
+    fun testCreateAndListSessions() = runBlocking<Unit> {
         val user = AuthService.register(
             username = "sessiontester",
             teamNumber = 9999,
@@ -122,7 +123,7 @@ class UserSessionsTest {
     }
 
     @Test
-    fun testRevokeSingleSession() {
+    fun testRevokeSingleSession() = runBlocking<Unit> {
         val user = AuthService.register(
             username = "revoketester",
             teamNumber = 8888,
@@ -152,7 +153,7 @@ class UserSessionsTest {
     }
 
     @Test
-    fun testRevokeAllOtherSessions() {
+    fun testRevokeAllOtherSessions() = runBlocking<Unit> {
         val user = AuthService.register(
             username = "revokeotherstester",
             teamNumber = 7777,
@@ -180,7 +181,7 @@ class UserSessionsTest {
     }
 
     @Test
-    fun testRevokeAllSessions() {
+    fun testRevokeAllSessions() = runBlocking<Unit> {
         val user = AuthService.register(
             username = "revokealltester",
             teamNumber = 6666,
@@ -225,7 +226,7 @@ class UserSessionsTest {
     }
 
     @Test
-    fun testDeleteUserCleansUpSessions() {
+    fun testDeleteUserCleansUpSessions() = runBlocking<Unit> {
         val user = AuthService.register(
             username = "deletewithsessions",
             teamNumber = 5555,
@@ -254,7 +255,7 @@ class UserSessionsTest {
     }
 
     @Test
-    fun testRevokedSessionValidation() {
+    fun testRevokedSessionValidation() = runBlocking<Unit> {
         val user = AuthService.register(
             username = "validatortester",
             teamNumber = 4444,
@@ -283,7 +284,7 @@ class UserSessionsTest {
     }
 
     @Test
-    fun testDeleteUserWithAllForeignKeys() {
+    fun testDeleteUserWithAllForeignKeys() = runBlocking<Unit> {
         val user = AuthService.register(
             username = "fullfktester",
             teamNumber = 9506,

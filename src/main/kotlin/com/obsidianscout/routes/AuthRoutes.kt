@@ -698,6 +698,11 @@ fun Route.authRoutes() {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid reset token.")
                     }
                     
+                    // Validate and hash before the transaction: hashing suspends on CryptoDispatcher.
+                    if (request.newPassword.isBlank()) throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Password cannot be blank")
+                    com.obsidianscout.auth.AuthService.validatePassword(request.newPassword)
+                    val newPasswordHash = com.obsidianscout.auth.AuthService.hashPassword(request.newPassword)
+
                     transaction {
                         // Claim the token first so concurrent requests cannot both use it.
                         val claimed = com.obsidianscout.db.PasswordResetTokens.update({
@@ -710,7 +715,7 @@ fun Route.authRoutes() {
                             throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid or expired reset token.")
                         }
 
-                        com.obsidianscout.auth.AuthService.updateUser(
+                        com.obsidianscout.auth.AuthService.updateUserWithHash(
                             callerSession = com.obsidianscout.auth.UserSession(
                                 userId = finalUserId,
                                 username = "SYSTEM",
@@ -719,7 +724,7 @@ fun Route.authRoutes() {
                             ),
                             targetUserId = finalUserId,
                             newUsername = request.newUsername?.takeIf { it.isNotBlank() },
-                            newPassword = request.newPassword,
+                            newPasswordHash = newPasswordHash,
                             newRole = null
                         )
                     }

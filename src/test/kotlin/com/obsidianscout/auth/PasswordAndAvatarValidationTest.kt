@@ -1,5 +1,6 @@
 package com.obsidianscout.auth
 
+import kotlinx.coroutines.runBlocking
 import com.obsidianscout.db.AppSettings
 import com.obsidianscout.db.ChatService
 import com.obsidianscout.db.Users
@@ -36,7 +37,7 @@ class PasswordAndAvatarValidationTest {
     }
 
     @Test
-    fun passwordsLongerThanBcryptAllowsAreRejectedNotCrashed() {
+    fun passwordsLongerThanBcryptAllowsAreRejectedNotCrashed() = runBlocking<Unit> {
         val tooLong = "a".repeat(AuthService.MAX_PASSWORD_BYTES + 1)
         val ex = assertFailsWith<ApiException> {
             AuthService.register("longpw", 7100, tooLong, "FRC", UserRole.SCOUT)
@@ -54,7 +55,7 @@ class PasswordAndAvatarValidationTest {
     }
 
     @Test
-    fun loginWithAnOverlongPasswordFailsNormally() {
+    fun loginWithAnOverlongPasswordFailsNormally() = runBlocking<Unit> {
         AuthService.register("someone", 7101, "Password123!", "FRC", UserRole.SCOUT)
         assertNull(AuthService.login("someone", 7101, "x".repeat(200), "FRC"))
     }

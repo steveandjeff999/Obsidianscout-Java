@@ -1,5 +1,6 @@
 package com.obsidianscout.auth
 
+import kotlinx.coroutines.runBlocking
 import com.obsidianscout.db.AppSettings
 import com.obsidianscout.db.Users
 import com.obsidianscout.integrations.SettingsService
@@ -26,7 +27,7 @@ class CustomRoleUserManagementTest {
     private lateinit var managerSession: UserSession
 
     @BeforeTest
-    fun setUp() {
+    fun setUp() = runBlocking<Unit> {
         testDbFile.parentFile?.mkdirs()
         if (testDbFile.exists()) testDbFile.delete()
         Database.connect("jdbc:sqlite:${testDbFile.absolutePath}", driver = "org.sqlite.JDBC")
@@ -54,7 +55,7 @@ class CustomRoleUserManagementTest {
     }
 
     @Test
-    fun customManagerCannotCreateOrPromoteAdmins() {
+    fun customManagerCannotCreateOrPromoteAdmins() = runBlocking<Unit> {
         assertFailsWith<ApiException> {
             AuthService.createUser(managerSession, "boss", team, "Password123!", program, UserRole.ADMIN)
         }
@@ -68,7 +69,7 @@ class CustomRoleUserManagementTest {
     }
 
     @Test
-    fun customManagerCannotTouchAdminAccounts() {
+    fun customManagerCannotTouchAdminAccounts() = runBlocking<Unit> {
         assertFailsWith<ApiException> {
             AuthService.updateUser(managerSession, admin.userId, null, "NewPassword123!", null)
         }
@@ -76,7 +77,7 @@ class CustomRoleUserManagementTest {
     }
 
     @Test
-    fun customManagerGivesOnlyTheirOwnPages() {
+    fun customManagerGivesOnlyTheirOwnPages() = runBlocking<Unit> {
         val ok = AuthService.createUser(managerSession, "helper", team, "Password123!", program, UserRole.CUSTOM,
             customPages = listOf("matches"))
         assertTrue("matches" in ok.customPages)
@@ -90,7 +91,7 @@ class CustomRoleUserManagementTest {
     }
 
     @Test
-    fun customManagerCannotChangeTheirOwnPages() {
+    fun customManagerCannotChangeTheirOwnPages() = runBlocking<Unit> {
         assertFailsWith<ApiException> {
             AuthService.updateUser(managerSession, manager.id, null, null, null,
                 newCustomPages = manager.customPages + "admin-settings")
@@ -100,7 +101,7 @@ class CustomRoleUserManagementTest {
     }
 
     @Test
-    fun adminsCanGiveAnyTeamAdminPage() {
+    fun adminsCanGiveAnyTeamAdminPage() = runBlocking<Unit> {
         val updated = AuthService.updateUser(admin, manager.id, null, null, null,
             newCustomPages = listOf("users", "admin-settings", "banners", "cluster-management"))
         assertEquals(setOf("dashboard", "my-assignments", "users", "admin-settings", "banners"), updated.customPages.toSet())

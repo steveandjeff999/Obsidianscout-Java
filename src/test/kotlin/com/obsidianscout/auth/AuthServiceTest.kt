@@ -1,5 +1,6 @@
 package com.obsidianscout.auth
 
+import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.db.AppSettings
@@ -41,7 +42,7 @@ class AuthServiceTest {
     }
 
     @Test
-    fun theProfileCarriesAPictureLinkNotTheImage() {
+    fun theProfileCarriesAPictureLinkNotTheImage() = runBlocking<Unit> {
         val user = AuthService.register(username = "pictured", teamNumber = 1234, password = "Password123!")
         val uuid = java.util.UUID.fromString(user.id)
         val image = "data:image/png;base64," + "A".repeat(400_000)
@@ -57,7 +58,7 @@ class AuthServiceTest {
     }
 
     @Test
-    fun aProfileWithoutAPictureHasNoLink() {
+    fun aProfileWithoutAPictureHasNoLink() = runBlocking<Unit> {
         val user = AuthService.register(username = "plain", teamNumber = 1234, password = "Password123!")
 
         assertNull(AuthService.getUserProfile(user.id)?.profilePicture)
@@ -65,7 +66,7 @@ class AuthServiceTest {
     }
 
     @Test
-    fun aMigratedPictureThatIsAlreadyAPathStaysAsItIs() {
+    fun aMigratedPictureThatIsAlreadyAPathStaysAsItIs() = runBlocking<Unit> {
         val user = AuthService.register(username = "legacy", teamNumber = 1234, password = "Password123!")
         val uuid = java.util.UUID.fromString(user.id)
         transaction { Users.update({ Users.id eq uuid }) { it[profilePicture] = "img/avatars/legacy.png" } }
@@ -84,7 +85,7 @@ class AuthServiceTest {
     }
 
     @Test
-    fun testCrossProgramAuthenticationIsolation() {
+    fun testCrossProgramAuthenticationIsolation() = runBlocking<Unit> {
         try {
             // Register an FRC user
             val frcUser = AuthService.register(
@@ -154,7 +155,7 @@ class AuthServiceTest {
     }
 
     @Test
-    fun testSelfServiceUsernameReset() {
+    fun testSelfServiceUsernameReset() = runBlocking<Unit> {
         val user = AuthService.register(
             username = "initial_scout",
             teamNumber = 5678,
@@ -188,7 +189,7 @@ class AuthServiceTest {
     }
 
     @Test
-    fun testSelfServicePasswordReset() {
+    fun testSelfServicePasswordReset() = runBlocking<Unit> {
         val user = AuthService.register(
             username = "pw_scout",
             teamNumber = 4321,
@@ -238,7 +239,7 @@ class AuthServiceTest {
     }
 
     @Test
-    fun testSelfServiceUsernameDuplicateConflict() {
+    fun testSelfServiceUsernameDuplicateConflict() = runBlocking<Unit> {
         val user1 = AuthService.register(
             username = "user_one",
             teamNumber = 9999,
@@ -275,7 +276,7 @@ class AuthServiceTest {
     }
 
     @Test
-    fun testSelfServiceUsernameValidation() {
+    fun testSelfServiceUsernameValidation() = runBlocking<Unit> {
         val user = AuthService.register(
             username = "valid_user",
             teamNumber = 1111,
@@ -316,7 +317,7 @@ class AuthServiceTest {
     }
 
     @Test
-    fun testAdminCannotChangeOtherUserUsername() {
+    fun testAdminCannotChangeOtherUserUsername() = runBlocking<Unit> {
         val admin = AuthService.register(
             username = "team_admin",
             teamNumber = 2222,
@@ -353,7 +354,7 @@ class AuthServiceTest {
     }
 
     @Test
-    fun testTeamRegistrationLockBlocksSelfRegistration() {
+    fun testTeamRegistrationLockBlocksSelfRegistration() = runBlocking<Unit> {
         // 1. Initial admin registers on new team (allowed)
         val admin = AuthService.register(
             username = "admin5555",
@@ -416,7 +417,7 @@ class AuthServiceTest {
     }
 
     @Test
-    fun testUserCreationPermissionsForAdminAndSuperadmin() {
+    fun testUserCreationPermissionsForAdminAndSuperadmin() = runBlocking<Unit> {
         val admin = AuthService.register(
             username = "team_admin",
             teamNumber = 254,
@@ -507,7 +508,7 @@ class AuthServiceTest {
     }
 
     @Test
-    fun testRegisterPasswordTooShort() {
+    fun testRegisterPasswordTooShort() = runBlocking<Unit> {
         val ex = assertFailsWith<ApiException> {
             AuthService.register(
                 username = "short_pw_user",
@@ -522,7 +523,7 @@ class AuthServiceTest {
     }
 
     @Test
-    fun testSelfRegisterAllowsAllRolesByDefault() {
+    fun testSelfRegisterAllowsAllRolesByDefault() = runBlocking<Unit> {
         AuthService.register(username = "founder", teamNumber = 3333, password = "Password123!", program = "FRC", role = UserRole.ADMIN)
         assertEquals(
             listOf("ADMIN", "ANALYTICS", "SCOUT"),
@@ -543,7 +544,7 @@ class AuthServiceTest {
     }
 
     @Test
-    fun testSelfRegisterRespectsTeamAllowedRoles() {
+    fun testSelfRegisterRespectsTeamAllowedRoles() = runBlocking<Unit> {
         AuthService.register(username = "founder", teamNumber = 3334, password = "Password123!", program = "FRC", role = UserRole.ADMIN)
         val settings = com.obsidianscout.integrations.SettingsService.getSettings(3334, "FRC")
         com.obsidianscout.integrations.SettingsService.updateSettings(3334, settings.copy(selfRegisterRoles = listOf("scout", "SCOUT", "bogus")))
@@ -568,7 +569,7 @@ class AuthServiceTest {
     }
 
     @Test
-    fun testUsernamesWithPathOrMarkupCharactersAreRejected() {
+    fun testUsernamesWithPathOrMarkupCharactersAreRejected() = runBlocking<Unit> {
         for (bad in listOf("../5455/alice", "a/b", "a\\b", "<img>", "x\u0000y", "..")) {
             val ex = assertFailsWith<ApiException>("username '$bad' should be rejected") {
                 AuthService.register(
@@ -593,7 +594,7 @@ class AuthServiceTest {
     }
 
     @Test
-    fun testSeedSuperAdminNeverOverwritesExistingAccount() {
+    fun testSeedSuperAdminNeverOverwritesExistingAccount() = runBlocking<Unit> {
         val seed = com.obsidianscout.config.SeedConfig(adminUsername = "superadmin", adminTeamNumber = 0, adminPassword = "OperatorChosen1!")
         AuthService.ensureSeedSuperAdmin(seed)
         assertNotNull(AuthService.login("superadmin", 0, "OperatorChosen1!"))
@@ -605,9 +606,56 @@ class AuthServiceTest {
     }
 
     @Test
-    fun testSeedSuperAdminNeverUsesDefaultPassword() {
+    fun testSeedSuperAdminNeverUsesDefaultPassword() = runBlocking<Unit> {
         val seed = com.obsidianscout.config.SeedConfig(adminUsername = "fresh_superadmin", adminTeamNumber = 0, adminPassword = "change-me")
         AuthService.ensureSeedSuperAdmin(seed)
         assertNull(AuthService.login("fresh_superadmin", 0, "change-me"))
+    }
+
+    @Test
+    fun testBcryptCostAndDispatcherVerification() = runBlocking<Unit> {
+        assertEquals(11, AuthService.BCRYPT_COST)
+
+        val rawPassword = "TestPassword123!"
+        val hash = AuthService.hashPassword(rawPassword)
+        // Cost 11 bcrypt hash begins with $2a$11$ or $2b$11$
+        assertEquals(true, hash.startsWith("$2a$11$") || hash.startsWith("$2b$11$"))
+
+        // Correct password verifies through CryptoDispatcher
+        assertEquals(true, AuthService.verifyPassword(rawPassword, hash))
+
+        // Incorrect password fails
+        assertEquals(false, AuthService.verifyPassword("WrongPassword!", hash))
+
+        // Backwards compatibility: verify a legacy cost 12 hash
+        val legacyCost12Hash = at.favre.lib.crypto.bcrypt.BCrypt.withDefaults().hashToString(12, rawPassword.toCharArray())
+        assertEquals(true, legacyCost12Hash.startsWith("$2a$12$") || legacyCost12Hash.startsWith("$2b$12$"))
+        assertEquals(true, AuthService.verifyPassword(rawPassword, legacyCost12Hash))
+
+        // Over-long password fails safely
+        val overLongPassword = "a".repeat(200)
+        assertEquals(false, AuthService.verifyPassword(overLongPassword, hash))
+    }
+
+    @Test
+    fun testCryptoDispatcherDynamicScaling() {
+        // Small machines: reserve 1 core, floor at 1
+        assertEquals(1, CryptoDispatcher.computeParallelism(availableProcessors = 1, envOverride = null))
+        assertEquals(1, CryptoDispatcher.computeParallelism(availableProcessors = 2, envOverride = null))
+        assertEquals(2, CryptoDispatcher.computeParallelism(availableProcessors = 3, envOverride = null))
+        assertEquals(3, CryptoDispatcher.computeParallelism(availableProcessors = 4, envOverride = null))
+
+        // High-end servers: reserve ~25% (min 2) for Netty/IO and let crypto scale with the remaining cores
+        assertEquals(6, CryptoDispatcher.computeParallelism(availableProcessors = 8, envOverride = null))
+        assertEquals(9, CryptoDispatcher.computeParallelism(availableProcessors = 12, envOverride = null))
+        assertEquals(12, CryptoDispatcher.computeParallelism(availableProcessors = 16, envOverride = null))
+        assertEquals(24, CryptoDispatcher.computeParallelism(availableProcessors = 32, envOverride = null))
+        assertEquals(48, CryptoDispatcher.computeParallelism(availableProcessors = 64, envOverride = null))
+
+        // Environment variable override
+        assertEquals(8, CryptoDispatcher.computeParallelism(availableProcessors = 2, envOverride = "8"))
+        // Invalid environment variable falls back to dynamic calculation
+        assertEquals(1, CryptoDispatcher.computeParallelism(availableProcessors = 2, envOverride = "not-a-number"))
+        assertEquals(1, CryptoDispatcher.computeParallelism(availableProcessors = 2, envOverride = "-4"))
     }
 }
