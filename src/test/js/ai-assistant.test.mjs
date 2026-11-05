@@ -626,7 +626,7 @@ test("history with Team 34 does not cause subsequent unrelated questions to stic
 
 test("allows up to 15 tool calls per prompt and enables visible reasoning across tier profiles", async () => {
     const AI = (await import(pathToFileURL(path.join(staticJs, "ai/local-ai.js")).href)).default;
-    for (const tierId of ["lite", "standard", "gemma4e2b", "advanced", "gemma4e4b"]) {
+    for (const tierId of ["lite", "gemma4e2b", "gemma4e2bq4", "gemma4e4b", "gemma4e4bq4"]) {
         const profile = AI.tierProfile(tierId);
         assert.equal(profile.maxToolCalls, 15, `${tierId} should allow up to 15 toolcalls`);
         assert.equal(profile.visibleReasoning, true, `${tierId} should enable visible reasoning`);
@@ -679,10 +679,31 @@ test("tier routing strategy: Lite uses rule router while Gemma tiers use large c
 
     const gemma2b = AI.tierProfile("gemma4e2b");
     const gemma4b = AI.tierProfile("gemma4e4b");
-    assert.equal(gemma2b.toolMode, "json", "Gemma 2B should use JSON toolcalls");
-    assert.equal(gemma4b.toolMode, "json", "Gemma 4B should use JSON toolcalls");
-    assert.ok(gemma2b.contextChars >= 20000, `Gemma 2B context window should be large (got ${gemma2b.contextChars})`);
-    assert.ok(gemma4b.contextChars >= 28000, `Gemma 4B context window should be large (got ${gemma4b.contextChars})`);
+    // The 4-bit builds route and answer exactly like their 2-bit counterparts (only the weights differ).
+    for (const [q4, q2] of [["gemma4e2bq4", gemma2b], ["gemma4e4bq4", gemma4b]]) {
+        const p = AI.tierProfile(q4);
+        assert.notEqual(p, AI.TIER_PROFILES.lite, `${q4} has its own profile`);
+        assert.deepEqual(p, q2);
+        assert.ok(AI.TIER_ORDER.includes(q4));
+    }
+    assert.deepEqual(AI.TIER_ORDER, ["lite", "gemma4e2b", "gemma4e2bq4", "gemma4e4b", "gemma4e4bq4"]);
+    for (const g of [gemma2b, gemma4b]) {
+        assert.equal(g.toolMode, "model", "Gemma tiers pick tools with the model");
+        assert.equal(g.toolFormat, "gemma", "Gemma tiers use native function calling");
+        assert.ok(g.maxRouterSteps >= 2 && g.maxRouterSteps <= 4, "routing steps are capped");
+    }
+    // One prefill pass must stay short enough for the Windows GPU watchdog: prompts are capped per tier.
+    for (const g of [gemma2b, gemma4b]) {
+        assert.ok(g.maxPromptTokens > 0, "Gemma tiers cap the prompt");
+        assert.ok(g.contextChars <= g.maxPromptTokens * AI.CHARS_PER_TOKEN && g.routerChars <= g.maxPromptTokens * AI.CHARS_PER_TOKEN);
+    }
+    assert.ok(gemma2b.contextChars >= 6000 && gemma4b.contextChars > gemma2b.contextChars, "still room for useful data");
+    assert.equal(gemma2b.answerThinking, false, "E2B asks for a short <thought> instead of native thinking");
+    // Budgets are token-based: prompt + reply must fit the context window (3 chars per token, conservatively).
+    for (const p of [liteProfile, gemma2b, gemma4b]) {
+        assert.ok(p.contextChars / AI.CHARS_PER_TOKEN + p.maxAnswerTokens <= p.contextTokens, "answer prompt + reply fit the context");
+        assert.ok(p.routerChars / AI.CHARS_PER_TOKEN + p.maxRouterTokens <= p.contextTokens, "router prompt + reply fit the context");
+    }
 
     const allowed = Object.keys(Tools.TOOLS);
     const shortlisted = selectTools("now do it using xP and match by match", allowed);
@@ -730,12 +751,16 @@ test("visual follow-ups: editSpec handles add team to graph, use xP, and context
     assert.equal(route2.args.by, "match");
 });
 
-test("model tool calling stepSchema allows thought and reasoning fields without breaking parser", async () => {
+test("stepSchema gives each tool its own argument schema, and the parser still reads extra fields", async () => {
     const { stepSchema, parseToolCalls } = await import(pathToFileURL(path.join(staticJs, "ai/assistant/tool-calls.js")).href);
     const allowed = ["make_table", "make_chart", "match_by_match", "top_teams"];
     const schema = stepSchema(allowed);
-    assert.ok(schema.properties.thought, "thought is an accepted property in stepSchema");
-    assert.ok(schema.properties.reasoning, "reasoning is an accepted property in stepSchema");
+    const branches = schema.properties.calls.items.anyOf;
+    assert.equal(branches.length, allowed.length, "one branch per tool");
+    const topTeams = branches.find((b) => b.properties.tool.enum[0] === "top_teams");
+    assert.ok(topTeams.properties.args.properties.metric, "top_teams takes a metric");
+    assert.ok(!topTeams.properties.args.properties.columns, "top_teams does not accept make_table's columns");
+    assert.deepEqual(topTeams.properties.args.properties.order.enum, ["desc", "asc"]);
 
     const modelOutputWithThought = JSON.stringify({
         thought: "The user wants to see match by match performance using xP for the four teams on screen.",
@@ -770,5 +795,307 @@ Team 1209 has the highest average score (95).`;
     assert.ok(parsed.content.includes("Here is the analysis based on the available data."));
 });
 
+// ------------------------------------------------------------------ native tool calling, validation, composite queries
 
+test("Gemma native tool calls are parsed, and unknown tools are reported", async () => {
+    const { parseGemmaToolCalls, gemmaDisplayText } = await import(pathToFileURL(path.join(staticJs, "ai/assistant/gemma-format.js")).href);
+    const raw = '<|channel>thought\nThey want auto in one match.<channel|><|tool_call>call:make_table{columns:[<|"|>Auto points<|"|>],match:<|"|>10<|"|>,teams:[254,1678]}<tool_call|><|tool_response>';
+    assert.deepEqual(parseGemmaToolCalls(raw), [{ tool: "make_table", args: { columns: ["Auto points"], match: "10", teams: [254, 1678] } }]);
+    const { calls } = Tools.parseToolCalls(raw, Object.keys(Tools.TOOLS), { withRejected: true });
+    assert.equal(calls[0].tool, "make_table");
+    const bad = Tools.parseToolCalls('<|tool_call>call:make_coffee{size:<|"|>large<|"|>}<tool_call|>', Object.keys(Tools.TOOLS), { withRejected: true });
+    assert.equal(bad.calls.length, 0);
+    assert.equal(bad.rejected[0].tool, "make_coffee");
+    // Display text: thinking goes to the thought drawer, markup is removed.
+    assert.equal(gemmaDisplayText('<|channel>thought\nchecking<channel|>254 leads.<turn|>'), "<thought>checking</thought>254 leads.");
+    assert.equal(gemmaDisplayText("<|channel>thought\nstill thinking"), "<thought>still thinking");
+});
 
+test("tool calls are validated against the tool and the event", () => {
+    const v = (tool, args) => {
+        const { args: cleaned, unknownTeams } = Tools.coerceArgsDetailed(ctx, args);
+        return Tools.validateCall(ctx, tool, cleaned, { unknownTeams });
+    };
+    assert.deepEqual(v("team_overview", { team: 254 }).errors, []);
+    assert.match(v("team_overview", {}).errors.join(" "), /team is required/);
+    assert.match(v("team_overview", { team: 9999 }).errors.join(" "), /9999 is not at this event/);
+    assert.match(v("compare_teams", { teams: [254, 9999] }).errors.join(" "), /9999/, "an unknown team in a list is reported, not dropped silently");
+    assert.match(v("top_teams", { metric: "warp drive" }).errors.join(" "), /not a metric/);
+    assert.deepEqual(v("top_teams", { metric: "Auto points", order: "ASC" }).args.order, "asc", "enum values are case-corrected");
+    assert.match(v("top_teams", { order: "sideways" }).errors.join(" "), /order must be one of/);
+    assert.match(v("match_preview", { match: "999" }).errors.join(" "), /not in the schedule/);
+    assert.match(v("make_table", { columns: ["Auto points", "flux capacitor"] }).errors.join(" "), /flux capacitor/);
+    assert.deepEqual(v("make_table", { columns: ["EPA - xP"], matches: ["5-8"] }).errors, [], "arithmetic columns and match ranges are valid");
+    assert.equal(v("team_overview", { team: 254, columns: ["x"] }).args.columns, undefined, "unknown parameters are dropped");
+    // Native declarations carry each tool's own parameters and required list.
+    const decl = Tools.toolSchema("compare_teams");
+    assert.deepEqual(decl.required, ["teams"]);
+    assert.equal(decl.properties.teams.type, "array");
+});
+
+test("one call can combine teams, a match and a metric", async () => {
+    const team = 254;
+    const played = ctx.stats.get(team).perMatch.find((p) => typeof p.values.score_auto === "number");
+    assert.ok(played, "254 has a scouted match");
+    const other = ctx.matches.find((m) => m.matchNumber === played.matchNumber);
+    const partner = [...other.redTeams, ...other.blueTeams].map((k) => Number(k.replace("frc", ""))).find((n) => n !== team);
+    const autoLabel = ctx.metrics.find((m) => m.id === "score_auto").label;
+
+    const out = await Tools.TOOLS.make_table.run(ctx, { teams: [team, partner], match: String(played.matchNumber), columns: [autoLabel] }, {});
+    assert.ok(!out.facts.error, JSON.stringify(out.facts));
+    assert.equal(out.facts.rows.length, 2, "one row per named team, not the six teams of the match");
+    const row = out.facts.rows.find((r) => r.team === team);
+    assert.equal(row[autoLabel], Math.round(played.values.score_auto * 10) / 10, "value is that match's, not the average");
+    assert.match(out.facts.rows_are, /only/);
+
+    // last N matches and match ranges
+    const last = await Tools.TOOLS.make_table.run(ctx, { teams: [team], last: 2, columns: [autoLabel], rows: "matches" }, {});
+    assert.equal(last.facts.rows.length, 2);
+    const range = await Tools.TOOLS.make_chart.run(ctx, { teams: [team], matches: ["1-7"], metrics: [autoLabel], by: "match" }, {});
+    assert.ok(range.chart.x.every((x) => Number(x.slice(1)) <= 7), "chart only covers matches 1-7");
+
+    // The question's entities are resolved in code for the router prompt.
+    const ents = Tools.questionEntities(ctx, `compare ${team} and ${partner} in match ${played.matchNumber} using auto points`);
+    assert.deepEqual(ents.teams.map((x) => x.number).sort(), [team, partner].sort());
+    assert.equal(ents.match.ref, String(played.matchNumber));
+});
+
+test("native routing: tools are declared, results come back as tool turns, and an invalid call gets one repair", async () => {
+    const AI = (await import(pathToFileURL(path.join(staticJs, "ai/local-ai.js")).href)).default;
+    const realGenerate = AI.generate;
+    const seen = [];
+    let step = 0;
+    AI.generate = async (messages, options) => {
+        seen.push({ messages, options });
+        if (options.raw) {
+            step++;
+            if (step === 1) return '<|tool_call>call:team_overview{team:9999}<tool_call|><|tool_response>';
+            if (step === 2) return '<|tool_call>call:team_overview{team:254}<tool_call|><|tool_response>';
+            return "That covers it.";
+        }
+        return "254 is solid.";
+    };
+    try {
+        const out = await Tools.answerQuestion({ question: "how good is team 9999?", ctx, tier: { id: "gemma4e2b" }, isZachary: false });
+        assert.equal(out.results.length, 1, "the invalid call never ran");
+        assert.equal(out.results[0].args.team, 254);
+        const first = seen[0].options;
+        assert.ok(Array.isArray(first.tools) && first.tools.some((d) => d.function.name === "team_overview"), "tools are passed as native declarations");
+        assert.equal(first.jsonSchema, null);
+        const repair = seen[1].messages;
+        const toolTurn = repair[repair.length - 1];
+        assert.equal(toolTurn.role, "tool");
+        assert.match(toolTurn.content, /9999 is not at this event/);
+        assert.ok(repair[repair.length - 2].tool_calls, "the bad call is shown back to the model as its own tool call");
+        assert.equal(seen[0].messages[0].role, "system", "Gemma gets a real system turn");
+        assert.ok(seen.length <= 4, "routing stops when the model answers");
+    } finally {
+        AI.generate = realGenerate;
+    }
+});
+
+test("the tool shortlist works in Spanish, Turkish and Hebrew", () => {
+    const allowed = Object.keys(Tools.TOOLS);
+    assert.ok(Tools.selectTools("¿qué equipos son los más consistentes?", allowed, 6).includes("consistency"));
+    assert.ok(Tools.selectTools("en iyi seçim adayları kimler? seçim", allowed, 6).includes("pick_candidates"));
+    assert.ok(Tools.selectTools("מה החוזקות והחולשות של 254", allowed, 6, ctx).includes("team_percentiles"));
+    assert.ok(Tools.selectTools("compare 254 and 1678 in match 3 using auto points", allowed, 3, ctx).includes("make_table"), "multi-part questions shortlist the builder");
+});
+
+test("message budget drops the oldest history first and keeps the question", async () => {
+    const { enforceMessageBudget } = await import(pathToFileURL(path.join(staticJs, "ai/ai-tools.js")).href);
+    const msgs = [{ role: "system", content: "S".repeat(100) }, { role: "user", content: "old".repeat(100) }, { role: "assistant", content: "mid".repeat(100) }, { role: "user", content: "latest question" }];
+    const out = enforceMessageBudget(msgs, 450);
+    assert.equal(out[out.length - 1].content, "latest question");
+    assert.equal(out[0].content, msgs[0].content);
+    assert.ok(!out.some((m) => m.content.startsWith("old")), "oldest turn dropped first");
+});
+
+test("routing eval scores tools, arguments and rejected calls", async () => {
+    const Eval = await import(pathToFileURL(path.join(staticJs, "ai/assistant/eval.js")).href);
+    const vars = Eval.fillPlaceholders(ctx);
+    assert.ok(ctx.stats.has(vars.A) && ctx.stats.has(vars.B) && vars.A !== vars.B);
+    // A scripted "model" that answers every case with a fixed route.
+    const fake = async ({ question, onEvent }) => {
+        if (/^hello/i.test(question)) return { results: [] };
+        if (/match \d+ using auto/.test(question)) {
+            onEvent({ type: "tool_rejected", name: "make_table", errors: ["x"] });
+            return { results: [{ tool: "make_table", args: { teams: [vars.A, vars.B], match: String(vars.M), columns: ["Auto points"] } }] };
+        }
+        return { results: [{ tool: "top_teams", args: {} }] };
+    };
+    const { rows, summary } = await Eval.runModelEval({ answerQuestion: fake, ctx, tier: { id: "gemma4e2b" } });
+    const composite = rows.find((r) => /match \d+ using auto/.test(r.question));
+    assert.ok(composite.tool_ok && composite.args_ok);
+    assert.equal(composite.rejected, 1);
+    assert.ok(rows.find((r) => r.question === "hello!").tool_ok, "no tool for small talk scores as correct");
+    assert.ok(rows.find((r) => r.question === "top 5 teams by auto").tool_ok);
+    assert.equal(summary.cases, Eval.DEFAULT_CASES.length);
+    assert.ok(summary.tool_accuracy > 0 && summary.tool_accuracy < 100);
+});
+
+// ------------------------------------------------------------------ all-team qualitative / pit / match data
+
+test("all-team qualitative, pit and match-report tools return data", async () => {
+    const qual = await Tools.TOOLS.qualitative_overview.run(ctx, {}, {});
+    assert.ok(!qual.facts.error, JSON.stringify(qual.facts));
+    assert.equal(qual.facts.teams_with_qualitative_data, TEAMS.length, "every team with qualitative reports is listed");
+    const first = qual.facts.teams[0];
+    assert.ok(first.notes > 0 && first.qualitative_reports > 0);
+    assert.ok(Object.keys(first.ratings).some((k) => /driver/i.test(k)), "qualitative ratings are included");
+    assert.ok(Array.isArray(first.themes), "recurring note themes are listed (words in two or more different notes)");
+
+    // Pit data: the synthetic event has no pit form, so give it one.
+    const pitCtx = { ...ctx, pitConfig: { fields: [{ id: "drive", type: "select", label: "Drivetrain" }, { id: "climb", type: "checkbox", label: "Can climb" }, { id: "photo", type: "image", label: "Photo" }] },
+        pitEntries: [{ targetTeamNumber: 254, createdAt: "2026-10-01", data: { drive: "swerve", climb: true, photo: "data:x" } }, { targetTeamNumber: 1678, createdAt: "2026-10-01", data: { drive: "tank" } }] };
+    const pit = await Tools.TOOLS.pit_overview.run(pitCtx, {}, {});
+    assert.equal(pit.facts.teams_with_pit_data, 2);
+    assert.deepEqual(pit.facts.teams.find((x) => x.team === 254).answers, { Drivetrain: "swerve", "Can climb": "yes" });
+    assert.ok(!pit.facts.questions.includes("Photo"), "images are skipped");
+    assert.equal(pit.facts.teams_without_pit_data.length, TEAMS.length - 2);
+    assert.ok((await Tools.TOOLS.pit_overview.run(ctx, {}, {})).facts.error, "no pit form -> clear error");
+
+    const reports = await Tools.TOOLS.match_reports.run(ctx, { match: "3" }, {});
+    assert.equal(reports.facts.match, "QM 3");
+    assert.equal(reports.facts.reports.length, 6);
+    assert.equal(reports.facts.scouted_reports, 6);
+    assert.ok(reports.facts.reports.every((r) => r.match_notes), "match notes are included");
+    assert.ok(reports.facts.reports.some((r) => r.qualitative_notes), "qualitative notes from that match are included");
+    assert.ok(Tools.briefFor({ tool: "match_reports", facts: reports.facts }).includes("QM 3"));
+});
+
+test("questions about all teams' qualitative, pit and match data shortlist the right tool", () => {
+    const allowed = Object.keys(Tools.TOOLS);
+    const top = (q, n = 4) => Tools.selectTools(q, allowed, n, ctx);
+    assert.ok(top("summerize the qualatative scouting data for all teams").includes("qualitative_overview"));
+    assert.ok(top("summarize the qualitative scouting data for all teams").includes("qualitative_overview"));
+    assert.ok(top("summerize their capabilitys using the pit socuitng data").includes("pit_overview"));
+    assert.ok(top("what did our scouts record in match 3?").includes("match_reports"));
+    assert.ok(top("resume los datos cualitativos de todos los equipos").includes("qualitative_overview"));
+});
+
+test("a Gemma tier whose engine does not take native tools falls back to JSON with the tools in the prompt", async () => {
+    const AI = (await import(pathToFileURL(path.join(staticJs, "ai/local-ai.js")).href)).default;
+    const realGenerate = AI.generate;
+    const realStatus = AI.getEngineStatus;
+    const seen = [];
+    AI.getEngineStatus = () => ({ tierId: "gemma4e2b", nativeTools: false });
+    AI.generate = async (messages, options) => {
+        seen.push({ messages, options });
+        if (options.raw) return seen.length === 1 ? JSON.stringify({ calls: [{ tool: "qualitative_overview", args: {} }] }) : '{"calls":[]}';
+        return "Summary.";
+    };
+    try {
+        const out = await Tools.answerQuestion({ question: "summarize the qualitative scouting data for all teams", ctx, tier: { id: "gemma4e2b" }, isZachary: false });
+        assert.equal(seen[0].options.tools, null, "no native declarations");
+        assert.ok(seen[0].options.jsonSchema, "JSON grammar instead");
+        assert.match(seen[0].messages[0].content, /TOOLS:\n- /, "the tools are listed in the prompt");
+        assert.equal(out.results[0].tool, "qualitative_overview");
+    } finally {
+        AI.generate = realGenerate;
+        AI.getEngineStatus = realStatus;
+    }
+});
+
+test("team names match without spaces or punctuation, and two named teams prefer compare_teams", () => {
+    const named = { ...ctx, teams: new Map(ctx.teams), stats: new Map(ctx.stats) };
+    named.teams.set(254, { ...(ctx.teams.get(254) || {}), nickname: "Wildcard Robotics" });
+    named.stats.set(254, { ...ctx.stats.get(254), name: "Wildcard Robotics" });
+    assert.deepEqual(Data.findTeamsInText(named, "compare 1678 and wild card robotics on opr and xP"), [1678, 254]);
+    assert.deepEqual(Data.findTeamsInText(named, "wildcard vs 1678"), [254, 1678]);
+    const top = Tools.selectTools("compare 1678 and wild card robotics on opr and xP", Object.keys(Tools.TOOLS), 3, named);
+    assert.equal(top[0], "compare_teams");
+    assert.ok(!top.includes("compare_metrics"), "metric-vs-metric is not offered for two named teams");
+});
+
+test("a question naming new teams is not treated as an edit of the chart on screen, and must include those teams", async () => {
+    const AI = (await import(pathToFileURL(path.join(staticJs, "ai/local-ai.js")).href)).default;
+    const realGenerate = AI.generate;
+    // The previous reply drew a metric-vs-metric chart (top teams by EPA vs xP).
+    const prev = await Tools.TOOLS.make_chart.run(ctx, { type: "scatter", x: "xP", metrics: ["OPR"], limit: 2 }, {});
+    const history = historyWith(prev, "make_chart");
+    const seen = [];
+    AI.generate = async (messages, options) => {
+        seen.push({ messages, options });
+        if (!options.raw) return "Done.";
+        if (seen.length === 1) return '<|tool_call>call:make_chart{type:<|"|>scatter<|"|>,x:<|"|>xP<|"|>,metrics:[<|"|>OPR<|"|>],limit:2}<tool_call|><|tool_response>';
+        if (seen.length === 2) return '<|tool_call>call:compare_teams{teams:[1678,254],metrics:[<|"|>OPR<|"|>,<|"|>xP<|"|>]}<tool_call|><|tool_response>';
+        return "That answers it.";
+    };
+    try {
+        const out = await Tools.answerQuestion({ question: "compare 1678 and 254 on opr and xP", history, ctx, tier: { id: "gemma4e2b" }, isZachary: false });
+        const first = seen[0];
+        assert.ok(!first.messages[first.messages.length - 1].content.includes("On screen from the previous reply"), "no 'call the same tool' hint for a new question");
+        assert.ok(!first.options.tools.some((d) => d.function.name === "compare_metrics"), "metric-vs-metric is not offered for two named teams");
+        const repair = seen[1].messages[seen[1].messages.length - 1];
+        assert.match(repair.content, /teams 1678, 254/, "the event-wide call is rejected with the named teams");
+        assert.deepEqual(out.results.map((r) => r.tool), ["compare_teams"], "only the call with the named teams ran");
+        assert.deepEqual(out.results[0].args.teams, [1678, 254]);
+    } finally {
+        AI.generate = realGenerate;
+    }
+});
+
+test("wrong comparison claims are rewritten from the table, and copied display notes are removed", async () => {
+    const named = { ...ctx, teams: new Map(ctx.teams), stats: new Map(ctx.stats) };
+    named.stats.set(254, { ...ctx.stats.get(254), name: "Wildcard Robotics" });
+    named.stats.set(1678, { ...ctx.stats.get(1678), name: "Crazy Train" });
+    const out = await Tools.TOOLS.make_chart.run(named, { teams: [254, 1678], metrics: ["xP", "OPR"] }, {});
+    const res = [{ tool: "make_chart", args: {}, ...out }];
+    const xp = (t) => out.facts.rows.find((r) => r.team === t).xP;
+    const opr = (t) => out.facts.rows.find((r) => r.team === t).OPR;
+    assert.ok(xp(254) > xp(1678) && opr(254) > opr(1678), "fixture: 254 is higher on both");
+    const wrong = '[Shown with this reply: table "xP, OPR" (2 rows)]\nThe chart shows both teams. Wild Card Robotics leads in the xP metric, while Crazy Train shows a stronger performance in the OPR metric.';
+    const fixed = Tools.verifyAndCorrectAnswer(wrong, res, "compare 254 and 1678 on xP and OPR", named).text;
+    assert.ok(!fixed.includes("[Shown with this reply"), fixed);
+    assert.ok(!/Crazy Train shows a stronger/.test(fixed), fixed);
+    assert.match(fixed, /254 is higher on xP .* 254 is higher on OPR/, fixed);
+    const right = "Wildcard Robotics leads on xP and is also higher on OPR.";
+    assert.equal(Tools.verifyAndCorrectAnswer(right, res, "q", named).text, right, "correct claims are left alone");
+});
+
+test("'make that a scatter plot' redraws the on-screen teams, not every team", async () => {
+    const AI = (await import(pathToFileURL(path.join(staticJs, "ai/local-ai.js")).href)).default;
+    const realGenerate = AI.generate;
+    const prev = await Tools.TOOLS.make_chart.run(ctx, { teams: [254, 1678], metrics: ["xP", "OPR"] }, {});
+    const history = historyWith(prev, "make_chart");
+    const seen = [];
+    AI.generate = async (messages, options) => {
+        seen.push({ messages, options });
+        if (!options.raw) return "Here it is.";
+        if (seen.length === 1) return '<|tool_call>call:scatter{metric_x:<|"|>xP<|"|>,metric_y:<|"|>OPR<|"|>}<tool_call|><|tool_response>';
+        if (seen.length === 2) {
+            const hint = messages[messages.length - 1].content;
+            const m = hint.match(/Call make_chart with (\{.*\})\./);
+            return `<|tool_call>call:make_chart${m ? m[1].replace(/"([a-z_]+)":/g, "$1:").replace(/"/g, '<|"|>') : "{}"}<tool_call|><|tool_response>`;
+        }
+        return "Done.";
+    };
+    try {
+        const out = await Tools.answerQuestion({ question: "make that a scatter plot", history, ctx, tier: { id: "gemma4e2b" }, isZachary: false });
+        assert.match(seen[0].messages[seen[0].messages.length - 1].content, /Suggested call .*"type":"scatter"/, "the edit is suggested from the on-screen spec");
+        assert.deepEqual(out.results.map((r) => r.tool), ["make_chart"], "the all-teams scatter was rejected");
+        assert.equal(out.results[0].chart.type, "scatter");
+        assert.deepEqual(out.results[0].chart.points.map((p) => p.team).sort((a, b) => a - b), [254, 1678]);
+    } finally {
+        AI.generate = realGenerate;
+    }
+});
+
+test("scatter plots only the teams asked for, teams are never silently dropped, and false 'same position' claims are fixed", async () => {
+    const out = await Tools.TOOLS.scatter.run(ctx, { metric_x: "OPR", metric_y: "xP", teams: [254, 1678] }, {});
+    assert.deepEqual(out.chart.points.map((p) => p.team).sort((a, b) => a - b), [254, 1678]);
+    assert.deepEqual(out.facts.teams_plotted.slice().sort((a, b) => a - b), [254, 1678]);
+    assert.equal((await Tools.TOOLS.scatter.run(ctx, { metric_x: "OPR", metric_y: "xP" }, {})).chart.points.length, TEAMS.length, "no teams -> every team");
+
+    const v = (tool, args) => Tools.validateCall(ctx, tool, Tools.coerceArgsDetailed(ctx, args).args).errors.join(" ");
+    assert.equal(v("scatter", { metric_x: "OPR", metric_y: "xP", teams: [254, 1678] }), "");
+    assert.match(v("current_rankings", { teams: [254, 1678] }), /cannot limit to specific teams.*make_chart/);
+    assert.match(v("team_overview", { teams: [254] }), /takes "team", not "teams"/);
+
+    const res = [{ tool: "scatter", args: {}, ...out }];
+    const claim = "The scatter plot comparing 254 and 1678 on OPR versus xP shows that both teams occupy the exact same position on the chart, indicating identical performance metrics across these two key areas.";
+    const fixed = Tools.verifyAndCorrectAnswer(claim, res, "scatter 254 and 1678 opr vs xp", ctx).text;
+    assert.ok(!/same position/.test(fixed), fixed);
+    assert.match(fixed, /254 is higher on (OPR|xP)/, fixed);
+});

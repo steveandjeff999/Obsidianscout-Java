@@ -742,12 +742,15 @@ export function findTeamsInText(ctx, text, { excludeMatch = null } = {}) {
     const addAlias = (tmNum, aliasStr, priority = 10) => {
         if (!aliasStr) return;
         const cleanStr = String(aliasStr).trim();
-        const norm = normalizeTeamQuery(cleanStr);
+        // Compared without spaces or punctuation, so "wild card robotics" finds "Wildcard Robotics" and
+        // "cheesy-poofs" finds "Cheesy Poofs".
+        const norm = normalizeTeamQuery(cleanStr).replace(/\s+/g, "");
         if (norm.length < 3 || GENERIC_TEAM_WORDS.has(norm)) return;
         const key = `${tmNum}:${norm}`;
         if (registered.has(key)) return;
         registered.add(key);
-        const re = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(cleanStr)}(?![\\p{L}\\p{N}])`, "giu");
+        const body = Array.from(norm).map(escapeRe).join("[\\s'’\\-_.&]*");
+        const re = new RegExp(`(?<![\\p{L}\\p{N}])${body}(?![\\p{L}\\p{N}])`, "giu");
         nameAliases.push({ team: tmNum, alias: cleanStr, norm, re, priority });
     };
 

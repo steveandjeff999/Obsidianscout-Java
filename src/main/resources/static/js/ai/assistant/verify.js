@@ -55,6 +55,7 @@ export function stripMarkdownTables(text) {
  */
 export function cleanGraphRefusalText(text, hasVisual, hasTable = false) {
     if (!text) return "";
+    text = stripDisplayNotes(text);
     if (hasTable) text = stripMarkdownTables(text);
     const generalRefusals = [
         /As a text-based AI, I (?:do not|don't) have access to (?:external )?(?:apis?|tool\s*calls?)[^.]*\.\s*/gi,
@@ -170,7 +171,11 @@ function teamNames(ctx) {
     const list = [];
     ctx.stats.forEach((s) => {
         const n = String(s.name || "").trim();
-        if (n.length >= 4 && counts.get(n.toLowerCase()) === 1 && !/^team\s*\d+$/i.test(n)) list.push({ team: s.teamNumber, re: new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(n)}(?![\\p{L}\\p{N}])`, "giu") });
+        if (n.length >= 4 && counts.get(n.toLowerCase()) === 1 && !/^team\s*\d+$/i.test(n)) {
+            // Spaces and punctuation are optional, so "Wild Card Robotics" finds "Wildcard Robotics".
+            const letters = Array.from(n.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ""));
+            if (letters.length >= 4) list.push({ team: s.teamNumber, re: new RegExp(`(?<![\\p{L}\\p{N}])${letters.map(escapeRe).join("[\\s'’\\-_.&]*")}(?![\\p{L}\\p{N}])`, "giu") });
+        }
     });
     nameCache.set(ctx, list);
     return list;
@@ -306,6 +311,83 @@ export function dropRowLists(text, results, ctx) {
     return lines.filter((_, i) => keep[i]).join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
+const MORE_WORDS = /\b(?:leads?|leading|higher|highest|stronger|strongest|better|best|more|most|ahead|outperform\w*|edges?|tops?|dominat\w*|superior|wins?)\b/i;
+const SAME_WORDS = /\b(?:same|identical|equal|equally|tied|level|indistinguishable|overlap\w*)\b/i;
+const LESS_WORDS = /\b(?:lower|lowest|weaker|weakest|worse|worst|less|least|fewer|behind|trails?|trailing)\b/i;
+
+/**
+ * Checks comparisons between the few teams of a comparison table, clause by clause ("A leads in xP, while B is
+ * stronger in OPR"): each clause that names one metric and says a team is higher / lower is checked against the
+ * table. If any clause is wrong, the sentence is rewritten from the table ("4646 is higher on xP (240.3 vs 60.2)").
+ */
+export function correctComparisons(text, results, ctx) {
+    const index = tableIndex(results, ctx).filter((e) => e.values.size >= 2 && e.values.size <= 6);
+    if (!index.length) return { text, corrected: 0 };
+    let corrected = 0;
+    const describe = (entry) => {
+        const sorted = Array.from(entry.values.entries()).sort((a, b) => b[1] - a[1]);
+        const [top, next] = sorted;
+        if (sorted.length === 2) {
+            return top[1] === next[1]
+                ? `${top[0]} and ${next[0]} are level on ${entry.label} (${Data.round(top[1], 1)})`
+                : `${top[0]} is higher on ${entry.label} (${Data.round(top[1], 1)} vs ${Data.round(next[1], 1)} for ${next[0]})`;
+        }
+        return `${entry.label}: ${sorted.map(([team, v]) => `${team} ${Data.round(v, 1)}`).join(", ")}`;
+    };
+    const fixSentence = (sentence) => {
+        const named = index.filter((e) => e.re.test(sentence));
+        // "Both teams occupy the same position / are identical / are equal": wrong when the named teams differ by
+        // more than 5% on a metric the sentence names (or on any compared metric when it names none).
+        if (SAME_WORDS.test(sentence)) {
+            const teams = Array.from(new Set(teamMentions(sentence, ctx).map((m) => m.team)));
+            const checked = named.length ? named : index;
+            const differs = checked.some((e) => {
+                const vals = (teams.length >= 2 ? teams : Array.from(e.values.keys())).map((tm) => e.values.get(tm)).filter((v) => typeof v === "number");
+                if (vals.length < 2) return false;
+                const hi = Math.max(...vals);
+                const lo = Math.min(...vals);
+                return hi - lo > Math.max(0.5, Math.abs(hi) * 0.05);
+            });
+            if (differs) {
+                corrected++;
+                return `${checked.map(describe).join("; ")}.`;
+            }
+            return sentence;
+        }
+        if (!named.length || !(MORE_WORDS.test(sentence) || LESS_WORDS.test(sentence))) return sentence;
+        const clauses = sentence.split(/,?\s+(?:while|whereas|but|although|though|yet)\s+|;\s*|,\s+and\s+/i);
+        let wrong = false;
+        clauses.forEach((clause) => {
+            const metrics = named.filter((e) => e.re.test(clause));
+            const mentions = teamMentions(clause, ctx).filter((m) => metrics.length && metrics[0].values.has(m.team));
+            if (metrics.length !== 1 || !mentions.length) return;
+            const less = LESS_WORDS.test(clause);
+            if (!less && !MORE_WORDS.test(clause)) return;
+            // "A leads B on xP": the claim is about the first team mentioned.
+            const entry = metrics[0];
+            const values = Array.from(entry.values.entries());
+            const best = values.reduce((a, b) => ((less ? b[1] < a[1] : b[1] > a[1]) ? b : a));
+            const claimed = entry.values.get(mentions[0].team);
+            if (claimed !== best[1]) wrong = true;
+        });
+        if (!wrong) return sentence;
+        corrected++;
+        const parts = named.map(describe);
+        return `${parts.join("; ")}.`;
+    };
+    const lines = String(text).split("\n").map((line) => {
+        if (/^\s*\|/.test(line) || !line.trim()) return line;
+        const lead = (line.match(/^\s*(?:[-*+]\s+|\d+\.\s+)?/) || [""])[0];
+        return lead + line.slice(lead.length).split(/(?<=[.!?])\s+/).map(fixSentence).join(" ");
+    });
+    return { text: lines.join("\n"), corrected };
+}
+
+/** Removes "[Shown with this reply: ...]" notes the model copied from the conversation history into its answer. */
+export function stripDisplayNotes(text) {
+    return String(text || "").replace(/^\s*\[Shown with this reply:[^\]]*\]\s*/gim, "").replace(/\[Shown with this reply:[^\]]*\]\s*/gi, "");
+}
+
 /** Kept for callers of the earlier name. */
 export function correctLeaderClaims(text, results, ctx) {
     return correctTableClaims(text, results, ctx);
@@ -325,7 +407,7 @@ export function verifyAndCorrectAnswer(text, results, question, ctx) {
     const { thought, content, isThinking } = parseThoughtAndContent(text);
     const hasTable = results.some((r) => r.table && r.table.rows && r.table.rows.length);
     // A table the model re-typed under the real one is dropped before checking (see stripMarkdownTables).
-    const rawCheck = content || (isThinking ? "" : text);
+    const rawCheck = stripDisplayNotes(content || (isThinking ? "" : text));
     const checkText = hasTable ? stripMarkdownTables(rawCheck) : rawCheck;
 
     // Build verified fact lookup
@@ -506,6 +588,7 @@ export function verifyAndCorrectAnswer(text, results, question, ctx) {
     finalOutput = cleanGraphRefusalText(finalOutput, hasVisual, hasTable);
     if (hasVisual) finalOutput = dropRowLists(finalOutput, results, ctx);
     if (!hadCriticalHallucination) finalOutput = correctTableClaims(finalOutput, results, ctx).text;
+    if (!hadCriticalHallucination) finalOutput = correctComparisons(finalOutput, results, ctx).text;
     if (!finalOutput.trim() && briefs.length) finalOutput = briefs.join("\n\n");
     if (!finalOutput.trim() && briefs.length) finalOutput = briefs.join("\n\n");
 

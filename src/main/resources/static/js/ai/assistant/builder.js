@@ -2,8 +2,11 @@
  * General table and chart builder. The model (or the rule router) describes WHAT to show as a small spec and this
  * code builds it from the scouting data, so every number on screen is exact and any combination can be asked for.
  *
- *   make_table {teams, exclude, match, conditions, columns, sort_by, order, limit, rows: "teams"|"matches", chart, document, title}
- *   make_chart {type, teams, exclude, match, conditions, metrics, x, by: "team"|"match", sort_by, order, limit, title}
+ *   make_table {teams, exclude, match, matches, last, conditions, columns, sort_by, order, limit, rows: "teams"|"matches", chart, document, title}
+ *   make_chart {type, teams, exclude, match, matches, last, conditions, metrics, x, by: "team"|"match", sort_by, order, limit, title}
+ *
+ * match / matches / last restrict values to those matches ("254 vs 1678 in match 10 on auto" is
+ * {teams:[254,1678], match:"10", columns:["Auto points"]}); without them values are event averages.
  *
  * A column / metric is any metric name, "max <metric>", "min <metric>", "stdev <metric>", "matches scouted",
  * "matches played", "official rank", "record", "ranking score", or arithmetic such as "EPA - xP" or "(Auto + Teleop) / 2".
@@ -192,10 +195,91 @@ const sameColumn = (a, b) => a && b && a.key === b.key;
 
 const OPS = { ">": (v, x) => v > x, ">=": (v, x) => v >= x, "<": (v, x) => v < x, "<=": (v, x) => v <= x, "=": (v, x) => v === x, "==": (v, x) => v === x, "!=": (v, x) => v !== x };
 
+// ------------------------------------------------------------------ match filters
+//
+// "in match 10", "matches 10-20", "their last 3 matches": values are then taken only from those matches instead of
+// the event averages. With teams AND match given, match filters the rows; with match alone it picks the six teams.
+
+const MATCH_RANGE = /^\s*(?:qm|q|match)?\s*(\d{1,3})\s*(?:-|to|–)\s*(?:qm|q|match)?\s*(\d{1,3})\s*$/i;
+
+function matchesFromRefs(ctx, refs) {
+    const out = [];
+    (Array.isArray(refs) ? refs : [refs]).forEach((ref) => {
+        const range = MATCH_RANGE.exec(String(ref));
+        if (range) {
+            const [a, b] = [Number(range[1]), Number(range[2])].sort((x, y) => x - y);
+            ctx.matches.filter((m) => m.compLevel === "qm" && m.matchNumber >= a && m.matchNumber <= b).forEach((m) => out.push(m));
+        } else {
+            const m = Data.findMatch(ctx, ref);
+            if (m) out.push(m);
+        }
+    });
+    return out;
+}
+
+const hasTeams = (spec) => Array.isArray(spec.teams) && spec.teams.length > 0;
+
+/**
+ * The per-match filter a spec asks for: { label, keep(team, perMatchList) -> filtered list } or null.
+ * spec.matches (list / ranges), spec.match together with teams or rows:"matches", and spec.last (N most recent).
+ */
+function matchFilter(ctx, spec) {
+    const refs = [];
+    if (Array.isArray(spec.matches)) refs.push(...spec.matches);
+    if (spec.match && (hasTeams(spec) || spec.rows === "matches" || spec.by === "match")) refs.push(spec.match);
+    const last = spec.last ? Math.max(1, parseInt(spec.last, 10)) : null;
+    if (!refs.length && !last) return null;
+    const found = refs.length ? matchesFromRefs(ctx, refs) : null;
+    const keys = found ? new Set(found.map((m) => String(m.matchKey || "").toLowerCase()).filter(Boolean)) : null;
+    const nums = found ? new Set(found.filter((m) => m.compLevel === "qm").map((m) => m.matchNumber)) : null;
+    const inSet = (p) => !found || keys.has(String(p.matchKey || "").toLowerCase()) || (nums.has(p.matchNumber) && !/_(?:sf|f|qf|ef)\d/i.test(p.matchKey || ""));
+    const labels = found ? found.map((m) => Data.matchLabel(m)) : [];
+    const label = [
+        labels.length ? (labels.length > 4 ? `${labels[0]} to ${labels[labels.length - 1]} (${labels.length} matches)` : labels.join(", ")) : "",
+        last ? `last ${last} match${last === 1 ? "" : "es"}` : ""
+    ].filter(Boolean).join(", ");
+    return {
+        label,
+        empty: found !== null && !found.length,
+        keep(list) {
+            // A match counts once it has scouting data (external ratings are attached to scheduled matches too).
+            const hasData = (p) => p.values && Object.entries(p.values).some(([k, v]) => !k.startsWith("ext:") && typeof v === "number");
+            let rows = (list || []).filter(inSet);
+            if (last) rows = rows.filter(hasData).sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0)).slice(-last);
+            return rows;
+        }
+    };
+}
+
+function statOf(vals, stat) {
+    if (!vals.length) return null;
+    if (stat === "n") return vals.length;
+    if (stat === "max") return r1(Math.max(...vals));
+    if (stat === "min") return r1(Math.min(...vals));
+    const mean = vals.reduce((s, v) => s + v, 0) / vals.length;
+    if (stat === "stdev") return vals.length > 1 ? r1(Math.sqrt(vals.reduce((s, v) => s + (v - mean) ** 2, 0) / (vals.length - 1))) : 0;
+    return r1(mean);
+}
+
+/** A team's value for a column over only the filtered matches (metrics and arithmetic; other columns as usual). */
+function filteredValue(ctx, col, team, filter) {
+    if (!filter) return columnValue(ctx, col, team);
+    const list = filter.keep((ctx.stats.get(team) || {}).perMatch || []);
+    if (col.kind === "metric") {
+        const vals = list.map((p) => matchValue({ ...col, stat: "avg" }, p)).filter((v) => typeof v === "number");
+        return statOf(vals, col.stat || "avg");
+    }
+    if (col.kind === "expr") return evalExpr(col, col.operands.map((o) => filteredValue(ctx, o, team, filter)));
+    return columnValue(ctx, col, team);
+}
+
 function selectTeams(ctx, spec) {
     let teams;
     let scope = "all teams";
-    if (spec.match) {
+    if (spec.match && hasTeams(spec)) {
+        teams = toTeamNumbers(ctx, spec.teams);
+        scope = `teams ${teams.join(", ")}`;
+    } else if (spec.match) {
         const m = Data.findMatch(ctx, spec.match);
         teams = m ? [...(m.redTeams || []), ...(m.blueTeams || [])].map(Data.teamNumberFromKey).filter((x) => x && ctx.stats.has(x)) : [];
         scope = m ? Data.matchLabel(m) : `match ${spec.match}`;
@@ -219,13 +303,13 @@ function selectTeams(ctx, spec) {
     return { teams, scope, conditions: conditions.map((c) => `${c.col.label} ${c.op} ${c.value}`) };
 }
 
-function sortTeams(ctx, teams, sortCol, order, keepOrder) {
+function sortTeams(ctx, teams, sortCol, order, keepOrder, filter = null) {
     if (!sortCol) return teams;
     if (keepOrder && !sortCol.explicit) return teams;
     const dir = order === "asc" ? 1 : -1;
     return teams.slice().sort((a, b) => {
-        const va = columnValue(ctx, sortCol, a);
-        const vb = columnValue(ctx, sortCol, b);
+        const va = filteredValue(ctx, sortCol, a, filter);
+        const vb = filteredValue(ctx, sortCol, b, filter);
         const na = typeof va !== "number";
         const nb = typeof vb !== "number";
         if (na && nb) return a - b;
@@ -313,6 +397,8 @@ function buildTable(ctx, args) {
     }
     const { teams: selected, scope, conditions } = selectTeams(ctx, spec);
     const limit = spec.limit || spec.n ? Math.max(1, parseInt(spec.limit || spec.n, 10)) : null;
+    const filter = matchFilter(ctx, spec);
+    if (filter && filter.empty) return { facts: { error: "Those matches are not in the schedule." } };
 
     if (spec.rows === "matches") {
         const teams = selected.slice(0, 6);
@@ -320,7 +406,8 @@ function buildTable(ctx, args) {
         const valueCols = cols.filter((c) => c.kind !== "special");
         const rows = [];
         teams.forEach((team) => {
-            (ctx.stats.get(team).perMatch || []).forEach((p) => {
+            const list = filter ? filter.keep(ctx.stats.get(team).perMatch || []) : (ctx.stats.get(team).perMatch || []);
+            list.forEach((p) => {
                 const vals = valueCols.map((c) => matchValue(c, p));
                 if (vals.every((v) => v === null)) return;
                 rows.push({ team, match: p.matchNumber ? `Q${p.matchNumber}` : "?", num: p.matchNumber || 0, ...Object.fromEntries(valueCols.map((c, i) => [c.label, vals[i]])) });
@@ -331,8 +418,10 @@ function buildTable(ctx, args) {
         const clean = { ...spec, columns: valueCols.map((c) => c.label), rows: "matches" };
         return {
             facts: {
-                title: spec.title || `${valueCols.map((c) => c.label).join(", ")} by match - ${teams.join(", ")}`,
+                title: spec.title || `${valueCols.map((c) => c.label).join(", ")} by match - ${teams.join(", ")}${filter ? ` (${filter.label})` : ""}`,
                 rows_are: "one row per team per match", row_count: shown.length, columns: valueCols.map((c) => c.label),
+                matches: filter ? filter.label : undefined,
+                note: !shown.length ? "No scouted data for these teams in those matches." : undefined,
                 unknown_columns: unknownNote(unknown, ctx),
                 highlights: highlights(shown, valueCols, (r) => `${r.team} ${r.match}`),
                 rows: shown.map(({ num, ...r }) => r)
@@ -347,11 +436,11 @@ function buildTable(ctx, args) {
     }
 
     const keepOrder = Array.isArray(spec.teams) && spec.teams.length && !spec.sort_by;
-    let teams = sortTeams(ctx, selected, sortCol, order, keepOrder);
+    let teams = sortTeams(ctx, selected, sortCol, order, keepOrder, filter);
     const considered = teams.length;
     if (limit) teams = teams.slice(0, limit);
-    const rows = teams.map((team) => ({ team, ...Object.fromEntries(cols.map((c) => [c.label, columnValue(ctx, c, team)])) }));
-    const title = spec.title || tableTitle(cols, scope, limit, sortCol, order);
+    const rows = teams.map((team) => ({ team, ...Object.fromEntries(cols.map((c) => [c.label, filteredValue(ctx, c, team, filter)])) }));
+    const title = spec.title || `${tableTitle(cols, scope, limit, sortCol, order)}${filter ? ` (${filter.label})` : ""}`;
     const clean = {
         ...spec, columns: cols.map((c) => c.label), sort_by: sortCol && sortCol.explicit ? sortCol.label : undefined,
         order: spec.order, limit: limit || undefined
@@ -361,8 +450,9 @@ function buildTable(ctx, args) {
     delete clean.n;
     return {
         facts: {
-            title, rows_are: "one row per team", row_count: rows.length, teams_matching: considered, teams_at_event: ctx.stats.size,
-            filters: conditions.length ? conditions : undefined, scope,
+            title, rows_are: filter ? `one row per team; values from ${filter.label} only (not event averages)` : "one row per team",
+            row_count: rows.length, teams_matching: considered, teams_at_event: ctx.stats.size,
+            filters: conditions.length ? conditions : undefined, scope, matches: filter ? filter.label : undefined,
             sorted_by: sortCol ? `${sortCol.label} (${order === "asc" ? "lowest first" : "highest first"})` : undefined,
             columns: cols.map((c) => c.label), unknown_columns: unknownNote(unknown, ctx),
             highlights: highlights(rows, cols.filter((c) => !(c.special && c.special.text))),
@@ -421,18 +511,21 @@ function buildChart(ctx, args) {
     const order = spec.order === "asc" ? "asc" : "desc";
     const sortCol = spec.sort_by ? Object.assign(resolveColumn(ctx, spec.sort_by) || {}, { explicit: true }) : cols[0];
     const { teams: selected, scope, conditions } = selectTeams(ctx, spec);
+    const filter = matchFilter(ctx, spec);
+    if (filter && filter.empty) return { facts: { error: "Those matches are not in the schedule." } };
+    const perMatchOf = (team) => (filter ? filter.keep(ctx.stats.get(team).perMatch || []) : (ctx.stats.get(team).perMatch || []));
     const keepOrder = Array.isArray(spec.teams) && spec.teams.length && !spec.sort_by;
     const defaults = { line: 5, radar: 4, box: 8, pie: 10 };
     const byMatch = spec.by === "match" || (type === "line" && spec.by !== "team");
     const limitRaw = spec.limit || spec.n || (keepOrder ? null : defaults[byMatch ? "line" : type]);
-    let teams = sortTeams(ctx, selected, sortCol && sortCol.key ? sortCol : cols[0], order, keepOrder);
+    let teams = sortTeams(ctx, selected, sortCol && sortCol.key ? sortCol : cols[0], order, keepOrder, filter);
     if (limitRaw) teams = teams.slice(0, Math.max(1, parseInt(limitRaw, 10)));
     if (!teams.length) return { facts: { error: "No teams match that request.", filters: conditions } };
 
     const label = (team) => String(team);
     if (type === "pie") cols = cols.slice(0, 1);
     const which = limitRaw && !keepOrder && sortCol && sortCol.label ? `${order === "asc" ? "bottom" : "top"} ${teams.length} by ${sortCol.label}` : scope;
-    const title = spec.title || `${type === "scatter" ? `${xCol.label} vs ${cols[0].label}` : cols.map((c) => c.label).join(", ")} - ${byMatch ? "by match" : which}`;
+    const title = spec.title || `${type === "scatter" ? `${xCol.label} vs ${cols[0].label}` : cols.map((c) => c.label).join(", ")} - ${byMatch ? "by match" : which}${filter ? ` (${filter.label})` : ""}`;
     let chart;
     let table;
     let rows;
@@ -445,10 +538,10 @@ function buildChart(ctx, args) {
     if (byMatch) {
         const seriesCols = teams.length === 1 ? cols : [cols[0]];
         const matchNums = new Set();
-        teams.forEach((team) => (ctx.stats.get(team).perMatch || []).forEach((p) => { if (p.matchNumber && seriesCols.some((c) => matchValue(c, p) !== null)) matchNums.add(p.matchNumber); }));
+        teams.forEach((team) => perMatchOf(team).forEach((p) => { if (p.matchNumber && seriesCols.some((c) => matchValue(c, p) !== null)) matchNums.add(p.matchNumber); }));
         const xs = Array.from(matchNums).sort((a, b) => a - b);
         const valueAt = (team, col, num) => {
-            const p = (ctx.stats.get(team).perMatch || []).find((x) => x.matchNumber === num);
+            const p = perMatchOf(team).find((x) => x.matchNumber === num);
             return p ? matchValue(col, p) : null;
         };
         const series = teams.length === 1
@@ -464,11 +557,11 @@ function buildChart(ctx, args) {
             columns: [t("ai.col.match", "Match"), t("ai.col.team", "Team"), ...seriesCols.map((c) => c.label)],
             rows: rows.map((r) => [r.match, Data.teamLabel(ctx, r.team), ...seriesCols.map((c) => fmtCell(r[c.label]))])
         };
-        return finishChart(ctx, { chart, table, rows, cols: seriesCols, keyOf: (r) => `${r.team} ${r.match}`, clean, type: chart.type, scope, conditions, unknown });
+        return finishChart(ctx, { chart, table, rows, cols: seriesCols, keyOf: (r) => `${r.team} ${r.match}`, clean, type: chart.type, scope, conditions, unknown, matches: filter && filter.label });
     }
 
     const allCols = xCol ? [xCol, ...cols] : cols;
-    rows = teams.map((team) => ({ team, ...Object.fromEntries(allCols.map((c) => [c.label, columnValue(ctx, c, team)])) }));
+    rows = teams.map((team) => ({ team, ...Object.fromEntries(allCols.map((c) => [c.label, filteredValue(ctx, c, team, filter)])) }));
     table = {
         columns: ["#", t("ai.col.team", "Team"), ...allCols.map((c) => c.label)],
         rows: rows.map((r, i) => [i + 1, Data.teamLabel(ctx, r.team), ...allCols.map((c) => fmtCell(r[c.label]))])
@@ -482,7 +575,7 @@ function buildChart(ctx, args) {
             break;
         }
         case "radar": {
-            const maxOf = (col) => Math.max(0, ...Array.from(ctx.stats.keys()).map((tm) => columnValue(ctx, col, tm)).filter((v) => typeof v === "number"));
+            const maxOf = (col) => Math.max(0, ...Array.from(ctx.stats.keys()).map((tm) => filteredValue(ctx, col, tm, filter)).filter((v) => typeof v === "number"));
             const maxes = cols.map(maxOf);
             chart = { type: "radar", title, theta: cols.map((c) => c.label),
                 series: rows.map((r) => ({ name: label(r.team), r: cols.map((c, i) => (typeof r[c.label] === "number" && maxes[i] > 0 ? r1(Math.max(0, r[c.label]) / maxes[i] * 100) : 0)) })) };
@@ -490,7 +583,7 @@ function buildChart(ctx, args) {
         }
         case "box":
             chart = { type: "box", title, yTitle: cols[0].label,
-                series: teams.map((team) => ({ name: label(team), y: (ctx.stats.get(team).perMatch || []).map((p) => matchValue(cols[0], p)).filter((v) => v !== null) })) };
+                series: teams.map((team) => ({ name: label(team), y: perMatchOf(team).map((p) => matchValue(cols[0], p)).filter((v) => v !== null) })) };
             break;
         case "pie":
             chart = { type: "pie", title, labels: rows.filter((r) => r[cols[0].label] > 0).map((r) => label(r.team)), values: rows.filter((r) => r[cols[0].label] > 0).map((r) => r[cols[0].label]) };
@@ -506,14 +599,14 @@ function buildChart(ctx, args) {
             chart = { type: cols.length > 1 ? "groupedBar" : "bar", title, x: rows.map((r) => label(r.team)), xTitle: t("ai.col.team", "Team"),
                 yTitle: cols.length === 1 ? cols[0].label : "", series: cols.map((c) => ({ name: c.label, y: ys(c) })) };
     }
-    return finishChart(ctx, { chart, table, rows, cols: allCols, keyOf: (r) => r.team, clean, type: chart.type, scope, conditions, unknown,
+    return finishChart(ctx, { chart, table, rows, cols: allCols, keyOf: (r) => r.team, clean, type: chart.type, scope, conditions, unknown, matches: filter && filter.label,
         note: type === "radar" ? "Radar values are each team's average as a % of the best team at the event on that metric." : undefined });
 }
 
-function finishChart(ctx, { chart, table, rows, cols, keyOf, clean, type, scope, conditions, unknown, note }) {
+function finishChart(ctx, { chart, table, rows, cols, keyOf, clean, type, scope, conditions, unknown, note, matches }) {
     return {
         facts: {
-            chart_type: type, title: chart.title, scope, filters: conditions.length ? conditions : undefined,
+            chart_type: type, title: chart.title, scope, filters: conditions.length ? conditions : undefined, matches: matches || undefined,
             metrics: cols.map((c) => c.label), teams_shown: Array.from(new Set(rows.map((r) => r.team))).length,
             unknown_metrics: unknownNote(unknown, ctx), note,
             highlights: highlights(rows, cols, keyOf), rows
@@ -530,7 +623,10 @@ export const BUILDER_TOOLS = {
         description: "Build ANY custom table: choose teams (list, all, a match, filters), columns (any metrics, max/min/stdev, matches scouted/played, official rank, record, or arithmetic like 'EPA - xP'), sorting and a row limit. Also edits an earlier table (pass the full changed spec).",
         params: {
             columns: "list of columns, e.g. [\"EPA\", \"Total points\", \"max Auto points\", \"EPA - xP\", \"matches scouted\"]",
-            teams: "team numbers (omit for all teams)", exclude: "team numbers to leave out", match: "a match number to use its six teams",
+            teams: "team numbers (omit for all teams)", exclude: "team numbers to leave out",
+            match: "a match number: alone it uses that match's six teams; with teams it limits values to that match",
+            matches: "only use values from these matches, e.g. [\"10\"] or [\"10-20\"] (instead of event averages)",
+            last: "only use each team's last N scouted matches",
             conditions: "filters [{column, op (> >= < <= = !=), value}]", sort_by: "column to sort by", order: "desc (default) or asc",
             limit: "max rows", rows: "'matches' for one row per team per match", chart: "true or a chart type to also draw it",
             document: "true to also create a document", title: "optional title"
@@ -543,7 +639,8 @@ export const BUILDER_TOOLS = {
                 const valueCols = out.cols.filter((c) => !(c.special && c.special.text)).slice(0, 4);
                 const chart = buildChart(ctx, {
                     type: typeof args.chart === "string" ? args.chart : undefined, metrics: valueCols.map((c) => c.label),
-                    teams: out.teamsShown, by: args.rows === "matches" ? "match" : undefined, title: out.facts.title
+                    teams: out.teamsShown, by: args.rows === "matches" ? "match" : undefined, title: out.facts.title,
+                    match: args.teams || args.rows === "matches" ? args.match : undefined, matches: args.matches, last: args.last
                 });
                 if (chart.chart) result.chart = chart.chart;
             }
@@ -559,7 +656,8 @@ export const BUILDER_TOOLS = {
         params: {
             type: "bar, stackedBar, line, scatter, radar, box or pie", metrics: "metrics to plot (y values; for stackedBar the stacked parts)",
             x: "x metric for scatter", by: "'match' for match-by-match values", teams: "team numbers (omit for all / top teams)",
-            exclude: "team numbers to leave out", match: "a match number to use its six teams", conditions: "filters [{column, op, value}]",
+            exclude: "team numbers to leave out", match: "a match number: alone it uses that match's six teams; with teams it limits values to that match",
+            matches: "only use values from these matches, e.g. [\"10-20\"]", last: "only use each team's last N scouted matches", conditions: "filters [{column, op, value}]",
             sort_by: "metric to sort / pick top teams by", order: "desc or asc", limit: "max teams", title: "optional title"
         },
         async run(ctx, args) {

@@ -173,6 +173,17 @@ export function briefFor(result) {
             return f.matching_notes
                 ? `${f.matching_notes} note(s) about ${f.teams_mentioned} team(s) mention "${f.query}": ${(f.teams || []).slice(0, 10).map((x) => x.team).join(", ")}.`
                 : `No scout notes mention "${f.query}".`;
+        case "qualitative_overview": {
+            const top = (f.teams || []).slice(0, 8).map((x) => `- ${nameOf(x)}: ${x.qualitative_reports} report(s), ${x.notes} note(s)`
+                + `${Object.entries(x.ratings || {}).filter(([, v]) => v !== null).map(([k, v]) => `, ${k} ${v}`).join("")}`
+                + `${x.themes && x.themes.length ? `; themes: ${x.themes.join(", ")}` : ""}`);
+            return [`Qualitative scouting covers ${f.teams_with_qualitative_data} team(s)${f.teams_without ? `; none for ${f.teams_without.length}` : ""}.`, ...top].join("\n");
+        }
+        case "pit_overview":
+            return `Pit scouting answers for ${f.teams_with_pit_data} team(s)${f.teams_without_pit_data ? ` (${f.teams_without_pit_data.length} without pit data)` : ""}; shown: ${(f.shown_questions || []).join(", ")}.`;
+        case "match_reports":
+            return `${f.match}: ${f.scouted_reports} of ${(f.reports || []).length} team(s) scouted${f.played ? `; result red ${f.red_score} - blue ${f.blue_score}` : " (not played yet)"}`
+                + `${f.unscouted_teams && f.unscouted_teams.length ? `; no report for ${f.unscouted_teams.join(", ")}` : ""}.`;
         case "pit_search":
             return f.matching_answers
                 ? `${f.matching_answers} pit answer(s)${f.query ? ` mention "${f.query}"` : ""} for team(s) ${(f.teams_matching || []).slice(0, 12).join(", ")}.`

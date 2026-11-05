@@ -4,6 +4,8 @@
  * Runtimes and weights are imported/fetched from this server's /models/ path only.
  */
 
+import { gemmaDisplayText, stripSpecialTokens } from "./assistant/gemma-format.js";
+
 const CPU_FILE_CACHE = "obsidianscout-ai-files";
 // Chromium rejects single Cache Storage entries of a few hundred MB, so large files are stored in chunks.
 const CHUNK_BYTES = 64 * 1024 * 1024;
@@ -159,20 +161,21 @@ async function loadTransformers(id, source, runtime, origin, device) {
     state.kind = "transformers";
     state.backend = device === "wasm" ? "cpu" : "webgpu";
     state.modelId = source.modelId;
+    // modelId is only the folder name ("gpu"), so Gemma is recognised by its model class or install path.
+    state.isGemma = /gemma/i.test(`${source.modelClass || ""} ${source.localModelPath || ""} ${source.modelId || ""}`);
 }
 
 async function loadWebLLM(id, tier, runtime, origin) {
     const gpu = tier.webgpu;
     const webllm = await import(origin + runtime.webllm);
     const isLlama = /llama/i.test(gpu.mlcModelId || "");
-    const contextSize = isLlama ? (tier.contextTokens || 2048) : ((gpu.modelLibUrl && gpu.modelLibUrl.includes("_cs1k")) ? 1024 : (tier.contextTokens || 4096));
-    const overrides = isLlama ? {
-        context_window_size: contextSize,
-        ...(gpu.overrides || tier.overrides || {})
-    } : {
-        context_window_size: contextSize,
-        sliding_window_size: -1,
-        attention_sink_size: -1,
+    // "_cs1k" in an MLC model library name is its prefill CHUNK size (1024 tokens per prefill step), not the context
+    // window; the context window comes from the tier.
+    const chunk1k = !!(gpu.modelLibUrl && gpu.modelLibUrl.includes("_cs1k"));
+    const overrides = {
+        context_window_size: tier.contextTokens || (isLlama ? 2048 : 4096),
+        ...(chunk1k ? { prefill_chunk_size: 1024 } : {}),
+        ...(isLlama ? {} : { sliding_window_size: -1, attention_sink_size: -1 }),
         ...(gpu.overrides || tier.overrides || {})
     };
     const appConfig = {
@@ -196,41 +199,55 @@ async function loadWebLLM(id, tier, runtime, origin) {
     state.kind = "webllm";
     state.backend = "webgpu";
     state.modelId = gpu.mlcModelId;
+    state.isGemma = /gemma/i.test(gpu.mlcModelId || "");
 }
 
-function normalizeChatMessages(messages, isGemma = false) {
-    if (!isGemma) return messages;
-    const mapped = [];
-    let pendingSystem = "";
-    for (const m of messages || []) {
-        if (m.role === "system") {
-            pendingSystem += (pendingSystem ? "\n\n" : "") + (m.content || "");
-        } else if (m.role === "user") {
-            const content = pendingSystem ? `${pendingSystem}\n\n${m.content || ""}` : (m.content || "");
-            pendingSystem = "";
-            mapped.push({ role: "user", content });
-        } else {
-            mapped.push({ role: m.role || "assistant", content: m.content || "" });
+/**
+ * Messages for engines without native tool roles (WebLLM / Llama): tool calls and results become plain text turns.
+ * Gemma 4's template takes system, tool_calls and tool messages natively, so its messages pass through unchanged.
+ */
+function flattenToolMessages(messages) {
+    return (messages || []).map((m) => {
+        if (m.role === "tool") return { role: "user", content: `Result of ${m.name || "tool"}:\n${m.content || ""}` };
+        if (m.role === "assistant" && Array.isArray(m.tool_calls) && m.tool_calls.length) {
+            const calls = m.tool_calls.map((c) => ({ tool: c.function.name, args: c.function.arguments }));
+            return { role: "assistant", content: JSON.stringify({ calls }) };
         }
-    }
-    if (pendingSystem) {
-        mapped.unshift({ role: "user", content: pendingSystem });
-    }
-    return mapped.length ? mapped : [{ role: "user", content: "Hello" }];
+        return { role: m.role, content: m.content || "" };
+    });
+}
+
+/**
+ * Gemma stops at end of turn AND right after a tool call (it emits <|tool_response> and waits for the result).
+ * generation_config.json lists these too; they are set here so a missing config can never let the model invent results.
+ */
+function gemmaStopIds(tokenizer) {
+    try {
+        const found = tokenizer.convert_tokens_to_ids(["<eos>", "<turn|>", "<|tool_response>"]);
+        if (Array.isArray(found) && found.length === 3 && found.every((v) => Number.isInteger(v))) return found;
+    } catch (_) { /* fall back to the known ids */ }
+    return [1, 106, 50];
 }
 
 async function generateTransformers(id, messages, options) {
     const { T, tokenizer, model } = state;
-    const isGemma = /gemma/i.test(state.modelId || "");
-    const cleanMessages = normalizeChatMessages(messages, isGemma);
-    const inputs = tokenizer.apply_chat_template(cleanMessages, { add_generation_prompt: true, return_dict: true });
+    const isGemma = !!state.isGemma;
+    const chat = isGemma ? messages : flattenToolMessages(messages);
+    const templateOptions = { add_generation_prompt: true, return_dict: true };
+    if (isGemma && Array.isArray(options.tools) && options.tools.length) templateOptions.tools = options.tools;
+    // Gemma 4's own thinking mode (<|think|> in the system turn); the model then thinks in <|channel>thought ... <channel|>.
+    if (isGemma && options.thinking) templateOptions.enable_thinking = true;
+    const inputs = tokenizer.apply_chat_template(chat, templateOptions);
+    // Decoded WITH special tokens: Gemma's tool-call and thinking markers are special tokens and must survive.
+    // Token events carry the display text (thinking as <thought>, markup removed); "done" also returns the raw text.
+    const display = isGemma ? gemmaDisplayText : (t) => stripSpecialTokens(t).trim();
     let full = "";
     const streamer = new T.TextStreamer(tokenizer, {
         skip_prompt: true,
-        skip_special_tokens: true,
+        skip_special_tokens: false,
         callback_function: (text) => {
             full += text;
-            post({ type: "token", id, text, full });
+            post({ type: "token", id, text, full: display(full) });
         }
     });
     state.stopper = new T.InterruptableStoppingCriteria();
@@ -238,6 +255,7 @@ async function generateTransformers(id, messages, options) {
     await model.generate({
         ...inputs,
         max_new_tokens: options.maxTokens,
+        ...(isGemma ? { eos_token_id: gemmaStopIds(tokenizer) } : {}),
         do_sample: sample,
         ...(sample ? { temperature: options.temperature, top_p: 0.9 } : {}),
         // Note: repetition_penalty corrupts output in transformers.js 4.3 (echoes the prompt, then loops).
@@ -245,18 +263,17 @@ async function generateTransformers(id, messages, options) {
         stopping_criteria: state.stopper
     });
     state.stopper = null;
-    return full.trim();
+    return { text: display(full), raw: full };
 }
 
 async function generateWebLLM(id, messages, options) {
-    const isGemma = /gemma/i.test(state.modelId || "");
-    const cleanMessages = normalizeChatMessages(messages, isGemma);
-    const temp = (options.temperature == null || options.temperature === 0) ? 0.05 : options.temperature;
+    const greedy = options.temperature == null || options.temperature === 0;
     const request = {
-        messages: cleanMessages,
+        messages: flattenToolMessages(messages),
         stream: true,
-        temperature: temp,
-        top_p: 0.9,
+        // WebLLM's sampler takes temperature 0 as argmax (greedy), so routing is deterministic.
+        temperature: greedy ? 0 : options.temperature,
+        top_p: greedy ? 1 : 0.9,
         max_tokens: options.maxTokens || 256
     };
     if (options.jsonSchema) {
@@ -271,6 +288,8 @@ async function generateWebLLM(id, messages, options) {
         chunks = await state.webllm.chat.completions.create(request);
     } catch (err) {
         if (request.response_format) {
+            // The grammar could not be compiled: say so (the caller still validates the output) and retry without it.
+            post({ type: "warn", id, message: `JSON schema was rejected, generating without it: ${(err && err.message) || err}` });
             delete request.response_format;
             chunks = await state.webllm.chat.completions.create(request);
         } else {
@@ -284,7 +303,7 @@ async function generateWebLLM(id, messages, options) {
             post({ type: "token", id, text, full });
         }
     }
-    return full.trim();
+    return { text: full.trim(), raw: full };
 }
 
 async function unloadAll() {
@@ -314,15 +333,16 @@ self.addEventListener("message", async (event) => {
             } else {
                 await loadWebLLM(msg.id, msg.tier, msg.runtime, msg.origin);
             }
-            post({ type: "loaded", id: msg.id, backend: state.backend });
+            // nativeTools tells the page whether this model takes tool declarations through its chat template.
+            post({ type: "loaded", id: msg.id, backend: state.backend, nativeTools: state.kind === "transformers" && !!state.isGemma });
             return;
         }
         if (msg.type === "generate") {
             if (!state.kind) throw new Error("No model is loaded.");
-            const text = state.kind === "transformers"
+            const out = state.kind === "transformers"
                 ? await generateTransformers(msg.id, msg.messages, msg.options || {})
                 : await generateWebLLM(msg.id, msg.messages, msg.options || {});
-            post({ type: "done", id: msg.id, text });
+            post({ type: "done", id: msg.id, text: out.text, raw: out.raw });
             return;
         }
         if (msg.type === "unload") {

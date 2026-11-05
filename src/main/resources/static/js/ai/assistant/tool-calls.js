@@ -5,8 +5,12 @@
  */
 
 import Data from "../ai-data.js";
+import { findMetricsInText } from "./builder.js";
 import { digestFacts } from "./display.js";
+import { parseGemmaToolCalls } from "./gemma-format.js";
+import { INTENTS, hasIntent } from "./router.js";
 import { r1 } from "./shared.js";
+import { stepSchema as perToolStepSchema } from "./tool-schemas.js";
 import { TOOLS } from "./tools.js";
 
 // ------------------------------------------------------------------ tool guide
@@ -17,8 +21,13 @@ import { TOOLS } from "./tools.js";
  * `example` is [question, args] and is shown when the tool makes the shortlist.
  */
 export const TOOL_GUIDE = {
-    make_table: { use: "ANY custom table: choose the teams, the columns, filters, sorting and a row limit; also to CHANGE the table on screen (send the full new spec)", shows: "table (chart with chart:true, document with document:true)", tags: "table matrix spreadsheet columns column rows list remove add only sort order without include custom", example: ["table of EPA, OPR and xP for the top 10 teams by EPA", { columns: ["EPA", "OPR", "xP"], sort_by: "EPA", limit: 10 }] },
-    make_chart: { use: "ANY custom chart (bar, stackedBar, line, scatter, radar, box, pie) for any metrics and teams; also to CHANGE the chart on screen", shows: "chart and its data table", tags: "chart graph plot pie bar line visualize visualise draw custom", example: ["pie chart of total points for the top 8 teams", { type: "pie", metrics: ["Total points"], limit: 8 }] },
+    make_table: { use: "ANY custom table: choose the teams, the columns, filters, sorting and a row limit; values from one match or a few matches (match / matches / last); also to CHANGE the table on screen (send the full new spec)", shows: "table (chart with chart:true, document with document:true)", tags: "table matrix spreadsheet columns column rows list remove add only sort order without include custom tabla tablo טבלה", example: ["table of EPA, OPR and xP for the top 10 teams by EPA", { columns: ["EPA", "OPR", "xP"], sort_by: "EPA", limit: 10 }],
+        examples: [
+            ["compare 254 and 1678 in match 10 using auto points", { teams: [254, 1678], match: "10", columns: ["Auto points"] }],
+            ["auto and teleop for 118 and 4414 over their last 3 matches", { teams: [118, 4414], last: 3, columns: ["Auto points", "Teleop points"] }]
+        ] },
+    make_chart: { use: "ANY custom chart (bar, stackedBar, line, scatter, radar, box, pie) for any metrics and teams, optionally only some matches; also to CHANGE the chart on screen", shows: "chart and its data table", tags: "chart graph plot pie bar line visualize visualise draw custom gráfico grafik גרף תרשים", example: ["pie chart of total points for the top 8 teams", { type: "pie", metrics: ["Total points"], limit: 8 }],
+        examples: [["line chart of xP for 254 and 1678 in matches 5 to 15", { type: "line", by: "match", teams: [254, 1678], matches: ["5-15"], metrics: ["xP"] }]] },
     team_overview: { use: "everything about ONE team: averages, rank, matches played vs scouted, pit info, notes summary", shows: "stats table", tags: "team about overview profile how good tell info stats played scouted", example: ["how good is 254?", { team: 254 }] },
     top_teams: { use: "rank ALL teams by one metric (best, worst, top N, leaderboard)", shows: "ranking table, bar chart with chart:true", tags: "top best worst highest lowest rank ranking leaderboard most least who", example: ["who has the best auto?", { metric: "Auto points", n: 5 }] },
     epa_data: { use: "Statbotics EPA for one team, or all teams ranked by EPA", shows: "table, chart with chart:true", tags: "epa statbotics expected points added rating", example: ["top teams by EPA", { n: 8 }] },
@@ -30,7 +39,8 @@ export const TOOL_GUIDE = {
     team_matches: { use: "one team's individual match scores and match-by-match line chart", shows: "match table and line chart", tags: "match by match each match scores game history individual per match", example: ["254 match by match", { team: 254 }] },
     match_by_match: { use: "match-by-match scores and progression line chart for 1 or more teams across matches (supports xP, EPA, Total points, Auto, Teleop)", shows: "line chart and table", tags: "match by match per match each match trend progression line over time xp epa graph chart scores", example: ["teams 31, 1209, 1561, 1706 match by match using xP", { teams: [31, 1209, 1561, 1706], metric: "xP", chart: true }] },
     metric_trend: { use: "how a metric (e.g. xP, EPA, Total points, Auto) changed over matches for 1-6 teams", shows: "line chart", tags: "trend changed improving over time line match by match progression xp epa", example: ["xP trend for 1209 and 1561", { teams: [1209, 1561], metric: "xP" }] },
-    scatter: { use: "correlate two metrics across all teams", shows: "scatter plot", tags: "scatter correlation plot relationship versus", example: ["scatter total points vs auto", { metric_x: "Total points", metric_y: "Auto points" }] },
+    scatter: { use: "two metrics against each other, for all teams or only the listed teams (pass teams)", shows: "scatter plot", tags: "scatter correlation plot relationship versus", example: ["scatter total points vs auto", { metric_x: "Total points", metric_y: "Auto points" }],
+        examples: [["scatter plot of 254 and 1678 on OPR vs xP", { metric_x: "OPR", metric_y: "xP", teams: [254, 1678] }]] },
     stacked_breakdown: { use: "auto / teleop / endgame split per team", shows: "stacked bar chart", tags: "breakdown phases stacked auto teleop endgame split", example: null },
     team_radar: { use: "skill profile of 1-4 teams", shows: "radar chart", tags: "radar spider profile skills shape", example: null },
     score_distribution: { use: "spread of each team's match scores", shows: "box plot", tags: "distribution spread box variance range", example: null },
@@ -51,6 +61,15 @@ export const TOOL_GUIDE = {
     team_percentiles: { use: "where ONE team ranks on every metric; its strengths and weaknesses", shows: "table and bar chart", tags: "percentile strengths weaknesses stack up good at weak strong every metric", example: ["what are 254's strengths and weaknesses?", { team: 254 }] },
     search_notes: { use: "find words in scout notes across all teams", shows: "table of matching notes", tags: "notes mention mentioned search said defense tipped broke comments described", example: ["which teams were noted for defense?", { query: "defense" }] },
     summarize_notes: { use: "summary of what scouts wrote about ONE team", shows: "text", tags: "notes summary summarize scouts say qualitative", example: null },
+    qualitative_overview: { use: "qualitative scouting for ALL teams (or several): ratings, report counts, recurring note themes and example notes", shows: "table of every team",
+        tags: "qualitative qual notes summary summarize all every teams ratings driver defense themes comments cualitativo cualitativa notas resumen todos nitel notlar özet tüm איכותי הערות סיכום כל",
+        example: ["summarize the qualitative scouting data for all teams", {}] },
+    pit_overview: { use: "pit scouting for ALL teams (or several) side by side: drivetrain, mechanisms, weight, every pit question", shows: "table of every team's pit answers",
+        tags: "pit capabilities capability robot robots drivetrain mechanisms build specs all every teams overview summary pits fosa boxes pit verisi yetenek פיט יכולות",
+        example: ["summarize every team's capabilities from pit scouting", {}] },
+    match_reports: { use: "the individual scouting reports for ONE match: each team's scouted points and the scouts' notes, plus the result", shows: "table of the six teams' reports",
+        tags: "reports report scouting match notes how did each team do what happened scouted partido informes maç rapor דוח משחק",
+        example: ["what did our scouts record in match 12?", { match: "12" }] },
     pit_search: { use: "search pit scouting answers (drivetrain, mechanisms) or list one team's pit data", shows: "table", tags: "pit drivetrain swerve tank mecanum weight mechanism intake climber robot build", example: ["which teams have swerve?", { query: "swerve" }] },
     event_summary: { use: "the event at a glance", shows: "table", tags: "event summary overview status glance going", example: null },
     scouting_coverage: { use: "missing scouting reports by team and match", shows: "table", tags: "coverage missing unscouted reports gaps need scouting", example: ["which teams still need scouting?", {}] },
@@ -69,10 +88,11 @@ const CORE_TOOLS = ["make_table", "make_chart", "team_overview", "top_teams", "c
 /** How to write make_table / make_chart specs; added to the router prompt whenever those tools are offered. */
 export const SPEC_GUIDE = [
     "TABLE / CHART SPECS (make_table, make_chart):",
-    "- Columns / metrics: exact metric names from the Metrics list; or \"max <metric>\", \"min <metric>\", \"stdev <metric>\"; or \"Matches scouted\", \"Matches played\", \"Official rank\", \"Ranking score\", \"Record\"; or arithmetic between metrics such as \"EPA - xP\" or \"(Auto points + Teleop points) / 2\".",
-    "- Teams: omit for every team; \"teams\": [254, 1678] for specific teams; \"exclude\": [...] to leave some out; \"match\": \"12\" for the six teams in a match; \"conditions\": [{\"column\":\"EPA\",\"op\":\">\",\"value\":50}] to filter (a condition column can be arithmetic too: \"teams whose auto beats their teleop\" is {\"column\":\"Auto points - Teleop points\",\"op\":\">\",\"value\":0}).",
-    "- \"sort_by\" + \"order\" (\"desc\" default, \"asc\") + \"limit\" for top / bottom N. make_table \"rows\": \"matches\" lists each match of the given teams; make_chart \"by\": \"match\" plots values match by match.",
-    "- To change the table or chart on screen, call the same tool with the COMPLETE new spec (copy the current spec and apply the change)."
+    "- Columns / metrics: exact metric names; or \"max <metric>\", \"min <metric>\", \"stdev <metric>\"; or \"Matches scouted\", \"Matches played\", \"Official rank\", \"Ranking score\", \"Record\"; or arithmetic such as \"EPA - xP\" or \"(Auto points + Teleop points) / 2\".",
+    "- Teams: omit for every team; \"teams\": [..] for specific teams; \"exclude\": [..] to leave some out; \"conditions\": [{\"column\":\"EPA\",\"op\":\">\",\"value\":50}] to filter (a condition column can be arithmetic: auto beats teleop is {\"column\":\"Auto points - Teleop points\",\"op\":\">\",\"value\":0}).",
+    "- Which matches: values are event averages unless you add \"match\": \"10\" (with teams: only that match; alone: that match's six teams), \"matches\": [\"10-20\"], or \"last\": 3.",
+    "- \"sort_by\" + \"order\" (\"desc\" default, \"asc\") + \"limit\" for top / bottom N. make_table \"rows\": \"matches\" gives one row per team per match; make_chart \"by\": \"match\" plots match by match.",
+    "- To change the table or chart on screen, call the same tool with the COMPLETE new spec (the current spec with the change applied)."
 ].join("\n");
 
 const wordsOf = (text) => String(text || "").toLowerCase()
@@ -83,15 +103,111 @@ const wordsOf = (text) => String(text || "").toLowerCase()
 // Words that appear in most questions and say nothing about which tool fits.
 const GENERIC_WORDS = new Set(["team", "teams", "all", "data", "show", "points", "point", "the", "for", "and", "with", "our", "which", "what", "who", "it", "now", "using", "use"]);
 
+/**
+ * Tools each router intent points at. INTENTS carry Spanish, Turkish and Hebrew words, so the shortlist works in every
+ * supported language even though TOOL_GUIDE tags are English.
+ */
+const INTENT_TOOLS = {
+    next: ["match_preview"], match: ["match_preview", "make_table", "match_reports"], strategy: ["create_strategy_brief"], worksheet: ["create_alliance_sheet"],
+    dossier: ["create_team_dossier"], stacked: ["stacked_breakdown"], radar: ["team_radar"], box: ["score_distribution"],
+    notes: ["summarize_notes", "search_notes", "qualitative_overview"], pick: ["pick_candidates"], trend: ["match_by_match", "metric_trend", "team_matches"],
+    line: ["match_by_match", "make_chart"], scatter: ["scatter"], difference: ["compare_metrics"], versus: ["compare_teams"],
+    compare: ["compare_teams", "compare_metrics"], top: ["top_teams"], worst: ["top_teams"], overview: ["team_overview"],
+    chart: ["make_chart"], docs: ["read_docs"], all_matches: ["all_matches"], all_teams: ["all_teams"], predictions: ["match_predictions"],
+    rankings: ["current_rankings"], projected: ["projected_rankings"], artifact: ["create_artifact"], match_count: ["team_overview"],
+    capabilities: ["capabilities_help"], greeting: ["capabilities_help"], consistency: ["consistency"], form: ["recent_form"],
+    schedule: ["team_schedule"], h2h: ["head_to_head"], alliance_build: ["alliance_builder"], stats: ["metric_summary"],
+    percentile: ["team_percentiles"], note_search: ["search_notes"], pit: ["pit_search", "pit_overview"], metrics_list: ["list_metrics"],
+    event_summary: ["event_summary"], coverage: ["scouting_coverage"]
+};
+
+// "match 10", "qm 10", "partido 10", "maç 10", "משחק 10", or Turkish "10. maç".
+const MATCH_REF = /(?:\bmatch(?:es)?|\bqm|\bpartido|maç|משחק)\s*#?\s*(\d{1,3})(?:\s*(?:-|to|a|–)\s*(\d{1,3}))?(?!\d)|(?<!\d)(\d{1,3})\.?\s*(?:maç|partido)/i;
+
+/**
+ * What a question names, resolved in code so the model never has to map nicknames or guess metric labels:
+ * { teams: [{number, name}], match: {ref, label, teams} | null, range: "10-20" | null, metrics: [label] }.
+ */
+export function questionEntities(ctx, question) {
+    const q = String(question || "");
+    const ref = q.match(MATCH_REF);
+    const matchNum = ref ? Number(ref[1] || ref[3]) : null;
+    const range = ref && ref[2] ? `${ref[1]}-${ref[2]}` : null;
+    const m = matchNum && !range ? Data.findMatch(ctx, String(matchNum)) : null;
+    const teams = Data.findTeamsInText(ctx, q, { excludeMatch: matchNum }).filter((n) => !(range && (n === Number(ref[1]) || n === Number(ref[2]))));
+    let metrics = [];
+    try { metrics = findMetricsInText(ctx, q).metrics.map((x) => x.label); } catch (_) { /* no metrics */ }
+    return {
+        teams: teams.map((number) => ({ number, name: Data.teamName(ctx, number) || "" })),
+        match: m ? { ref: String(matchNum), label: Data.matchLabel(m), red: (m.redTeams || []).map(Data.teamNumberFromKey), blue: (m.blueTeams || []).map(Data.teamNumberFromKey) } : null,
+        range,
+        metrics
+    };
+}
+
+/** Edit distance, stopping early once it exceeds max. */
+function editDistance(a, b, max) {
+    if (Math.abs(a.length - b.length) > max) return max + 1;
+    let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+    for (let i = 1; i <= a.length; i++) {
+        const cur = [i];
+        let best = i;
+        for (let j = 1; j <= b.length; j++) {
+            cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+            best = Math.min(best, cur[j]);
+        }
+        if (best > max) return max + 1;
+        prev = cur;
+    }
+    return prev[b.length];
+}
+
+let vocabulary = null;
+/** Every word in the tool guide tags and names (5+ letters), for typo matching. */
+function toolVocabulary() {
+    if (!vocabulary) {
+        vocabulary = new Set();
+        Object.entries(TOOL_GUIDE).forEach(([name, g]) => wordsOf(`${g.tags} ${name.replace(/_/g, " ")}`).forEach((w) => { if (w.length >= 5) vocabulary.add(w); }));
+    }
+    return vocabulary;
+}
+
+/**
+ * The question's words plus the tag words they are a typo of ("summerize" -> "summarize", "qualatative" ->
+ * "qualitative", "capabilitys" -> "capabilities"): one edit for 5-7 letters, two for longer words.
+ */
+function questionWords(question) {
+    const words = new Set(wordsOf(question).filter((w) => !GENERIC_WORDS.has(w)));
+    const vocab = toolVocabulary();
+    Array.from(words).forEach((w) => {
+        if (w.length < 5 || vocab.has(w)) return;
+        const max = w.length >= 8 ? 2 : 1;
+        vocab.forEach((v) => { if (editDistance(w, v, max) <= max) words.add(v); });
+    });
+    return words;
+}
+
 /** The allowed tools most relevant to a question, best first, always including a few core ones. */
-export function selectTools(question, allowed, limit = 12) {
-    const qWords = new Set(wordsOf(question).filter((w) => !GENERIC_WORDS.has(w)));
+export function selectTools(question, allowed, limit = 12, ctx = null) {
+    const qWords = questionWords(question);
+    const intentHits = Object.keys(INTENTS).filter((name) => INTENT_TOOLS[name] && hasIntent(question, name));
+    const ents = ctx ? questionEntities(ctx, question) : null;
     const scored = allowed.map((name) => {
         const guide = TOOL_GUIDE[name] || {};
         let score = CORE_TOOLS.includes(name) ? 0.5 : 0;
         wordsOf(guide.tags).forEach((w) => { if (qWords.has(w)) score += 3; });
         wordsOf(name.replace(/_/g, " ")).forEach((w) => { if (qWords.has(w)) score += 2; });
         wordsOf(TOOLS[name] && TOOLS[name].description).forEach((w) => { if (w.length > 3 && qWords.has(w)) score += 1; });
+        intentHits.forEach((intent) => { if (INTENT_TOOLS[intent].includes(name)) score += 3; });
+        if (ents) {
+            // Several named things at once (teams + a match + a metric) is a custom table / chart, not a fixed tool.
+            const parts = (ents.teams.length ? 1 : 0) + (ents.match || ents.range ? 1 : 0) + (ents.metrics.length ? 1 : 0);
+            if (parts >= 2 && (name === "make_table" || name === "make_chart")) score += 3 + 2 * parts;
+            // Two or more named teams: compare the teams, not two metrics across the whole event.
+            if (ents.teams.length >= 2 && name === "compare_teams") score += ents.match || ents.range ? 2 : 4;
+            if (ents.teams.length >= 2 && name === "compare_metrics") score -= 12;
+            if (ents.teams.length === 1 && ["team_overview", "team_matches", "team_percentiles"].includes(name)) score += 1;
+        }
         return { name, score };
     }).sort((a, b) => b.score - a.score);
     const picked = scored.filter((s) => s.score >= 1).slice(0, limit).map((s) => s.name);
@@ -101,23 +217,29 @@ export function selectTools(question, allowed, limit = 12) {
     return picked.slice(0, limit);
 }
 
+/** One-line description of a tool for the model: when to use it and what the user sees. */
+export function describeTool(name) {
+    const guide = TOOL_GUIDE[name];
+    const tool = TOOLS[name];
+    return guide ? `${guide.use}. Shows: ${guide.shows}.` : (tool ? tool.description : name);
+}
+
 export function toolCatalog(ctx, allowed, names = null) {
     return (names || allowed).filter((name) => allowed.includes(name) && TOOLS[name]).map((name) => {
         const tool = TOOLS[name];
-        const guide = TOOL_GUIDE[name];
-        const what = guide ? `${guide.use}. Shows: ${guide.shows}.` : tool.description;
-        return `- ${name}(${Object.keys(tool.params).join(", ")}): ${what}`;
+        return `- ${name}(${Object.keys(tool.params).join(", ")}): ${describeTool(name)}`;
     }).join("\n");
 }
 
-export function metricList(ctx) {
+export function metricList(ctx, max = 80) {
     const custom = (ctx.metrics || []).map((m) => m.label);
     const standard = ["Total points", "Auto points", "Teleop points", "Endgame points", "EPA", "OPR", "xP", "Matches played", "Matches scouted", "Official rank", "Ranking score", "Record"];
     const all = Array.from(new Set([...custom, ...standard]));
-    return all.slice(0, 45).join(", ");
+    return all.slice(0, max).join(", ");
 }
 
 const intArg = { type: "integer" };
+/** Union of every tool's arguments (kept for callers that need one schema; routing uses per-tool schemas). */
 export const TOOL_ARGS_SCHEMA = {
     type: "object",
     properties: {
@@ -142,6 +264,7 @@ export const TOOL_ARGS_SCHEMA = {
         last: intArg,
         order: { type: "string" },
         match: { type: "string" },
+        matches: { type: "array", items: { type: "string" } },
         focus: { type: "string" },
         query: { type: "string" },
         chart: { type: "boolean" },
@@ -157,29 +280,19 @@ export const TOOL_ARGS_SCHEMA = {
     }
 };
 
-export function stepSchema(allowed) {
-    const call = { type: "object", properties: { tool: { type: "string", enum: allowed }, args: TOOL_ARGS_SCHEMA }, required: ["tool"] };
-    return {
-        type: "object",
-        properties: {
-            thought: { type: "string" },
-            reasoning: { type: "string" },
-            action: { type: "string", enum: ["call", "calls", "answer"] },
-            tool: { type: "string", enum: allowed },
-            args: TOOL_ARGS_SCHEMA,
-            calls: { type: "array", items: call },
-            tools: { type: "array", items: call }
-        },
-        required: ["action"]
-    };
+/** Grammar for WebLLM routing: one branch per tool, each with only that tool's arguments (see tool-schemas.js). */
+export function stepSchema(allowed, maxCalls = 4) {
+    return perToolStepSchema(allowed, maxCalls);
 }
 
 /**
  * Cleans model-written arguments: "frc254" / "254" -> 254, "254, 1678" -> [254, 1678], "our team" -> our number,
- * "true" -> true, numeric match -> "12". Tools still validate everything themselves.
+ * "true" -> true, numeric match -> "12", "10-20" -> ["10-20"]. Returns the cleaned args and every team reference
+ * that is not at this event (so the model can be told, instead of the team silently vanishing).
  */
-export function coerceArgs(ctx, args) {
+export function coerceArgsDetailed(ctx, args) {
     const out = { ...(args || {}) };
+    const unknownTeams = [];
     const ours = (v) => (typeof v === "string" && /^\s*(?:our(?:\s+team)?|ours|us|we)\s*$/i.test(v) && ctx.ourTeam ? ctx.ourTeam : v);
     const resolveTeam = (v) => {
         if (v === undefined || v === null || v === "") return undefined;
@@ -207,11 +320,19 @@ export function coerceArgs(ctx, args) {
             }
         }
         if (!Array.isArray(v)) v = [v];
-        out[key] = Array.from(new Set(v.map(resolveTeam).filter((x) => Number.isFinite(x) && ctx.stats && ctx.stats.has(x))));
+        const resolved = v.map((x) => ({ raw: x, team: resolveTeam(x) }));
+        resolved.forEach((r) => {
+            if (!(Number.isFinite(r.team) && ctx.stats && ctx.stats.has(r.team)) && key !== "exclude") unknownTeams.push(String(r.raw));
+        });
+        out[key] = Array.from(new Set(resolved.map((r) => r.team).filter((x) => Number.isFinite(x) && ctx.stats && ctx.stats.has(x))));
     });
     ["columns", "metrics"].forEach((key) => {
         if (typeof out[key] === "string") out[key] = out[key].split(/\s*[,;]\s*|\s+and\s+/i).filter(Boolean);
     });
+    if (out.matches !== undefined && out.matches !== null && out.matches !== "") {
+        const list = Array.isArray(out.matches) ? out.matches : String(out.matches).split(/\s*(?:,|;|\band\b)\s*/i);
+        out.matches = list.map((m) => String(m).trim()).filter(Boolean);
+    }
     ["n", "last", "limit"].forEach((key) => {
         if (out[key] === undefined || out[key] === null) return;
         const n = parseInt(out[key], 10);
@@ -225,7 +346,12 @@ export function coerceArgs(ctx, args) {
         if (typeof out[key] === "string") out[key] = /^(true|yes|1)$/i.test(out[key]) ? true : (/^(false|no|0)$/i.test(out[key]) ? false : out[key]);
     });
     if (typeof out.match === "number") out.match = String(out.match);
-    return out;
+    return { args: out, unknownTeams: Array.from(new Set(unknownTeams)) };
+}
+
+/** coerceArgs without the unknown-team report. Tools still validate everything themselves. */
+export function coerceArgs(ctx, args) {
+    return coerceArgsDetailed(ctx, args).args;
 }
 
 export function parseJsonLoose(text) {
@@ -253,11 +379,28 @@ export function parseJsonLoose(text) {
  * - Multiple calls in tools: {"action":"call", "tools":[{"tool":"...", "args":{...}}, ...]}
  * - Raw array of calls: [{"tool":"...", "args":{...}}, ...]
  * - Multiple separate JSON blocks emitted in text
+ * - Gemma 4 native calls: <|tool_call>call:name{key:<|"|>value<|"|>}<tool_call|>
+ * With { withRejected: true } it returns { calls, rejected } where rejected lists calls naming a tool that is not
+ * offered, or whose arguments could not be read (so the model can be told and retry).
  */
-export function parseToolCalls(text, allowed) {
-    if (!text) return [];
-    const calls = [];
+export function parseToolCalls(text, allowed, { withRejected = false } = {}) {
+    const rejected = [];
+    const result = (calls) => (withRejected ? { calls, rejected } : calls);
+    if (!text) return result([]);
     const isAllowed = (name) => name && (!allowed || allowed.includes(name)) && TOOLS[name];
+
+    // Gemma 4 native syntax takes priority: it is what the model was trained on.
+    if (/call:[A-Za-z_]\w*\s*\{/.test(String(text))) {
+        const native = parseGemmaToolCalls(text);
+        const ok = [];
+        native.forEach((c) => {
+            if (c.malformed) rejected.push({ tool: c.tool, reason: "its arguments could not be read" });
+            else if (!isAllowed(c.tool)) rejected.push({ tool: c.tool, reason: TOOLS[c.tool] ? "it is not offered for this question" : "there is no such tool" });
+            else ok.push({ tool: c.tool, args: c.args });
+        });
+        if (ok.length || rejected.length) return result(ok);
+    }
+    const calls = [];
 
     const ingest = (obj) => {
         if (!obj) return;
@@ -281,6 +424,8 @@ export function parseToolCalls(text, allowed) {
         }
         if (toolName && isAllowed(toolName)) {
             calls.push({ tool: toolName, args: typeof toolArgs === "object" && toolArgs !== null ? toolArgs : {} });
+        } else if (typeof toolName === "string" && toolName) {
+            rejected.push({ tool: toolName, reason: TOOLS[toolName] ? "it is not offered for this question" : "there is no such tool" });
         }
     };
 
@@ -289,7 +434,7 @@ export function parseToolCalls(text, allowed) {
     try {
         const parsed = JSON.parse(clean);
         ingest(parsed);
-        if (calls.length > 0) return calls;
+        if (calls.length > 0 || rejected.length > 0) return result(calls);
     } catch (_) { /* fall through to balanced block extractor */ }
 
     let i = 0;
@@ -344,68 +489,91 @@ export function parseToolCalls(text, allowed) {
         }
     }
 
-    return calls;
+    return result(calls);
 }
 
-function examplesFor(names, limit) {
-    return names.map((name) => {
-        const ex = TOOL_GUIDE[name] && TOOL_GUIDE[name].example;
-        return ex ? `"${ex[0]}" -> ${JSON.stringify({ action: "call", tool: name, args: ex[1] })}` : null;
-    }).filter(Boolean).slice(0, limit);
+/** Worked examples for the shortlisted tools (composite ones first, since those are hardest for small models). */
+function examplesFor(names, limit, native) {
+    const out = [];
+    names.forEach((name) => {
+        const g = TOOL_GUIDE[name];
+        if (!g) return;
+        [...(g.examples || []), ...(g.example ? [g.example] : [])].forEach((ex) => {
+            out.push(native ? `"${ex[0]}" -> ${name} ${JSON.stringify(ex[1])}` : `"${ex[0]}" -> ${JSON.stringify({ calls: [{ tool: name, args: ex[1] }] })}`);
+        });
+    });
+    return out.slice(0, limit);
 }
 
-/** System prompt for the routing step. Only a per-question shortlist of tools is listed, so it fits small prompts. */
-export function routerSystemPrompt(ctx, allowed, maxCalls, { compact = false, question = "", include = [] } = {}) {
+/** The teams, match and metrics a question names, already resolved, so the model copies them instead of guessing. */
+export function entitiesNote(ctx, question) {
+    const e = questionEntities(ctx, question);
+    const parts = [];
+    if (e.teams.length) parts.push(`teams ${e.teams.map((t) => (t.name ? `${t.number} (${t.name})` : String(t.number))).join(", ")}`);
+    if (e.match) parts.push(`match "${e.match.ref}" = ${e.match.label} (red ${e.match.red.join(", ")}; blue ${e.match.blue.join(", ")})`);
+    if (e.range) parts.push(`matches "${e.range}"`);
+    if (e.metrics.length) parts.push(`metrics ${e.metrics.map((m) => `"${m}"`).join(", ")}`);
+    return parts.length ? `The latest question mentions: ${parts.join("; ")}.` : "";
+}
+
+function teamNumbers(ctx) {
+    const nums = Array.from(ctx.stats ? ctx.stats.keys() : []).sort((a, b) => a - b);
+    return { count: nums.length, text: nums.length > 120 ? `${nums.slice(0, 120).join(", ")}, ...` : nums.join(", ") };
+}
+
+/**
+ * System prompt for the routing step. Only a per-question shortlist of tools is offered.
+ * native: the tools are passed to the chat template as function declarations (Gemma 4), so this prompt only explains
+ * how to use them; otherwise the shortlist is listed here and the reply is JSON {"calls":[...]}.
+ * Returns the prompt text; routerTools() gives the shortlist itself.
+ */
+export function routerSystemPrompt(ctx, allowed, maxCalls, { compact = false, question = "", include = [], native = false, limit = 10 } = {}) {
+    const ours = ctx.ourTeam || "unknown";
+    const entities = entitiesNote(ctx, question);
+    const jsonFormat = 'Reply with JSON only: {"calls":[{"tool":"<name>","args":{...}}]}, or {"calls":[]} when no scouting data is needed.';
     if (compact) {
         // Small prompt budget: six tools at most, and the reply format before the list so trimming never loses it.
-        const few = selectTools(question, allowed, 6).slice(0, 6);
+        const few = routerTools(ctx, allowed, question, include, 6);
         return [
-            "You are the FIRST Robotics scouting assistant that selects tools to fetch data. Output JSON only.",
-            "IMPORTANT: No tools run automatically; YOU MUST emit a tool call in JSON to fetch data if the question needs stats or scouting data.",
-            "Earlier messages and visuals are context only; use them only if the latest question refers to them.",
-            'Reply {"action":"call","tool":"...","args":{...}} or {"action":"answer"} if no data is needed.',
-            `Our team: ${ctx.ourTeam || "unknown"}. Metrics: ${metricList(ctx).slice(0, 160)}.`,
-            ...examplesFor(few, 1).map((e) => `Example: ${e}`),
+            "You choose data tools for a FIRST Robotics scouting assistant. The app runs them and shows the results.",
+            jsonFormat,
+            `Our team: ${ours}. Metrics: ${metricList(ctx, 30)}.`,
+            entities,
+            ...examplesFor(few, 2, false).map((e) => `Example: ${e}`),
             "Tools:",
             toolCatalog(ctx, allowed, few)
-        ].join("\n");
+        ].filter(Boolean).join("\n");
     }
-    const names = Array.from(new Set([...include.filter((n) => allowed.includes(n)), ...selectTools(question, allowed, 10)]));
-    const teamEntries = Array.from(ctx.stats ? ctx.stats.entries() : []);
-    const teamListFormatted = teamEntries.slice(0, 40).map(([num, s]) => s.name ? `${num} (${s.name})` : String(num)).join(", ");
+    const names = routerTools(ctx, allowed, question, include, limit);
+    const teams = teamNumbers(ctx);
+    const builder = names.includes("make_table") || names.includes("make_chart");
     return [
-        "You are the intelligent FIRST Robotics scouting assistant deciding data tools to run. Reply with JSON only.",
-        "IMPORTANT: No tools are called automatically. If the user's question asks for or needs team statistics, match schedules, comparisons, rankings, pick recommendations, scouting notes, or charts, YOU MUST make a tool call in JSON format to fetch the data.",
-        `Event: ${ctx.eventKey || "unknown"}. Our team: ${ctx.ourTeam || "unknown"} ("we", "us" and "our team" mean team ${ctx.ourTeam || "unknown"}).`,
-        `Teams at the event (${teamEntries.length}): ${teamListFormatted}${teamEntries.length > 40 ? ", ..." : ""}.`,
-        `Metrics (use these exact names): ${metricList(ctx)}.`,
+        "You choose data tools for the ObsidianScout scouting assistant (FIRST Robotics). The app runs the tools you call and draws their tables and charts; a later step writes the answer from the results.",
+        `Event: ${ctx.eventKey || "unknown"}. Our team: ${ours} ("we", "us", "our" mean team ${ours}).`,
+        `Teams at the event (${teams.count}): ${teams.text}.`,
+        `Metrics (exact names): ${metricList(ctx)}.`,
+        entities,
         "",
-        "TOOLS (available to fetch data; each tool displays its result to the user as a table, chart or document):",
-        toolCatalog(ctx, allowed, names),
+        ...(native ? [] : ["TOOLS:", toolCatalog(ctx, allowed, names), ""]),
+        "RULES:",
+        `- Call the tool that fits the latest question. Make several calls (at most ${maxCalls}) only when it needs separate sets of data.`,
+        "- Use team numbers and metric names exactly as listed. Add \"chart\": true when the user wants a chart, graph or plot.",
+        "- One question can combine teams, matches and metrics (\"compare 254 and 1678 in match 10 on auto\"): use make_table or make_chart with all of them.",
+        "- Earlier messages are context for words like \"them\" or \"that table\"; to change the table or chart on screen, call its tool again with the full new spec.",
+        native
+            ? "- If no scouting data is needed (greeting, small talk, a general question), or the results so far already answer the question, reply with a short plain sentence and call no tool."
+            : "- If no scouting data is needed (greeting, small talk, a general question), or the results so far already answer the question, reply {\"calls\":[]}.",
+        ...(native ? [] : [`- ${jsonFormat}`]),
         "",
-        "HOW TO CHOOSE AND MAKE TOOL CALLS:",
-        "- Pick the tool whose purpose matches what the user is asking. Prefer ONE call.",
-        `- Up to ${maxCalls} call${maxCalls === 1 ? "" : "s"} in total; make more than one only when the question asks for multiple distinct data sets.`,
-        "- When the user asks for a chart, graph, plot, or visual, add \"chart\": true to the tool args.",
-        "- METRICS & DATA SOURCES: Scouted metrics are 'Total points', 'Auto points', 'Teleop points', 'Endgame points'. External ratings are 'EPA' (Statbotics), 'xP' (Match 13), and 'OPR' (TBA). All can be queried, ranked, compared, and plotted.",
-        "- MATCH-BY-MATCH & TRENDS: When the user asks for match-by-match scores, progression lines, or trends (e.g. 'match by match using xP', 'graph match by match', 'trend over time', 'scores each match'), call 'match_by_match' with 'metric' (e.g. 'xP', 'EPA', 'Total points'), 'chart': true, and the relevant teams.",
-        "- MODIFYING ON-SCREEN VISUALS: When the user asks to modify the current visual (e.g. 'add 2718 to that graph', 'remove 31', 'use xP instead', 'swap the columns', 'now do it using xP and match by match'):",
-        "  * If changing teams on a chart: call 'make_chart' or the chart tool with the updated 'teams' array.",
-        "  * If changing the metric to xP, EPA, etc.: call the tool with 'metric': 'xP' or 'metric': 'EPA'.",
-        "  * If changing to match-by-match: call 'match_by_match' with 'metric' and the previous teams.",
-        "- When the user references a team by their name or nickname (e.g. 'Citrus Circuits' -> 1678, 'Rockets' -> 34, 'Cheesy Poofs' -> 254), map it to their exact team number.",
-        "- CONTEXT & HISTORY: Any previous conversation messages, earlier retrieved data, and on-screen visuals are provided for CONTEXT ONLY (e.g. to resolve pronouns like \"they\", \"them\", \"that team\", or when the user asks to modify an existing table/chart). You decide whether this context is needed. If the user's latest question is a new, independent question, focus strictly on the latest question and do not carry over previous teams or topics.",
-        "- If the question is small talk, greeting, general knowledge, or small chat that does not need scouting data, reply {\"action\":\"answer\"}.",
-        "",
-        ...(names.includes("make_table") || names.includes("make_chart") ? [SPEC_GUIDE, ""] : []),
-        "FORMAT (JSON only; you may include an optional 'thought' or 'reasoning' field to reason through the step):",
-        '- Single call: {"thought":"optional reasoning","action":"call","tool":"<name>","args":{...}}',
-        '- Multiple calls: {"thought":"optional reasoning","action":"calls","calls":[{"tool":"<name>","args":{...}}, ...]}',
-        '- No tools needed / small talk: {"thought":"optional reasoning","action":"answer"}',
-        "",
+        ...(builder ? [SPEC_GUIDE, ""] : []),
         "EXAMPLES:",
-        ...examplesFor(names, 6)
-    ].join("\n");
+        ...examplesFor(names, 6, native)
+    ].filter((line) => line !== null && line !== undefined).join("\n");
+}
+
+/** The shortlist offered for a question: tools on screen first, then the most relevant. */
+export function routerTools(ctx, allowed, question, include = [], limit = 10) {
+    return Array.from(new Set([...include.filter((n) => allowed.includes(n)), ...selectTools(question, allowed, limit, ctx)])).slice(0, limit + include.length);
 }
 
 /** Tool facts for the model, sized to budgetChars (see digestFacts). */

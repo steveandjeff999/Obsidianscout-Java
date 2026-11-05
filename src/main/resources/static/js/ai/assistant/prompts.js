@@ -46,9 +46,11 @@ export function displayReminder(results) {
  * @param {string} o.facts     facts digest (key points + details)
  * @param {boolean} o.compact  short prompt for small context budgets
  * @param {boolean} o.isZachary whether Zachary assistant persona is active
+ * @param {boolean} o.nativeThinking the model thinks in its own channel (Gemma 4), so no <thought> instruction is added
  */
-export function answerSystemPrompt({ ctx, profile = {}, results = [], manifest = "", facts = "", compact = false, isZachary = false }) {
+export function answerSystemPrompt({ ctx, profile = {}, results = [], manifest = "", facts = "", compact = false, isZachary = false, nativeThinking = false }) {
     const lang = currentLanguage();
+    const promptThinking = profile.visibleReasoning && !nativeThinking;
     const team = ctx.ourTeam || "unknown";
     const failures = toolFailures(results);
     if (compact) {
@@ -60,7 +62,7 @@ export function answerSystemPrompt({ ctx, profile = {}, results = [], manifest =
             manifest
                 ? `Already on screen above your reply (complete; refer to it, never recreate it, never write a table, never say you cannot make it):\n${manifest}`
                 : "Nothing is drawn above your reply.",
-            ...(profile.visibleReasoning ? [
+            ...(promptThinking ? [
                 "- Think first inside <thought>...</thought> (reason step by step and verify numbers against DATA), then write the final answer after </thought>."
             ] : []),
             "Answer using ONLY the DATA below. Long lists in DATA are shortened (\"+N more\"); the table on screen has every row.",
@@ -109,9 +111,10 @@ export function answerSystemPrompt({ ctx, profile = {}, results = [], manifest =
         `- If the user wants another view, suggest a follow-up they can ask (you can: ${OTHER_SKILLS}).`,
         "- Earlier conversation history and previous visual states are provided for CONTEXT ONLY (e.g. to resolve pronouns like \"them\", \"that team\", or follow-up edits). Answer the LATEST question; use previous context only when needed, and let DATA and the latest prompt guide your answer.",
         profile.strategy ? "- For strategy questions (picks, defense, match plans), reason from the numbers in DATA and name the trade-offs." : null,
-        ...(profile.visibleReasoning ? [
+        ...(promptThinking ? [
             "- Think first inside <thought>...</thought> (reason through your analysis step by step, verify team numbers, rankings, and stats against DATA), then write the final answer after </thought>."
-        ] : ["- Answer directly and concisely. Do not write out your reasoning."]),
+        ] : nativeThinking ? ["- Check team numbers, rankings and stats against DATA before you answer. Keep the final answer concise."]
+            : ["- Answer directly and concisely. Do not write out your reasoning."]),
         `- Reply in ${lang}, in markdown.`,
         "",
         "DATA:",

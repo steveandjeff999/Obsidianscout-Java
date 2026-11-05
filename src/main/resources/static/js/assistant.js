@@ -39,6 +39,25 @@ const state = {
 
 const el = {};
 
+/**
+ * Developer hook: scores the loaded model's tool routing on canned questions (see ai/assistant/eval.js).
+ * In the console: await ObsidianscoutAssistantEval.run()  or  .run({ limit: 5 })
+ */
+window.ObsidianscoutAssistantEval = {
+    async run(options = {}) {
+        if (!state.ctx) throw new Error("Load an event on the Assistant page first.");
+        const { tier } = await UI.ensureModelReady({ tierId: (el.tier && el.tier.value) || undefined });
+        const { runModelEval } = await import("./ai/assistant/eval.js");
+        const report = await runModelEval({
+            answerQuestion: Tools.answerQuestion, ctx: state.ctx, tier, ...options,
+            onResult: (row) => console.log(`[eval] ${row.tool_ok ? "ok " : "BAD"} ${row.ms}ms  ${row.question} -> ${row.ran}`)
+        });
+        console.table(report.rows);
+        console.table([report.summary]);
+        return report;
+    }
+};
+
 document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.initTheme();
     const me = await Obsidianscout.requireAuth();

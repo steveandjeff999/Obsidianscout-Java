@@ -79,7 +79,7 @@ class LocalAiModelServiceTest {
     @Test
     fun adminStatusReportsNotInstalledByDefault() {
         val status = LocalAiModelService.adminStatus()
-        assertEquals(listOf("lite", "gemma4e2b", "gemma4e4b"), status.tiers.map { it.id })
+        assertEquals(listOf("lite", "gemma4e2b", "gemma4e2bq4", "gemma4e4b", "gemma4e4bq4"), status.tiers.map { it.id })
         assertTrue(status.tiers.all { it.state == "not_installed" })
     }
 
@@ -150,5 +150,22 @@ class LocalAiModelServiceTest {
             ),
             planned
         )
+    }
+
+    @Test
+    fun gemma4FourBitTiersUseQ4f16ForEverySession() {
+        for (id in listOf("gemma4e2bq4", "gemma4e4bq4")) {
+            val tier = LocalAiModelService.tier(id)!!
+            val gpu = tier.gpuOnnx!!
+            assertEquals(setOf("q4f16"), gpu.dtype.values.toSet(), id)
+            assertEquals("Gemma4ForConditionalGeneration", gpu.modelClass)
+            assertTrue(gpu.files.contains("onnx/decoder_model_merged_q4f16.onnx_data"), id)
+            assertEquals(40, gpu.revision.length, "$id is pinned to a full commit")
+            assertEquals("no", tier.mobile, "$id is for laptops and desktops")
+            // A different version from the 2-bit build, so both can be installed and cached side by side.
+            val twoBit = LocalAiModelService.tier(id.removeSuffix("q4"))!!
+            assertTrue(tier.version != twoBit.version)
+            assertTrue(tier.vramMB > twoBit.vramMB)
+        }
     }
 }

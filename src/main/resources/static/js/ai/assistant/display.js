@@ -52,7 +52,10 @@ const TOOL_TITLES = {
     event_summary: ["ai.card.event_summary", "Event summary"],
     scouting_coverage: ["ai.card.coverage", "Scouting coverage"],
     make_table: ["ai.card.custom_table", "Custom table"],
-    make_chart: ["ai.card.custom_chart", "Custom chart"]
+    make_chart: ["ai.card.custom_chart", "Custom chart"],
+    qualitative_overview: ["ai.card.qualitative_overview", "Qualitative scouting"],
+    pit_overview: ["ai.card.pit_overview", "Pit scouting"],
+    match_reports: ["ai.card.match_reports", "Match scouting reports"]
 };
 
 export function toolTitle(name) {

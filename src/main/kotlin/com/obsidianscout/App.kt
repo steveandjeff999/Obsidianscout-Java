@@ -97,7 +97,7 @@ fun main(args: Array<String>) {
             return
         }
         if (firstArg == "--install-ai-models" || firstArg == "install-ai-models") {
-            // e.g. --install-ai-models lite,standard,advanced  (downloads into data/models, then exits)
+            // e.g. --install-ai-models lite,gemma4e2b,gemma4e4b  (downloads into data/models, then exits)
             val requested = args.getOrNull(1)?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }
                 ?: com.obsidianscout.ai.LocalAiModelService.tiers.map { it.id }
             for (tierId in requested) {

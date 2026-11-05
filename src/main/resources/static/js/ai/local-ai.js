@@ -26,26 +26,63 @@ export async function setCpuForced(value) {
     capsPromise = null;
     await unload();
 }
-export const TIER_ORDER = ["lite", "gemma4e2b", "gemma4e4b"];
+export const TIER_ORDER = ["lite", "gemma4e2b", "gemma4e2bq4", "gemma4e4b", "gemma4e4bq4"];
+
+/**
+ * Prompt budgets are counted in tokens (what the model's context window holds) and converted to characters with a
+ * conservative ratio: English runs ~4 chars/token, Spanish/Turkish/Hebrew and JSON nearer 3.
+ */
+export const CHARS_PER_TOKEN = 3;
+const SAFETY_TOKENS = 64;
+
+/**
+ * Characters of prompt that fit when `reserveTokens` are kept free for the reply, and never more than
+ * maxPromptTokens: Transformers.js reads the whole prompt in ONE GPU pass, and a pass that runs longer than about two
+ * seconds trips the Windows GPU watchdog (TDR) - the driver resets and the browser loses the GPU until it restarts.
+ */
+export function promptChars(profile, reserveTokens) {
+    const fit = (profile.contextTokens || 2048) - (reserveTokens || 0) - SAFETY_TOKENS;
+    const tokens = Math.max(256, Math.min(fit, profile.maxPromptTokens || fit));
+    return Math.floor(tokens * CHARS_PER_TOKEN);
+}
 
 /**
  * Per-tier behaviour. Features check these flags, never tier ids, so new tiers only need an entry here.
- *  toolMode        "router" = rule router first, at most one model-picked tool (results that error are dropped);
- *                  "json" = the model picks tools with JSON (grammar-constrained on WebLLM).
- *  maxToolCalls    model-picked tool calls when the rule router doesn't recognise the question.
- *  routedFollowUps extra model-picked calls allowed after a rule-routed tool.
+ *  contextTokens   context window the prompt + reply must fit in (Lite's WebLLM build is set to 2048; the Gemma
+ *                  tiers have a far larger window, capped here because every prompt token costs prefill time).
+ *  toolMode        "router" = rule router first, the model picks tools only when it finds nothing;
+ *                  "model" = the model picks tools.
+ *  toolFormat      "gemma" = Gemma 4's native function calling (declarations in the chat template, tool_call /
+ *                  tool_response turns); "json" = {"calls":[...]} JSON (grammar-constrained on WebLLM).
+ *  maxToolCalls    tool calls allowed per question (one routing step may make several).
+ *  maxRouterSteps  routing generations per question, plus one repair turn when a call is invalid. Each step re-reads
+ *                  the whole prompt, so this is kept small.
+ *  maxPromptTokens cap on any single prompt (see promptChars): keeps one prefill pass short enough for the GPU
+ *                  watchdog on mid-range GPUs. Tool results beyond it are abbreviated; the tables on screen stay complete.
+ *  routerThinking  let the model think (Gemma's thinking channel) before choosing tools.
+ *  answerThinking  use Gemma's thinking channel for the answer; when off, a visibleReasoning tier is asked for a short
+ *                  <thought> block instead (E2B's native thinking runs long and can leak into the answer as plain text).
  *  codeAnswers     answer with code-built briefs instead of model prose (tiny models invent details).
  *  extractiveSummaries  notes summaries quote scouts instead of being rewritten by the model.
  *  calculate / strategy  enable the calculator tool and the strategy-reasoning prompt.
- *  visibleReasoning  ask for a <thought> block before the answer (costly; only for fast WebLLM tiers).
+ *  visibleReasoning  show reasoning before the answer (Gemma's native thinking; a <thought> block on other models).
  */
-export const TIER_PROFILES = {
-    lite: { maxAnswerTokens: 600, contextChars: 6000, toolMode: "router", maxToolCalls: 15, routedFollowUps: 15, historyTurns: 3, codeAnswers: true, extractiveSummaries: true, calculate: true, strategy: true, visibleReasoning: true },
-    standard: { maxAnswerTokens: 1200, contextChars: 16000, toolMode: "json", maxToolCalls: 15, routedFollowUps: 15, historyTurns: 6, codeAnswers: false, extractiveSummaries: false, calculate: true, strategy: true, visibleReasoning: true },
-    gemma4e2b: { maxAnswerTokens: 1500, contextChars: 24000, toolMode: "json", maxToolCalls: 15, routedFollowUps: 15, historyTurns: 8, codeAnswers: false, extractiveSummaries: false, calculate: true, strategy: true, visibleReasoning: true },
-    advanced: { maxAnswerTokens: 2000, contextChars: 32000, toolMode: "json", maxToolCalls: 15, routedFollowUps: 15, historyTurns: 10, codeAnswers: false, extractiveSummaries: false, calculate: true, strategy: true, visibleReasoning: true },
-    gemma4e4b: { maxAnswerTokens: 2000, contextChars: 32000, toolMode: "json", maxToolCalls: 15, routedFollowUps: 15, historyTurns: 10, codeAnswers: false, extractiveSummaries: false, calculate: true, strategy: true, visibleReasoning: true }
+const BASE_PROFILES = {
+    lite: { contextTokens: 2048, maxAnswerTokens: 600, maxRouterTokens: 400, toolMode: "router", toolFormat: "json", maxToolCalls: 15, maxRouterSteps: 2, routerThinking: false, historyTurns: 3, codeAnswers: true, extractiveSummaries: true, calculate: true, strategy: true, visibleReasoning: true },
+    gemma4e2b: { contextTokens: 8192, maxPromptTokens: 3000, maxAnswerTokens: 1500, maxRouterTokens: 600, toolMode: "model", toolFormat: "gemma", maxToolCalls: 15, maxRouterSteps: 3, routerToolCount: 6, routerThinking: false, answerThinking: false, historyTurns: 8, codeAnswers: false, extractiveSummaries: false, calculate: true, strategy: true, visibleReasoning: true },
+    gemma4e4b: { contextTokens: 12288, maxPromptTokens: 4096, maxAnswerTokens: 2000, maxRouterTokens: 900, toolMode: "model", toolFormat: "gemma", maxToolCalls: 15, maxRouterSteps: 4, routerToolCount: 8, routerThinking: true, answerThinking: true, historyTurns: 10, codeAnswers: false, extractiveSummaries: false, calculate: true, strategy: true, visibleReasoning: true }
 };
+
+// The 4-bit builds behave like their 2-bit counterparts; only the weights' precision (and size) differ.
+BASE_PROFILES.gemma4e2bq4 = { ...BASE_PROFILES.gemma4e2b };
+BASE_PROFILES.gemma4e4bq4 = { ...BASE_PROFILES.gemma4e4b };
+
+// contextChars = prompt room left for the answer step; routerChars = prompt room for a routing step.
+export const TIER_PROFILES = Object.fromEntries(Object.entries(BASE_PROFILES).map(([id, p]) => [id, {
+    ...p,
+    contextChars: promptChars(p, p.maxAnswerTokens),
+    routerChars: promptChars(p, p.maxRouterTokens)
+}]));
 
 /** Profile for a tier (object or id); unknown tiers get Lite's conservative settings. */
 export function tierProfile(tierOrId) {
@@ -333,6 +370,7 @@ const engine = {
     worker: null,
     tierId: null,
     backend: null,
+    nativeTools: undefined,
     loading: null,
     seq: 0,
     pending: new Map(),
@@ -351,6 +389,8 @@ function ensureWorker() {
             pending.onProgress && pending.onProgress(msg);
         } else if (msg.type === "token") {
             pending.onToken && pending.onToken(msg.text, msg.full);
+        } else if (msg.type === "warn") {
+            console.warn(`[Local AI] ${msg.message}`);
         } else if (msg.type === "error") {
             engine.pending.delete(msg.id);
             pending.reject(new Error(msg.message || "Local AI error"));
@@ -381,7 +421,7 @@ function call(type, payload, handlers = {}) {
 }
 
 export function getEngineStatus() {
-    return { tierId: engine.tierId, backend: engine.backend, loading: !!engine.loading };
+    return { tierId: engine.tierId, backend: engine.backend, loading: !!engine.loading, nativeTools: engine.nativeTools };
 }
 
 /**
@@ -414,6 +454,7 @@ export async function load(tierId, { onProgress } = {}) {
         const msg = await engine.loading;
         engine.tierId = tierId;
         engine.backend = msg.backend || assessment.backend;
+        engine.nativeTools = msg.nativeTools;
         try {
             if (navigator.storage && navigator.storage.persist) await navigator.storage.persist();
         } catch (_) { /* best effort */ }
@@ -425,46 +466,53 @@ export async function load(tierId, { onProgress } = {}) {
 }
 
 /**
- * Streams a chat completion. messages: [{role:'system'|'user'|'assistant', content}].
- * options: { maxTokens, temperature, onToken(delta, full), signal, jsonSchema }
+ * Streams a chat completion. messages: [{role:'system'|'user'|'assistant'|'tool', content, tool_calls?}].
+ * options: { maxTokens, temperature, onToken(delta, full), signal, jsonSchema, tools, thinking, raw }
+ *   tools     native function declarations (Gemma 4 reads them through its chat template; other models ignore them)
+ *   thinking  turn on Gemma 4's thinking channel (shown as <thought>...</thought>)
+ *   raw       resolve to the raw output with special tokens (tool-call markers) instead of the display text
  * Requests are serialized: only one generation runs at a time.
  */
 export function generate(messages, options = {}) {
+    const request = () => call("generate", {
+        messages,
+        options: {
+            maxTokens: options.maxTokens || 400,
+            temperature: options.temperature ?? 0.3,
+            jsonSchema: options.jsonSchema || null,
+            tools: options.tools || null,
+            thinking: !!options.thinking
+        }
+    }, { onToken: options.onToken });
+    const pick = (result) => (options.raw ? (result.raw ?? result.text) : result.text) || "";
     const run = async () => {
         if (!engine.tierId) throw new Error(t("ai.err.not_loaded", "No model is loaded."));
         if (options.signal && options.signal.aborted) throw new DOMException("Aborted", "AbortError");
         const onAbort = () => abort();
         if (options.signal) options.signal.addEventListener("abort", onAbort, { once: true });
         try {
-            const result = await call("generate", {
-                messages,
-                options: {
-                    maxTokens: options.maxTokens || 400,
-                    temperature: options.temperature ?? 0.3,
-                    jsonSchema: options.jsonSchema || null
-                }
-            }, { onToken: options.onToken });
+            const result = await request();
             if (options.signal && options.signal.aborted) {
                 const err = new DOMException("Aborted", "AbortError");
                 err.partial = result.text || "";
                 throw err;
             }
-            return result.text || "";
+            return pick(result);
         } catch (err) {
-            const isDisposedOrUnloaded = /disposed|not loaded|MLCEngine\.reload|Device lost|GrammarMatcher|GPUBuffer|mapAsync|unmapped/i.test(err.message || "");
+            const isDisposedOrUnloaded = /disposed|not loaded|MLCEngine\.reload|Device lost|GrammarMatcher|GPUBuffer|mapAsync|unmapped|GPU adapter|no available backend/i.test(err.message || "");
             if (isDisposedOrUnloaded && engine.tierId) {
                 const currentTierId = engine.tierId;
-                await unload();
-                await load(currentTierId);
-                const retryResult = await call("generate", {
-                    messages,
-                    options: {
-                        maxTokens: options.maxTokens || 400,
-                        temperature: options.temperature ?? 0.3,
-                        jsonSchema: options.jsonSchema || null
+                try {
+                    await unload();
+                    await load(currentTierId);
+                    return pick(await request());
+                } catch (retryErr) {
+                    // The graphics driver reset (e.g. a Windows GPU timeout) and the browser has no GPU until it restarts.
+                    if (/GPU adapter|no available backend|Device lost|webgpu/i.test(String((retryErr && retryErr.message) || retryErr))) {
+                        throw new Error(t("ai.err.gpu_lost", "The graphics card stopped responding and the browser lost access to it. Restart the browser, then try again, or pick a smaller model (a 2-bit build or Lite)."));
                     }
-                }, { onToken: options.onToken });
-                return retryResult.text || "";
+                    throw retryErr;
+                }
             }
             throw err;
         } finally {
@@ -489,6 +537,7 @@ export async function unload() {
     engine.worker = null;
     engine.tierId = null;
     engine.backend = null;
+    engine.nativeTools = undefined;
 }
 
 /**
@@ -608,6 +657,8 @@ const api = {
     TIER_ORDER,
     TIER_PROFILES,
     tierProfile,
+    promptChars,
+    CHARS_PER_TOKEN,
     pruneRetiredCaches,
     getMe,
     isEnabled,

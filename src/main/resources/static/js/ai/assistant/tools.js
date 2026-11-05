@@ -9,6 +9,7 @@ import Features from "../ai-features.js";
 import { getDocGuide } from "./docs-guide.js";
 import { BUILDER_TOOLS } from "./builder.js";
 import { EXTRA_TOOLS } from "./tools-extra.js";
+import { DATA_TOOLS } from "./tools-data.js";
 import { evaluate, fmtTeamPage, metricOrDefault, r1, t, toTeamNumbers, unknownTeams } from "./shared.js";
 
 // ------------------------------------------------------------------ tools
@@ -653,9 +654,10 @@ export const TOOLS = {
     },
 
     scatter: {
-        description: "2D scatter plot correlating two metrics across all teams (e.g. Total points vs Auto, OPR vs EPA, xP vs Total points).",
-        params: { metric_x: "X-axis metric name", metric_y: "Y-axis metric name" },
+        description: "2D scatter plot of two metrics, for all teams or only the listed teams (e.g. Total points vs Auto, OPR vs xP).",
+        params: { metric_x: "X-axis metric name", metric_y: "Y-axis metric name", teams: "optional team numbers to plot (omit for every team)" },
         async run(ctx, args) {
+            const only = args.teams ? toTeamNumbers(ctx, args.teams) : [];
             const mx = metricOrDefault(ctx, args.metric_x, "score_total");
             let my = args.metric_y ? Data.findMetric(ctx, args.metric_y) : null;
             if (!my || my.id === mx.id) {
@@ -664,6 +666,7 @@ export const TOOLS = {
 
             const points = [];
             ctx.stats.forEach((s, team) => {
+                if (only.length && !only.includes(team)) return;
                 const vx = s.metrics[mx.id]?.avg;
                 const vy = s.metrics[my.id]?.avg;
                 if (vx !== undefined && vx !== null && vy !== undefined && vy !== null) {
@@ -671,7 +674,7 @@ export const TOOLS = {
                 }
             });
 
-            if (!points.length) return { facts: { error: `No teams have data for both ${mx.label} and ${my.label}.` } };
+            if (!points.length) return { facts: { error: `No${only.length ? ` listed` : ""} teams have data for both ${mx.label} and ${my.label}.` } };
 
             points.sort((a, b) => (b.x + b.y) - (a.x + a.y));
             const meanX = r1(points.reduce((a, b) => a + b.x, 0) / points.length);
@@ -686,6 +689,9 @@ export const TOOLS = {
                     average_x: meanX,
                     average_y: meanY,
                     average_difference: meanDiff,
+                    teams_plotted: only.length ? points.map((p) => p.team) : undefined,
+                    // With a few named teams every point is listed, so the answer can compare them exactly.
+                    points: only.length ? points.map((p) => ({ team: p.team, name: p.name || undefined, [mx.label]: p.x, [my.label]: p.y })) : undefined,
                     strongest_on_both: points.slice(0, 5)
                 },
                 table: {
@@ -694,7 +700,7 @@ export const TOOLS = {
                 },
                 chart: {
                     type: "scatter",
-                    title: `${mx.label} vs ${my.label} (Scatter Plot)`,
+                    title: `${mx.label} vs ${my.label}${only.length ? ` - teams ${points.map((p) => p.team).join(", ")}` : " - all teams"}`,
                     xTitle: mx.label,
                     yTitle: my.label,
                     points: points.map((p) => ({ team: p.team, name: Data.teamLabel(ctx, p.team), x: p.x, y: p.y })),
@@ -1688,6 +1694,6 @@ export const TOOLS = {
     }
 };
 
-Object.assign(TOOLS, EXTRA_TOOLS, BUILDER_TOOLS);
+Object.assign(TOOLS, EXTRA_TOOLS, BUILDER_TOOLS, DATA_TOOLS);
 
 /** Built-in ObsidianScout documentation knowledge base. */

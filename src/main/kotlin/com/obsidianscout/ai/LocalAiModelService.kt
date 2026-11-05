@@ -146,6 +146,30 @@ object LocalAiModelService {
         modelClass = "Gemma4ForConditionalGeneration"
     )
 
+    /**
+     * Gemma 4 regular ONNX builds at 4 bits (q4f16) for every session. Larger and slower than the 2-bit QAT builds,
+     * but the weights keep more precision, which helps exact tool calls and multi-part questions. The vision/audio
+     * encoders are also 4-bit here (the 2-bit repos ship the vision encoder at fp16), which keeps the total down.
+     * Split weights (E4B's decoder is in two parts) are picked up by planOnnx.
+     */
+    private fun gemma4Q4(repo: String, revision: String) = OnnxSource(
+        repo = repo,
+        revision = revision,
+        files = listOf(
+            "config.json", "generation_config.json", "tokenizer.json", "tokenizer_config.json", "chat_template.jinja",
+            "preprocessor_config.json", "processor_config.json",
+            "onnx/embed_tokens_q4f16.onnx", "onnx/embed_tokens_q4f16.onnx_data",
+            "onnx/decoder_model_merged_q4f16.onnx", "onnx/decoder_model_merged_q4f16.onnx_data",
+            "onnx/audio_encoder_q4f16.onnx", "onnx/audio_encoder_q4f16.onnx_data",
+            "onnx/vision_encoder_q4f16.onnx", "onnx/vision_encoder_q4f16.onnx_data"
+        ),
+        dtype = mapOf(
+            "decoder_model_merged" to "q4f16", "embed_tokens" to "q4f16",
+            "audio_encoder" to "q4f16", "vision_encoder" to "q4f16"
+        ),
+        modelClass = "Gemma4ForConditionalGeneration"
+    )
+
     val tiers: List<LocalAiTier> = listOf(
         LocalAiTier(
             id = "lite",
@@ -174,7 +198,7 @@ object LocalAiModelService {
         ),
         LocalAiTier(
             id = "gemma4e2b",
-            name = "Standard (Gemma 4 E2B)",
+            name = "Standard (Gemma 4 E2B, 2-bit)",
             model = "gemma-4-E2B-it (QAT mobile)",
             params = "E2B",
             license = "Apache-2.0",
@@ -183,14 +207,38 @@ object LocalAiModelService {
             minDeviceMemoryGB = 4,
             mobile = "slow"
         ),
+        // ~3.4 GB: decoder 1.5 GB + per-layer embeddings 1.6 GB + 4-bit encoders.
+        LocalAiTier(
+            id = "gemma4e2bq4",
+            name = "Standard (Gemma 4 E2B, 4-bit)",
+            model = "gemma-4-E2B-it (4-bit)",
+            params = "E2B",
+            license = "Apache-2.0",
+            gpuOnnx = gemma4Q4("onnx-community/gemma-4-E2B-it-ONNX", "6f21c99d7e18237f8d2ce92aadfdbfeba877f63a"),
+            vramMB = 3500,
+            minDeviceMemoryGB = 8,
+            mobile = "no"
+        ),
         LocalAiTier(
             id = "gemma4e4b",
-            name = "Advanced (Gemma 4 E4B)",
+            name = "Advanced (Gemma 4 E4B, 2-bit)",
             model = "gemma-4-E4B-it (QAT mobile)",
             params = "E4B",
             license = "Apache-2.0",
             gpuOnnx = gemma4Qat("onnx-community/gemma-4-E4B-it-qat-mobile-ONNX", "4d18aa8b54e354bec4705e4a4894f5bbf8956c3d"),
             vramMB = 3800,
+            minDeviceMemoryGB = 8,
+            mobile = "no"
+        ),
+        // ~5.2 GB: decoder 2.9 GB (two parts) + per-layer embeddings 2.0 GB + 4-bit encoders. Desktop-class GPUs only.
+        LocalAiTier(
+            id = "gemma4e4bq4",
+            name = "Advanced (Gemma 4 E4B, 4-bit)",
+            model = "gemma-4-E4B-it (4-bit)",
+            params = "E4B",
+            license = "Apache-2.0",
+            gpuOnnx = gemma4Q4("onnx-community/gemma-4-E4B-it-ONNX", "2b6d2e26a962f70a33da8f7cd81e1afdd8d9cfb2"),
+            vramMB = 5400,
             minDeviceMemoryGB = 8,
             mobile = "no"
         )
