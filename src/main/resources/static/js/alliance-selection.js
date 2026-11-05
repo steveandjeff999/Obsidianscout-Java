@@ -6,10 +6,12 @@
 
     // Server Polling and Sync State
     let lastSyncedTime = 0;
-    let pollIntervalId = null;
-    // Board changes arrive as a push over the notification socket; the poll only catches changes made through
-    // another cluster node.
+    // Board changes arrive straight away as a push over the notification socket, from any cluster node, so there's no
+    // timer. They skip LiveRefresh's waits on purpose: a pick should show on every screen in the room at once. A change
+    // made while the socket was down or the tab was asleep was never announced, so check when either comes back.
     Obsidianscout.onInvalidate(["alliance-selection"], () => pollServer());
+    window.addEventListener("obsidianscout:socket-reconnected", () => pollServer());
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) pollServer(); });
 
     // Selector Modal Context
     let targetAllianceNum = null;
@@ -72,12 +74,6 @@
         Obsidianscout.wireThemeToggle();
 
         await initAllianceSelectionPage();
-    });
-
-    window.addEventListener("beforeunload", () => {
-        if (pollIntervalId) {
-            clearInterval(pollIntervalId);
-        }
     });
 
     async function initAllianceSelectionPage() {
@@ -212,11 +208,6 @@
     }
 
     async function loadEventTeams(eventKey) {
-        if (pollIntervalId) {
-            clearInterval(pollIntervalId);
-            pollIntervalId = null;
-        }
-
         if (!eventKey) {
             const grid = document.getElementById("alliances-grid-container");
             grid.innerHTML = '<div class="empty-indicator">Please select an event key in settings.</div>';
@@ -286,8 +277,6 @@
 
             renderAlliances();
             updateRecommendations();
-
-            pollIntervalId = setInterval(() => { if (!document.hidden) pollServer(); }, 15000);
 
         } catch (error) {
             console.error("Failed to load event teams:", error);

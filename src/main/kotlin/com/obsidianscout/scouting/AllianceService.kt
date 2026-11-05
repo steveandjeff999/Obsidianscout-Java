@@ -288,6 +288,7 @@ object AllianceService {
                 it[respondedAt] = now
                 it[active] = true
             }
+            announceAllianceChange(allianceId.value)
             clearEffectiveSettingsCache()
             buildRecord(allianceId.value)!!
         }
@@ -331,6 +332,7 @@ object AllianceService {
                 it[ScoutingAlliances.eventCode] = finalCode
                 it[updatedAt] = now
             }
+            announceAllianceChange(allianceUuid)
             clearEffectiveSettingsCache()
             buildRecord(allianceUuid)!!
         }
@@ -352,6 +354,7 @@ object AllianceService {
                 it[ScoutingAlliances.eventKey] = eventKey.trim().lowercase()
                 it[updatedAt] = Instant.now()
             }
+            announceAllianceChange(allianceId)
             clearEffectiveSettingsCache()
         }
     }
@@ -364,6 +367,8 @@ object AllianceService {
         val allianceUuid = UUID.fromString(allianceId)
         requireAdmin(session, allianceUuid)
         transaction {
+            // Before the rows go: they say who to tell.
+            announceAllianceChange(allianceUuid)
             AllianceMemberships.deleteWhere { AllianceMemberships.allianceId eq allianceUuid }
             ScoutingAlliances.deleteWhere { ScoutingAlliances.id eq allianceUuid }
             clearEffectiveSettingsCache()
@@ -434,6 +439,7 @@ object AllianceService {
                     it[respondedAt] = null
                 }
             }
+            announceAllianceChange(allianceUuid)
             clearEffectiveSettingsCache()
         }
     }
@@ -486,6 +492,7 @@ object AllianceService {
                     it[respondedAt] = Instant.now()
                 }
             }
+            announceAllianceChange(allianceUuid.value)
             clearEffectiveSettingsCache()
         }
     }
@@ -539,6 +546,8 @@ object AllianceService {
                 }
             }
 
+            // Before the row goes, so the team leaving hears too.
+            announceAllianceChange(allianceUuid)
             AllianceMemberships.deleteWhere {
                 (AllianceMemberships.allianceId eq allianceUuid) and
                 (AllianceMemberships.teamNumber eq targetTeamNumber) and
@@ -961,6 +970,7 @@ object AllianceService {
             }) {
                 it[status] = STATUS_ADMIN
             }
+            announceAllianceChange(allianceUuid)
             clearEffectiveSettingsCache()
         }
     }
@@ -1013,6 +1023,7 @@ object AllianceService {
                     it[AllianceMemberships.active] = false
                 }
             }
+            announceAllianceChange(allianceUuid)
             clearEffectiveSettingsCache()
         }
     }
@@ -1048,6 +1059,7 @@ object AllianceService {
             }) {
                 it[AllianceMemberships.active] = active
             }
+            announceAllianceChange(allianceUuid)
             clearEffectiveSettingsCache()
         }
     }
@@ -1055,6 +1067,32 @@ object AllianceService {
     // ────────────────────────────────────
     // Internal helpers
     // ────────────────────────────────────
+
+    /**
+     * Tells every team in the alliance (invited, declined and admins included) that its memberships changed, once the
+     * transaction commits. Which alliance is active also decides whose selection board a team sees, so that topic goes
+     * too. Call it while the rows still name everyone to tell: before a delete, after an insert.
+     */
+    private fun announceAllianceChange(allianceId: UUID) {
+        val teams = AllianceMemberships.select(AllianceMemberships.teamNumber, AllianceMemberships.program)
+            .where { AllianceMemberships.allianceId eq allianceId }
+            .map { it[AllianceMemberships.teamNumber] to it[AllianceMemberships.program] }
+            .toSet()
+        if (teams.isEmpty()) return
+        val send = {
+            teams.forEach { (team, program) ->
+                com.obsidianscout.db.NotificationWebSocketManager.invalidateTeam(team, program, listOf("alliances", "alliance-selection"))
+            }
+        }
+        val tx = org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.currentOrNull()
+        if (tx == null) {
+            send()
+            return
+        }
+        tx.registerInterceptor(object : org.jetbrains.exposed.v1.core.statements.StatementInterceptor {
+            override fun afterCommit(transaction: org.jetbrains.exposed.v1.core.Transaction) = send()
+        })
+    }
 
     private fun requireAdmin(session: UserSession, allianceId: UUID) {
         if (!session.role.isAtLeast(UserRole.ADMIN)) {

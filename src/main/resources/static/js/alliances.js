@@ -12,7 +12,6 @@
     let alliances = [];
     let pendingInvites = [];
     let importSources = [];
-    const LIVE_REFRESH_MS = 10000;
 
     // ─────────────────────────────────────────────────────────────────
     // Init
@@ -35,9 +34,11 @@
         await Promise.all([loadAlliances(false), loadInvites(false)]);
         await loadInviteBadge();
 
-        setInterval(async () => {
+        // The server announces membership changes (invites, responses, leaving, which alliance is active) to every
+        // team in the alliance, so this reloads on those instead of polling.
+        Obsidianscout.liveRefresh(["alliances"], async () => {
             await Promise.all([loadAlliances(true), loadInvites(true), loadInviteBadge()]);
-        }, LIVE_REFRESH_MS);
+        }, { settleMs: 1000, spreadMs: 2000 });
 
         // Show/hide Create button for non-admins
         const createBtn = document.getElementById('btn-create-alliance');

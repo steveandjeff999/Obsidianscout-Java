@@ -103,11 +103,11 @@ import com.obsidianscout.db.ChatService
 import com.obsidianscout.db.ChatMessages
 
 /**
- * Selection boards and pick lists can be shared across a scouting alliance's teams, so every socket hears about a
- * change; only alliance-selection and pick-list pages act on it.
+ * Selection boards can be shared across a scouting alliance's teams, so the team and its partners hear about a change;
+ * only alliance-selection and pick-list pages act on it. Other teams' boards are their own and never change with this one.
  */
-private fun allianceSelectionChanged() {
-    com.obsidianscout.db.NotificationWebSocketManager.invalidateAll(listOf("alliance-selection"))
+private fun allianceSelectionChanged(session: UserSession) {
+    com.obsidianscout.db.NotificationWebSocketManager.invalidateTeamData(session.teamNumber, session.program, listOf("alliance-selection"))
 }
 
 fun Route.analyticsRoutes() {
@@ -272,7 +272,7 @@ fun Route.analyticsRoutes() {
                     val session = call.requireAnalyticsOrAbove()
                     val request = call.receive<com.obsidianscout.scouting.AllianceSelectionUpdateRequest>()
                     val response = com.obsidianscout.scouting.AllianceSelectionService.updateSelection(session, request)
-                    allianceSelectionChanged()
+                    allianceSelectionChanged(session)
                     call.respond(response)
                 }
                 route("/pick-lists") {
@@ -289,7 +289,7 @@ fun Route.analyticsRoutes() {
                             throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey")
                         }
                         call.respond(com.obsidianscout.scouting.AllianceSelectionService.updatePickLists(session, request))
-                        allianceSelectionChanged()
+                        allianceSelectionChanged(session)
                     }
                 }
                 // Ranked pick list. Shares the Do Not Pick list with the pick lists above.
@@ -307,7 +307,7 @@ fun Route.analyticsRoutes() {
                             throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey")
                         }
                         call.respond(com.obsidianscout.scouting.AllianceSelectionService.updateRankedPickList(session, request))
-                        allianceSelectionChanged()
+                        allianceSelectionChanged(session)
                     }
                     post("/dnp") {
                         val session = call.requireAnalyticsOrAbove()
@@ -316,7 +316,7 @@ fun Route.analyticsRoutes() {
                             throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey or teamNumber")
                         }
                         call.respond(com.obsidianscout.scouting.AllianceSelectionService.setDoNotPick(session, request))
-                        allianceSelectionChanged()
+                        allianceSelectionChanged(session)
                     }
                 }
             }

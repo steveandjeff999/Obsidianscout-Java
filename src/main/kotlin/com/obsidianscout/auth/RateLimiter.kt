@@ -34,7 +34,18 @@ private fun isTrustedProxyAddress(address: String): Boolean {
     return bytes.size == 4 && (bytes[0].toInt() and 0xFF) == 100 && (bytes[1].toInt() and 0xC0) == 64
 }
 
+/**
+ * Failed logins per IP and per username, [MAX_ATTEMPTS] a minute. Every node counts in its own memory and, while Redis is
+ * up, in shared keys too, so a load balancer spreading attempts over the cluster doesn't multiply the limit. Either count
+ * reaching the limit blocks: if Redis drops mid-attack, this node's own count still holds.
+ */
 object LoginRateLimiter {
+    private val log = org.slf4j.LoggerFactory.getLogger(LoginRateLimiter::class.java)
+    private const val REDIS_PREFIX = "obsidian:ratelimit:login"
+
+    /** INCR and start the window in one step, so a key can't be left without an expiry and block forever. */
+    private const val INCREMENT_SCRIPT =
+        "local c = redis.call('INCR', KEYS[1]) if c == 1 then redis.call('PEXPIRE', KEYS[1], ARGV[1]) end return c"
 
     private data class AttemptWindow(
         val count: AtomicInteger = AtomicInteger(0),
@@ -43,6 +54,26 @@ object LoginRateLimiter {
 
     private val ipAttempts = ConcurrentHashMap<String, AttemptWindow>()
     private val usernameAttempts = ConcurrentHashMap<String, AttemptWindow>()
+
+    private fun ipKey(ip: String) = "$REDIS_PREFIX:ip:$ip"
+    private fun userKey(username: String) = "$REDIS_PREFIX:user:${username.trim().lowercase()}"
+
+    /** The keys for whichever of [ip] and [username] are given. */
+    private fun redisKeys(ip: String, username: String): List<String> = buildList {
+        if (ip.isNotBlank()) add(ipKey(ip))
+        if (username.isNotBlank()) add(userKey(username))
+    }
+
+    /** Runs [block] against Redis when it's up; null when it isn't or the call fails, and the local counts decide. */
+    private fun <T> withRedis(block: (redis.clients.jedis.Jedis) -> T): T? {
+        if (!com.obsidianscout.cache.RedisClusterCoordinator.isReady) return null
+        return try {
+            com.obsidianscout.cache.RedisClusterCoordinator.getJedis().use(block)
+        } catch (e: Exception) {
+            log.debug("[LoginRateLimiter] Redis unavailable, using this node's counts: {}", e.message)
+            null
+        }
+    }
 
     private const val MAX_ATTEMPTS = 10
     private const val WINDOW_MS = 60_000L
@@ -80,7 +111,10 @@ object LoginRateLimiter {
             }
         }
 
-        return true
+        val keys = redisKeys(ip, username)
+        if (keys.isEmpty()) return true
+        val shared = withRedis { it.mget(*keys.toTypedArray()) } ?: return true
+        return shared.none { (it?.toIntOrNull() ?: 0) >= MAX_ATTEMPTS }
     }
 
     /**
@@ -107,6 +141,13 @@ object LoginRateLimiter {
             }
             userWindow.count.incrementAndGet()
         }
+
+        val keys = redisKeys(ip, username)
+        if (keys.isNotEmpty()) {
+            withRedis { jedis ->
+                keys.forEach { jedis.eval(INCREMENT_SCRIPT, listOf(it), listOf(WINDOW_MS.toString())) }
+            }
+        }
         if (isLogin) com.obsidianscout.admin.ServerAnalyticsService.recordAuthFailure(ip, username)
     }
 
@@ -120,6 +161,8 @@ object LoginRateLimiter {
         if (username.isNotBlank()) {
             usernameAttempts.remove(username.trim().lowercase())
         }
+        val keys = redisKeys(ip, username)
+        if (keys.isNotEmpty()) withRedis { it.del(*keys.toTypedArray()) }
     }
 
     @Synchronized

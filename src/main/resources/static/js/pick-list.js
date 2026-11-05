@@ -14,10 +14,12 @@
     let searchQuery = "";
     let saveChain = Promise.resolve();
     let pendingSaves = 0;
-    let pollIntervalId = null;
-    // Board changes arrive as a push over the notification socket; the poll only catches changes made through
-    // another cluster node.
+    // Pick list and board changes arrive straight away as a push over the notification socket, from any cluster node,
+    // so there's no timer. A change made while the socket was down or the tab was asleep was never announced, so check
+    // when either comes back.
     Obsidianscout.onInvalidate(["alliance-selection"], () => poll());
+    window.addEventListener("obsidianscout:socket-reconnected", () => poll());
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
     let dragTeamNumber = null;
 
     const METRIC_PREF_KEY = "obsidian-pick-list-metric";
@@ -57,10 +59,6 @@
 
     window.addEventListener("obsidianscout:languagechange", () => {
         if (currentEventKey && allTeams.length) renderAll();
-    });
-
-    window.addEventListener("beforeunload", () => {
-        if (pollIntervalId) clearInterval(pollIntervalId);
     });
 
     async function initPickListPage() {
@@ -155,10 +153,6 @@
     }
 
     async function loadEvent(eventKey) {
-        if (pollIntervalId) {
-            clearInterval(pollIntervalId);
-            pollIntervalId = null;
-        }
         if (!eventKey) {
             document.getElementById("ranking-list").innerHTML = `<div class="empty-indicator pl-empty">${Obsidianscout.escapeHtml(tr("pick_list.no_event", "Select an event in settings to build a pick list."))}</div>`;
             return;
@@ -170,7 +164,6 @@
         boardSyncedAt = null;
         await Promise.all([refreshPickList(true), refreshBoard()]);
         renderAll();
-        pollIntervalId = setInterval(() => { if (!document.hidden) poll(); }, 15000);
     }
 
     async function refreshPickList(force) {
