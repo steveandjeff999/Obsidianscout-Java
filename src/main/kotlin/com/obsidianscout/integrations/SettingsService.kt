@@ -539,7 +539,11 @@ object SettingsService {
         )
     }
 
-    fun teamNumbersEligibleForAutoSync(): List<Pair<Int, String>> {
+    fun teamNumbersEligibleForAutoSync(): List<Pair<Int, String>> =
+        autoSyncTeamSettings().map { (teamNumber, program, _) -> Pair(teamNumber, program) }
+
+    /** Every team and program the automatic sync covers, with the effective settings it syncs with. */
+    private fun autoSyncTeamSettings(): List<Triple<Int, String, ApiSettings>> {
         return readTransaction {
             AppSettings.selectAll()
                 .map { Pair(it[AppSettings.teamNumber], it[AppSettings.program]) }
@@ -549,19 +553,84 @@ object SettingsService {
                     if (settings.resolvedEventKey().isBlank()) {
                         return@mapNotNull null
                     }
-                    val keys = settings.apiKeys
+                    // FTC Scout needs no key, so every FTC team with an event is synced.
                     val isFtc = program.equals("FTC", ignoreCase = true)
-                    val hasApi = if (isFtc) {
-                        true
-                    } else {
-                        keys.tbaKey.isNotBlank() || (keys.firstUsername.isNotBlank() && keys.firstKey.isNotBlank())
-                    }
-                    if (!hasApi) {
+                    if (!isFtc && !hasOwnApiCredentials(program, settings.apiKeys)) {
                         return@mapNotNull null
                     }
-                    Pair(teamNumber, program)
+                    Triple(teamNumber, program, settings)
                 }
         }
+    }
+
+    /**
+     * Whether [keys] hold credentials for a source that needs a key: The Blue Alliance or FIRST for FRC, FIRST for
+     * FTC (FTC Scout needs no key, and TBA has no FTC data).
+     */
+    fun hasOwnApiCredentials(program: String, keys: ApiKeys): Boolean {
+        val first = keys.firstUsername.isNotBlank() && keys.firstKey.isNotBlank()
+        return if (program.equals("FTC", ignoreCase = true)) first else first || keys.tbaKey.isNotBlank()
+    }
+
+    private const val SYNCED_EVENTS_TTL_MS = 60_000L
+
+    private class SyncedEvents(val builtAt: Long, val teamsByEvent: Map<Pair<String, String>, Set<Int>>)
+
+    @Volatile
+    private var syncedEvents: SyncedEvents? = null
+    private val syncedEventsGeneration = java.util.concurrent.atomic.AtomicLong()
+
+    /**
+     * Whether a team other than [teamNumber] is synced automatically for [eventKey] in [program] with its own API
+     * credentials ([hasOwnApiCredentials]). The synced event, team and match rows are shared by every team, so a team
+     * without those credentials at that event reads what the other team's sync writes: for FTC, FIRST's data on top
+     * of FTC Scout's.
+     *
+     * Answering reads every team's settings, so the answer is kept for [SYNCED_EVENTS_TTL_MS] and dropped
+     * whenever effective settings change ([clearSyncedEventsCache]).
+     */
+    suspend fun isEventSyncedByAnotherTeam(teamNumber: Int, program: String, eventKey: String): Boolean {
+        val key = eventKey.trim().lowercase()
+        if (key.isBlank()) return false
+        val current = freshSyncedEvents() ?: run {
+            val generation = syncedEventsGeneration.get()
+            // Every banner load after a settings change lands here at once: they share one rebuild instead of each
+            // reading every team's settings. The generation is in the key so a load after a newer change rebuilds.
+            com.obsidianscout.cache.SingleFlight.execute("obsidian:synced-events:$generation") {
+                freshSyncedEvents() ?: kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    buildSyncedEvents(generation)
+                }
+            }
+        }
+        return current.teamsByEvent[program.uppercase() to key].orEmpty().any { it != teamNumber }
+    }
+
+    private fun freshSyncedEvents(): SyncedEvents? =
+        syncedEvents?.takeIf { System.currentTimeMillis() - it.builtAt < SYNCED_EVENTS_TTL_MS }
+
+    private fun buildSyncedEvents(generation: Long): SyncedEvents {
+        syncedEventsBuilds.incrementAndGet()
+        val startedAt = System.currentTimeMillis()
+        val teamsByEvent = autoSyncTeamSettings()
+            .filter { (_, prog, settings) -> hasOwnApiCredentials(prog, settings.apiKeys) }
+            .groupBy(
+                { (_, prog, settings) -> prog.uppercase() to settings.resolvedEventKey().lowercase() },
+                { (team, _, _) -> team }
+            )
+            .mapValues { it.value.toSet() }
+        val built = SyncedEvents(startedAt, teamsByEvent)
+        // A settings change while building would leave this out of date, so only keep it if none happened.
+        if (syncedEventsGeneration.get() == generation) syncedEvents = built
+        return built
+    }
+
+    /** How many times [isEventSyncedByAnotherTeam] has read every team's settings. For tests. */
+    internal val syncedEventsBuilds = java.util.concurrent.atomic.AtomicInteger()
+
+    /** Drops the cached [isEventSyncedByAnotherTeam] answers. Called whenever effective settings change. */
+    fun clearSyncedEventsCache() {
+        syncedEventsGeneration.incrementAndGet()
+        syncedEvents = null
     }
 
     private fun resolveEventCode(settings: ApiSettings): String {

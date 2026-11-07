@@ -141,6 +141,8 @@ object AllianceService {
     fun clearLocalEffectiveSettingsCache() {
         effectiveSettingsGeneration.incrementAndGet()
         effectiveSettingsCache.clear()
+        // Which teams sync which events is built from effective settings.
+        com.obsidianscout.integrations.SettingsService.clearSyncedEventsCache()
     }
 
     /**

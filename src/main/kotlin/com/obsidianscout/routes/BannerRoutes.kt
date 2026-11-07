@@ -103,6 +103,79 @@ import com.obsidianscout.db.ScoutingAlliances
 import com.obsidianscout.db.ChatService
 import com.obsidianscout.db.ChatMessages
 
+private val bannerLogger = org.slf4j.LoggerFactory.getLogger("BannerRoutes")
+
+/**
+ * The banner for a team without its own API credentials ([SettingsService.hasOwnApiCredentials]), or null when it
+ * has them. Synced rows are shared by every team, so when another team syncs this event ([sharedByAnotherTeam]) the
+ * banner says the data is shared instead of warning that syncing is off. FTC still syncs from FTC Scout without a
+ * key; only FIRST's data needs one.
+ */
+internal suspend fun apiKeyBanner(
+    teamNumber: Int,
+    program: String,
+    eventKey: String,
+    keys: com.obsidianscout.integrations.ApiKeys,
+    sharedByAnotherTeam: suspend () -> Boolean = { SettingsService.isEventSyncedByAnotherTeam(teamNumber, program, eventKey) }
+): BannerDto? {
+    if (SettingsService.hasOwnApiCredentials(program, keys)) return null
+    val isFtc = program.equals("FTC", ignoreCase = true)
+    val shared = try {
+        sharedByAnotherTeam()
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        // Quorum loss has its own banner, added by the caller.
+        if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLossException(e)) throw e
+        bannerLogger.warn("Couldn't check whether another team shares event $eventKey with team $teamNumber ($program); showing the no-key warning", e)
+        false
+    }
+    val (id, type, message, details) = when {
+        shared && isFtc -> listOf(
+            "sys-shared-event-data",
+            "info",
+            "FIRST API teams and matches for this event are being shared by another team on this server. For better reliability, we highly recommend adding your own FIRST API key in Admin Settings.",
+            "Your team still syncs from FTC Scout, which needs no key. Another team on this server has a FIRST API key and is set to this event, so its sync adds FIRST's teams and matches for you as well. " +
+                "That part only stays up to date while that team keeps syncing this event. " +
+                "With your own FIRST API key, your team gets FIRST's data on its own schedule, for any event."
+        )
+        shared -> listOf(
+            "sys-shared-event-data",
+            "info",
+            "Teams and matches for this event are being shared by another team on this server. For better reliability, we highly recommend adding your own API key in Admin Settings.",
+            "Another team on this server has an API key and is set to this event, so its sync fills in teams and matches for you as well. " +
+                "That data only stays up to date while that team keeps syncing this event, and your team can't sync any other event. " +
+                "With your own The Blue Alliance or FIRST API key, your team syncs on its own schedule."
+        )
+        isFtc -> listOf(
+            "sys-no-api-key",
+            "warning",
+            "No FIRST API key is currently configured for your team. Teams and matches sync from FTC Scout only; add a FIRST API key in Admin Settings to include FIRST's data.",
+            ""
+        )
+        else -> listOf(
+            "sys-no-api-key",
+            "warning",
+            "No API Key is currently configured for your team. External data syncing (The Blue Alliance / FIRST) is disabled.",
+            ""
+        )
+    }
+    val now = java.time.Instant.now().toString()
+    return BannerDto(
+        id = id,
+        teamNumber = teamNumber,
+        program = if (isFtc) "FTC" else "FRC",
+        message = message,
+        bannerType = type,
+        isDismissible = true,
+        isExpandable = details.isNotEmpty(),
+        expandableMessage = details,
+        isActive = true,
+        createdAt = now,
+        updatedAt = now
+    )
+}
+
 fun Route.bannerRoutes() {
             route("/banners") {
                 get("/login") {
@@ -192,30 +265,7 @@ fun Route.bannerRoutes() {
                             )
                         }
 
-                        val keys = settings.apiKeys
-                        val isFtc = session.program.equals("FTC", ignoreCase = true)
-                        val hasApi = if (isFtc) {
-                            true
-                        } else {
-                            keys.tbaKey.isNotBlank() || (keys.firstUsername.isNotBlank() && keys.firstKey.isNotBlank())
-                        }
-                        if (!hasApi) {
-                            active.add(
-                                0,
-                                com.obsidianscout.routes.BannerDto(
-                                    id = "sys-no-api-key",
-                                    teamNumber = session.teamNumber,
-                                    message = "No API Key is currently configured for your team. External data syncing (The Blue Alliance / FIRST) is disabled.",
-                                    bannerType = "warning",
-                                    isDismissible = true,
-                                    isExpandable = false,
-                                    expandableMessage = "",
-                                    isActive = true,
-                                    createdAt = java.time.Instant.now().toString(),
-                                    updatedAt = java.time.Instant.now().toString()
-                                )
-                            )
-                        }
+                        apiKeyBanner(session.teamNumber, session.program, eventKey, settings.apiKeys)?.let { active.add(0, it) }
                     } catch (e: Exception) {
                         if (orchestrator.isQuorumLossException(e)) {
                             orchestrator.isQuorumLost = true
