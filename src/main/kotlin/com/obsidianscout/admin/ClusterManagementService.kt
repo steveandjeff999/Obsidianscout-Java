@@ -19,6 +19,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.net.URI
@@ -46,14 +47,19 @@ data class ClusterNodeInfo(
     val serverVersion: String = "Unknown",
     val executionMode: String = "Unknown",
     val uptimeSeconds: Long? = null,
-    val uptimeFormatted: String? = null
+    val uptimeFormatted: String? = null,
+    val cloudflaredVersion: String? = null,
+    val cloudflaredUpgradeState: String? = null,
+    val cloudflaredRollout: String? = null
 )
 
 @Serializable
 data class ClusterNodesResponse(
     val localNodeIp: String,
     val totalNodes: Int,
-    val nodes: List<ClusterNodeInfo>
+    val nodes: List<ClusterNodeInfo>,
+    val latestCloudflaredVersion: String? = null,
+    val recommendedCloudflaredVersion: String? = null
 )
 
 @Serializable
@@ -79,7 +85,10 @@ data class ClusterStatusResponse(
     val dbActive: Boolean = true,
     val executionMode: String = if (System.getProperty("org.graalvm.nativeimage.imagecode") != null) "Native" else "Jar",
     val uptimeSeconds: Long? = null,
-    val uptimeFormatted: String? = null
+    val uptimeFormatted: String? = null,
+    val cloudflaredVersion: String? = null,
+    val cloudflaredUpgradeState: String? = null,
+    val cloudflaredRollout: String? = null
 )
 
 object ClusterManagementService {
@@ -204,7 +213,10 @@ object ClusterManagementService {
                 serverVersion = appConfig.current_version,
                 executionMode = localMode,
                 uptimeSeconds = localUptime,
-                uptimeFormatted = formatUptime(localUptime)
+                uptimeFormatted = formatUptime(localUptime),
+                cloudflaredVersion = CloudflaredService.getInstalledVersion(),
+                cloudflaredUpgradeState = CloudflaredService.upgradeState,
+                cloudflaredRollout = cloudflaredRolloutState
             )
         )
 
@@ -260,7 +272,10 @@ object ClusterManagementService {
                         serverVersion = probeResult.version,
                         executionMode = probeResult.executionMode,
                         uptimeSeconds = probeResult.uptimeSeconds,
-                        uptimeFormatted = if (probeResult.isOnline) (probeResult.uptimeFormatted ?: "Unknown") else "Offline"
+                        uptimeFormatted = if (probeResult.isOnline) (probeResult.uptimeFormatted ?: "Unknown") else "Offline",
+                        cloudflaredVersion = probeResult.cloudflaredVersion,
+                        cloudflaredUpgradeState = probeResult.cloudflaredUpgradeState,
+                        cloudflaredRollout = probeResult.cloudflaredRollout
                     )
                 }
             }.awaitAll()
@@ -270,7 +285,9 @@ object ClusterManagementService {
         ClusterNodesResponse(
             localNodeIp = localIp,
             totalNodes = nodesList.size,
-            nodes = nodesList
+            nodes = nodesList,
+            latestCloudflaredVersion = CloudflaredService.getLatestVersion(),
+            recommendedCloudflaredVersion = CloudflaredService.getRecommendedVersion()
         )
     }
 
@@ -279,7 +296,10 @@ object ClusterManagementService {
         val version: String,
         val executionMode: String,
         val uptimeSeconds: Long? = null,
-        val uptimeFormatted: String? = null
+        val uptimeFormatted: String? = null,
+        val cloudflaredVersion: String? = null,
+        val cloudflaredUpgradeState: String? = null,
+        val cloudflaredRollout: String? = null
     )
 
     private fun fetchNodeStatusAndVersion(ip: String, appPort: Int, dbPort: Int = 26257): NodeProbeDetails {
@@ -306,12 +326,24 @@ object ClusterManagementService {
                 val uptimeFmt = jsonElem?.get("uptimeFormatted")?.let {
                     runCatching { it.jsonPrimitive.content }.getOrNull()
                 } ?: uptimeSec?.let { formatUptime(it) }
+                val cfVersion = jsonElem?.get("cloudflaredVersion")?.let {
+                    runCatching { it.jsonPrimitive.contentOrNull }.getOrNull()
+                }
+                val cfState = jsonElem?.get("cloudflaredUpgradeState")?.let {
+                    runCatching { it.jsonPrimitive.contentOrNull }.getOrNull()
+                }
+                val cfRollout = jsonElem?.get("cloudflaredRollout")?.let {
+                    runCatching { it.jsonPrimitive.contentOrNull }.getOrNull()
+                }
                 return NodeProbeDetails(
                     isOnline = true,
                     version = ver,
                     executionMode = mode,
                     uptimeSeconds = uptimeSec,
-                    uptimeFormatted = uptimeFmt
+                    uptimeFormatted = uptimeFmt,
+                    cloudflaredVersion = cfVersion,
+                    cloudflaredUpgradeState = cfState,
+                    cloudflaredRollout = cfRollout
                 )
             }
         } catch (e: Exception) {
@@ -859,6 +891,125 @@ object ClusterManagementService {
             message = "Force reinstall/update command dispatched to $successCount/${cluster.nodes.size} nodes on the cluster.",
             targetIp = "all-nodes"
         )
+    }
+
+    /**
+     * Installs cloudflared [version] on [targetIp] in the background. The node answers right away; progress and the
+     * result show up in its `cloudflaredUpgradeState`.
+     */
+    suspend fun upgradeCloudflaredNode(targetIp: String, version: String): ActionResultResponse = withContext(Dispatchers.IO) {
+        if (!CloudflaredService.isValidVersion(version)) {
+            return@withContext ActionResultResponse(false, "\"$version\" is not a cloudflared version (expected e.g. 2025.10.1).", targetIp)
+        }
+        val localIp = getLocalTailscaleIp()
+        if (isLocalTarget(targetIp, localIp)) {
+            if (CloudflaredService.startUpgradeAsync(version)) {
+                ServerLogService.appendLog("INFO", "ClusterManagementService", "cloudflared upgrade to $version started on $localIp.")
+                ActionResultResponse(true, "cloudflared upgrade to $version started on $localIp.", localIp)
+            } else {
+                ActionResultResponse(false, "A cloudflared upgrade is already running on $localIp.", localIp)
+            }
+        } else {
+            val appPort = AppConfigLoader.load().server.port
+            val url = "http://$targetIp:$appPort/api/admin/cluster/nodes/local/cloudflared-upgrade?version=$version"
+            try {
+                val req = buildSignedClusterRequest(url, "POST")
+                    .timeout(Duration.ofSeconds(5))
+                    .POST(HttpRequest.BodyPublishers.noBody())
+                    .build()
+                val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
+                when (resp.statusCode()) {
+                    200 -> runCatching { JsonSupport.json.decodeFromString(ActionResultResponse.serializer(), resp.body()) }
+                        .getOrElse { ActionResultResponse(true, "cloudflared upgrade started on $targetIp.", targetIp) }
+                    404 -> ActionResultResponse(false, "$targetIp runs an older ObsidianScout without remote cloudflared upgrades; update it first.", targetIp)
+                    else -> ActionResultResponse(false, "Remote server $targetIp returned status ${resp.statusCode()}.", targetIp)
+                }
+            } catch (e: Exception) {
+                if (e.message?.contains("selector manager closed") == true) {
+                    resetHttpClient()
+                }
+                ActionResultResponse(false, "Could not reach $targetIp: ${e.message}", targetIp)
+            }
+        }
+    }
+
+    private fun isLocalTarget(targetIp: String, localIp: String) =
+        targetIp == localIp || targetIp == "127.0.0.1" || targetIp == "local" || targetIp.isBlank()
+
+    /** What the cluster-wide cloudflared rollout started from this node is doing; blank if none was started here. */
+    @Volatile
+    var cloudflaredRolloutState: String = ""
+        private set
+
+    const val ROLLOUT_RUNNING = "Rolling out"
+
+    fun isRolloutBusy(state: String?) = state != null && state.startsWith(ROLLOUT_RUNNING)
+
+    /** Longest one server may take: download (up to 3 min) plus a health check and possible rollback (90s each). */
+    private const val CLOUDFLARED_NODE_TIMEOUT_MS = 8L * 60 * 1000
+
+    /**
+     * Installs cloudflared [version] on every online server, one at a time. Each server has to finish its upgrade,
+     * with its tunnel connected again, before the next one starts; the first failure, rollback or timeout stops the
+     * rollout, so a bad release reaches at most one server. This server goes last.
+     */
+    suspend fun startCloudflaredRollout(version: String): ActionResultResponse = withContext(Dispatchers.IO) {
+        if (!CloudflaredService.isValidVersion(version)) {
+            return@withContext ActionResultResponse(false, "\"$version\" is not a cloudflared version (expected e.g. 2025.10.1).", "all-nodes")
+        }
+        val cluster = getClusterNodes()
+        cluster.nodes.firstOrNull { isRolloutBusy(it.cloudflaredRollout) }?.let {
+            return@withContext ActionResultResponse(false, "A cloudflared rollout is already running from ${it.ip}.", "all-nodes")
+        }
+        cluster.nodes.firstOrNull { CloudflaredService.isUpgradeBusy(it.cloudflaredUpgradeState) }?.let {
+            return@withContext ActionResultResponse(false, "${it.ip} is already upgrading cloudflared; wait for it to finish.", "all-nodes")
+        }
+        val online = cluster.nodes.filter { it.status != "offline" }.sortedBy { it.isLocal }
+        val offline = cluster.nodes.filter { it.status == "offline" }.map { it.ip }
+        synchronized(this@ClusterManagementService) {
+            if (isRolloutBusy(cloudflaredRolloutState)) {
+                return@withContext ActionResultResponse(false, "A cloudflared rollout is already running from this server.", "all-nodes")
+            }
+            cloudflaredRolloutState = "$ROLLOUT_RUNNING $version: starting (0 of ${online.size} done)"
+        }
+        CoroutineScope(Dispatchers.IO).launch {
+            cloudflaredRolloutState = try {
+                runCloudflaredRollout(version, online.map { it.ip to it.isLocal }, offline)
+            } catch (e: Throwable) {
+                "Stopped: ${e.message}"
+            }
+            ServerLogService.appendLog("INFO", "ClusterManagementService", "cloudflared rollout: $cloudflaredRolloutState")
+        }
+        val skipped = if (offline.isEmpty()) "" else " Offline and skipped: ${offline.joinToString(", ")}."
+        ActionResultResponse(true, "Rolling out cloudflared $version to ${online.size} servers, one at a time.$skipped", "all-nodes")
+    }
+
+    private suspend fun runCloudflaredRollout(version: String, nodes: List<Pair<String, Boolean>>, offline: List<String>): String {
+        val appConfig = AppConfigLoader.load()
+        val results = mutableListOf<String>()
+        nodes.forEachIndexed { i, (ip, isLocal) ->
+            cloudflaredRolloutState = "$ROLLOUT_RUNNING $version: upgrading $ip ($i of ${nodes.size} done)"
+            val start = upgradeCloudflaredNode(if (isLocal) "local" else ip, version)
+            if (!start.success) return "Stopped at $ip ($i of ${nodes.size} done): ${start.message}"
+
+            val deadline = System.currentTimeMillis() + CLOUDFLARED_NODE_TIMEOUT_MS
+            var state: String? = null
+            while (System.currentTimeMillis() < deadline) {
+                delay(5_000)
+                state = if (isLocal) CloudflaredService.upgradeState
+                else fetchNodeStatusAndVersion(ip, appConfig.server.port, appConfig.cockroach_port).cloudflaredUpgradeState
+                if (state != null && !CloudflaredService.isUpgradeBusy(state)) break
+            }
+            when {
+                state == null || CloudflaredService.isUpgradeBusy(state) ->
+                    return "Stopped at $ip ($i of ${nodes.size} done): no result within ${CLOUDFLARED_NODE_TIMEOUT_MS / 60_000} minutes"
+                !CloudflaredService.isUpgradeSuccess(state) ->
+                    return "Stopped at $ip ($i of ${nodes.size} done): $state"
+            }
+            results.add(ip)
+        }
+        val skipped = if (offline.isEmpty()) "" else " Offline and skipped: ${offline.joinToString(", ")}."
+        return "Finished: all ${nodes.size} online servers are on cloudflared $version.$skipped"
     }
 
     /** [targetIp]'s load figures, or null when it can't be reached. */

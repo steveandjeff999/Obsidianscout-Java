@@ -1,6 +1,7 @@
 package com.obsidianscout.blob
 
 import com.obsidianscout.config.JsonSupport
+import com.obsidianscout.db.BlobObjects
 import com.obsidianscout.db.EventInfoFiles
 import com.obsidianscout.db.PitScoutingEntries
 import com.obsidianscout.db.QualitativeScoutingEntries
@@ -19,6 +20,7 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.dao.id.java.UUIDTable
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.like
+import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.core.notLike
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -74,8 +76,40 @@ object BlobMigrationService {
             }
         }
         currentStep = null
+        runCatching { backfillAvatarTeams() }.onFailure { log.debug("[Blobs] Avatar team backfill skipped: ${it.message}") }
         if (total > 0) log.info("[Blobs] Moved $total row(s) of images/files out of the database into the blob store.")
         return total
+    }
+
+    /**
+     * Profile pictures uploaded before uploads recorded the team were stored without one; copy it from the user so
+     * the Storage Manager can count them per team.
+     */
+    private fun backfillAvatarTeams() {
+        val missing = readTransaction {
+            BlobObjects.select(BlobObjects.id).where { (BlobObjects.kind eq BlobService.KIND_AVATAR) and BlobObjects.teamNumber.isNull() }
+                .limit(1000).map { it[BlobObjects.id].value }.toSet()
+        }
+        if (missing.isEmpty()) return
+        val owners = readTransaction {
+            Users.select(Users.teamNumber, Users.program, Users.profilePicture).where { Users.profilePicture like "${BlobService.REF_PREFIX}%" }
+                .mapNotNull { row -> BlobService.idFromRef(row[Users.profilePicture])?.takeIf { it in missing }?.let { it to (row[Users.teamNumber] to row[Users.program]) } }
+        }
+        if (owners.isEmpty()) return
+        writeTransactionWithRetry {
+            for ((id, owner) in owners) {
+                BlobObjects.update({ (BlobObjects.id eq id) and BlobObjects.teamNumber.isNull() }) {
+                    it[teamNumber] = owner.first
+                    it[program] = owner.second
+                }
+            }
+        }
+    }
+
+    /** Blob ids in `/api/blobs/<id>` URLs inside [text] (scouting entry JSON). */
+    fun blobIdsIn(text: String?): Set<UUID> {
+        if (text.isNullOrEmpty() || !text.contains(BlobService.URL_PREFIX)) return emptySet()
+        return BlobService.URL_IN_TEXT_REGEX.findAll(text).mapNotNull { runCatching { UUID.fromString(it.groupValues[1]) }.getOrNull() }.toSet()
     }
 
     /** Runs [step] until it reports nothing left (or no progress), stopping early if the store goes away. */

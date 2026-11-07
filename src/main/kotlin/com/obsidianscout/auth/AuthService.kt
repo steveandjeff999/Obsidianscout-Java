@@ -537,7 +537,14 @@ object AuthService {
         if (newProfilePicture != null && !clearProfilePicture) validateProfilePicture(newProfilePicture)
         val newHash = newPasswordHash
         // The picture goes to the blob store first (it must not happen inside the transaction); the row keeps a reference.
-        val storedPicture: String? = if (newProfilePicture != null && !clearProfilePicture) storeProfilePicture(newProfilePicture) else null
+        val storedPicture: String? = if (newProfilePicture != null && !clearProfilePicture) {
+            // The owner's team goes on the blob so the Storage Manager can count it per team.
+            val owner = readTransaction {
+                Users.select(Users.teamNumber, Users.program).where { Users.id eq targetUuid }.firstOrNull()
+                    ?.let { it[Users.teamNumber] to it[Users.program] }
+            }
+            storeProfilePicture(newProfilePicture, owner?.first, owner?.second)
+        } else null
         var replacedPicture: String? = null
 
         var customPagesChange: Pair<Boolean, UserRecord>? = null
@@ -1217,11 +1224,11 @@ object AuthService {
     }
 
     /** Puts a validated picture data URL in the blob store and returns the reference to keep in the row. */
-    private fun storeProfilePicture(picture: String): String {
+    private fun storeProfilePicture(picture: String, teamNumber: Int?, program: String?): String {
         if (!com.obsidianscout.blob.BlobService.isEnabled) return picture
         val (type, bytes) = decodeProfilePicture(picture) ?: return picture
         return com.obsidianscout.blob.BlobService.ref(
-            com.obsidianscout.blob.BlobService.put(bytes, type, com.obsidianscout.blob.BlobService.KIND_AVATAR, null, null)
+            com.obsidianscout.blob.BlobService.put(bytes, type, com.obsidianscout.blob.BlobService.KIND_AVATAR, teamNumber, program)
         )
     }
 

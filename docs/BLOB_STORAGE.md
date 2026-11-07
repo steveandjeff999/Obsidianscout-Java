@@ -40,6 +40,21 @@ and the volume server's 9340/19340) and the page combines the results every 15 s
 With only one server online there is nothing to test between, so the page says so and shows the rules to open
 before adding more servers. Single servers (not in a cluster) need no firewall changes.
 
+## Storage Manager
+
+`/storage-manager` counts the blob store separately from the database:
+
+* a **Photos & Files** card (total size, object count, files waiting on local disk) and a per-type line under the
+  database bar;
+* a **Photos & Files** column in the per-team table, included in each team's total. A photo copied to alliance
+  partners counts once, against the team that owns it;
+* photo counts and sizes per event in a team's detail view.
+
+**Wipe Team Data** and **Delete event scouting data** free the photos and files those rows pointed to straight
+away, keeping any another row still uses (an alliance partner's copy). The result message says how many were freed
+and kept. During quorum loss, or if blob storage isn't running, freeing is skipped and the weekly garbage collection
+removes them instead. Profile pictures stay, since wiping a team doesn't delete its users.
+
 ## How it runs
 
 | Mode | Master | Volume server |

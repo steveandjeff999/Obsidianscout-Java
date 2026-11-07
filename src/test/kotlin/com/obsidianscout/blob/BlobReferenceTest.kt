@@ -65,6 +65,16 @@ class BlobReferenceTest {
     }
 
     @Test
+    fun `blobIdsIn finds every photo url in entry json and nothing else`() {
+        val a = UUID.randomUUID()
+        val b = UUID.randomUUID()
+        val json = """{"robot_photo": "/api/blobs/$a", "images": ["/api/blobs/$b", "/api/blobs/$a"], "note": "blob:$b", "x": "/api/blobs/nope"}"""
+        assertEquals(setOf(a, b), BlobMigrationService.blobIdsIn(json))
+        assertEquals(emptySet(), BlobMigrationService.blobIdsIn("""{"drivetrain": "swerve"}"""))
+        assertEquals(emptySet(), BlobMigrationService.blobIdsIn(null))
+    }
+
+    @Test
     fun `offloadImages leaves data without photos untouched`() {
         val data = buildJsonObject {
             put("targetTeamNumber", 254)

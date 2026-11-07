@@ -104,6 +104,19 @@ import com.obsidianscout.db.ScoutingAlliances
 import com.obsidianscout.db.ChatService
 import com.obsidianscout.db.ChatMessages
 
+/** The cloudflared version asked for in `?version=`, else the recommended release; 400 if neither is usable. */
+private fun ApplicationCall.cloudflaredTargetVersion(): String {
+    val asked = request.queryParameters["version"]?.trim().orEmpty()
+    if (asked.isNotEmpty()) {
+        if (!com.obsidianscout.admin.CloudflaredService.isValidVersion(asked)) {
+            throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "\"$asked\" is not a cloudflared version (expected e.g. 2025.10.1)")
+        }
+        return asked
+    }
+    return com.obsidianscout.admin.CloudflaredService.getRecommendedVersion()
+        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.ServiceUnavailable, "Could not reach GitHub to find a cloudflared release; enter a version instead")
+}
+
 fun Route.adminRoutes() {
             route("/cluster") {
                 get("/status") {
@@ -121,6 +134,9 @@ fun Route.adminRoutes() {
                             put("nodeIp", com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp())
                             put("uptimeSeconds", uptimeSec)
                             put("uptimeFormatted", com.obsidianscout.admin.ClusterManagementService.formatUptime(uptimeSec))
+                            put("cloudflaredVersion", com.obsidianscout.admin.CloudflaredService.getInstalledVersion())
+                            put("cloudflaredUpgradeState", com.obsidianscout.admin.CloudflaredService.upgradeState)
+                            put("cloudflaredRollout", com.obsidianscout.admin.ClusterManagementService.cloudflaredRolloutState)
                         }
                     )
                 }
@@ -783,7 +799,10 @@ fun Route.adminRoutes() {
                                 dbActive = true,
                                 executionMode = com.obsidianscout.admin.ClusterManagementService.getLocalExecutionMode(),
                                 uptimeSeconds = uptimeSec,
-                                uptimeFormatted = com.obsidianscout.admin.ClusterManagementService.formatUptime(uptimeSec)
+                                uptimeFormatted = com.obsidianscout.admin.ClusterManagementService.formatUptime(uptimeSec),
+                                cloudflaredVersion = com.obsidianscout.admin.CloudflaredService.getInstalledVersion(),
+                                cloudflaredUpgradeState = com.obsidianscout.admin.CloudflaredService.upgradeState,
+                                cloudflaredRollout = com.obsidianscout.admin.ClusterManagementService.cloudflaredRolloutState
                             )
                         )
                     }
@@ -825,6 +844,23 @@ fun Route.adminRoutes() {
                         call.requireSuperAdminOrClusterAuth()
                         val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
                         call.respond(com.obsidianscout.admin.ClusterManagementService.forceReinstallUpdateNode(localIp))
+                    }
+                    // `version` is optional for the page (defaults to the recommended release) but always sent between nodes.
+                    post("/nodes/local/cloudflared-upgrade") {
+                        call.requireSuperAdminOrClusterAuth()
+                        val version = call.cloudflaredTargetVersion()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.upgradeCloudflaredNode("local", version))
+                    }
+                    post("/nodes/{ip}/cloudflared-upgrade") {
+                        call.requireSuperAdminOrClusterAuth()
+                        val ip = call.parameters["ip"] ?: "local"
+                        val version = call.cloudflaredTargetVersion()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.upgradeCloudflaredNode(ip, version))
+                    }
+                    post("/cloudflared-upgrade-all") {
+                        call.requireSuperAdminOrClusterAuth()
+                        val version = call.cloudflaredTargetVersion()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.startCloudflaredRollout(version))
                     }
                     get("/nodes/{ip}/logs") {
                         call.requireSuperAdminOrClusterAuth()

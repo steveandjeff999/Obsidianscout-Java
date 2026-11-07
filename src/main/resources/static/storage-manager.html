@@ -406,6 +406,15 @@
                         <div class="stat-value-storage" id="stat-chat-accounts-size" style="color: #f59e0b;">0 MB</div>
                         <div class="stat-subtext" id="stat-chat-accounts-records">0 messages & users</div>
                     </div>
+
+                    <div class="stat-card-storage" id="stat-card-blob">
+                        <div class="stat-header">
+                            <span class="stat-label-storage" data-i18n="storage.blob_storage">Photos &amp; Files</span>
+                            <a href="/blob-storage" class="stat-badge badge-info" style="text-decoration: none;" data-i18n="storage.blob_badge">Blob Store</a>
+                        </div>
+                        <div class="stat-value-storage" id="stat-blob-size" style="color: #8b5cf6;">0 MB</div>
+                        <div class="stat-subtext" id="stat-blob-records">0 objects</div>
+                    </div>
                 </div>
 
                 <!-- Storage Breakdown Progress Ratio Bar -->
@@ -430,6 +439,7 @@
                         <div class="legend-item"><div class="legend-dot seg-config"></div><span data-i18n="storage.legend_config">Configurations & System</span></div>
                         <div class="legend-item"><div class="legend-dot seg-errors"></div><span data-i18n="storage.legend_errors">Error & Bug Reports</span></div>
                     </div>
+                    <p id="blob-kinds" class="hidden" style="font-size: 12px; color: var(--muted); margin: 10px 0 0 0;"></p>
                 </div>
 
                 <!-- Tabs Navigation -->
@@ -504,6 +514,7 @@
                                     <th data-i18n="storage.th_match_entries">Match Entries</th>
                                     <th data-i18n="storage.th_pit_entries">Pit Entries</th>
                                     <th data-i18n="storage.th_qual_entries">Qual Entries</th>
+                                    <th data-i18n="storage.th_photos_files">Photos &amp; Files</th>
                                     <th data-i18n="storage.th_configs_revs">Configs & Revs</th>
                                     <th data-i18n="storage.th_chat_msgs">Chat Msgs</th>
                                     <th data-i18n="storage.th_users">Users</th>
@@ -592,6 +603,11 @@
                                 <p style="font-size: 13px; color: var(--muted); margin: 0 0 16px 0;" data-i18n="storage.reclaim_desc">
                                     Runs SQLite <code>VACUUM</code> or PostgreSQL optimization to defragment storage and shrink physical database file size after large deletions.
                                 </p>
+                                <p style="font-size: 13px; color: var(--muted); margin: -8px 0 16px 0;">
+                                    <span class="material-symbols-outlined" aria-hidden="true" style="font-size: 16px; vertical-align: -3px;">photo_library</span>
+                                    <span data-i18n="storage.reclaim_blob_note">Photos and files live in the blob store (SeaweedFS), not the database, so this doesn't shrink them. Deleting team or event data on this page frees their photos right away; photos removed elsewhere are cleaned up about a week after nothing uses them.</span>
+                                    <a href="/blob-storage" data-i18n="storage.reclaim_blob_link">Blob Storage</a>
+                                </p>
                             </div>
                             <button id="btn-reclaim-space" class="btn" type="button" data-i18n="storage.btn_reclaim">Execute Database VACUUM</button>
                         </div>
@@ -678,6 +694,7 @@
                                 <th>Match Forms</th>
                                 <th>Pit Forms</th>
                                 <th>Qual Forms</th>
+                                <th data-i18n="storage.th_photos">Photos</th>
                                 <th>Total Data</th>
                             </tr>
                         </thead>

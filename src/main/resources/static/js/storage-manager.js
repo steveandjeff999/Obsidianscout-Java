@@ -163,6 +163,24 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (chatAccountsSizeEl) chatAccountsSizeEl.textContent = formatBytes(chatAndAccountBytes);
         if (chatAccountsRecordsEl) chatAccountsRecordsEl.textContent = `${formatNumber(chatAndAccountRecords)} ${Obsidianscout.t("storage.chat_user_records", "messages & users")}`;
 
+        // Photos & files in the blob store (SeaweedFS): counted apart from the database, which no longer holds them.
+        const blobSizeEl = document.getElementById("stat-blob-size");
+        const blobRecordsEl = document.getElementById("stat-blob-records");
+        if (blobSizeEl) blobSizeEl.textContent = formatBytes(overviewData.blobBytes || 0);
+        if (blobRecordsEl) {
+            const pending = overviewData.blobPendingLocal || 0;
+            blobRecordsEl.textContent = `${formatNumber(overviewData.blobObjects || 0)} ${Obsidianscout.t("storage.blob_objects", "objects")}` +
+                (pending > 0 ? ` · ${formatNumber(pending)} ${Obsidianscout.t("storage.blob_pending", "waiting on local disk")}` : "");
+        }
+        const blobKindsEl = document.getElementById("blob-kinds");
+        if (blobKindsEl) {
+            const kinds = (overviewData.blobKinds || []).filter(k => k.objects > 0);
+            blobKindsEl.textContent = kinds.length
+                ? `${Obsidianscout.t("storage.blob_kinds_label", "Blob store (not in the bar above):")} ` + kinds.map(k => `${k.label} ${formatBytes(k.bytes)} (${formatNumber(k.objects)})`).join(" · ")
+                : "";
+            blobKindsEl.classList.toggle("hidden", kinds.length === 0);
+        }
+
         // Progress Bar Calculation
         const totalEstimated = overviewData.totalEstimatedBytes > 0 ? overviewData.totalEstimatedBytes : 1;
         const apiPct = Math.max(0, ((overviewData.apiCacheBytes / totalEstimated) * 100)).toFixed(1);
@@ -268,7 +286,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
 
         if (filtered.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--muted); padding: 24px;">No scouting teams matched your filter.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; color: var(--muted); padding: 24px;">No scouting teams matched your filter.</td></tr>`;
             return;
         }
 
@@ -287,6 +305,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     <td>${formatNumber(t.matchEntryCount)} <span style="font-size: 11px; color: var(--muted);">(${formatBytes(t.matchBytes)})</span></td>
                     <td>${formatNumber(t.pitEntryCount)} <span style="font-size: 11px; color: var(--muted);">(${formatBytes(t.pitBytes)})</span></td>
                     <td>${formatNumber(t.qualEntryCount)} <span style="font-size: 11px; color: var(--muted);">(${formatBytes(t.qualBytes)})</span></td>
+                    <td>${formatNumber(t.blobCount || 0)} <span style="font-size: 11px; color: var(--muted);">(${formatBytes(t.blobBytes || 0)})</span></td>
                     <td>${formatNumber(t.configRevisionCount)} ${escapeHtml(revsLabel)}</td>
                     <td>${formatNumber(t.chatMessageCount)} ${escapeHtml(msgsLabel)}</td>
                     <td>${formatNumber(t.userCount)} ${escapeHtml(usersLabel)}</td>
@@ -618,7 +637,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         if (titleEl) titleEl.textContent = `Team ${teamNumber} (${program}) Storage Breakdown`;
         if (summaryEl) summaryEl.innerHTML = `<div style="color: var(--muted); padding: 10px;">Loading team summary...</div>`;
-        if (eventsBody) eventsBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--muted); padding: 16px;">Loading event breakdown...</td></tr>`;
+        if (eventsBody) eventsBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--muted); padding: 16px;">Loading event breakdown...</td></tr>`;
         
         openModal("modal-team-detail");
 
@@ -640,6 +659,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                         <div><strong>Qual Forms:</strong> ${formatNumber(sum.qualEntryCount)} (${formatBytes(sum.qualBytes)})</div>
                         <div><strong>Config Revisions:</strong> ${formatNumber(sum.configRevisionCount)} (${formatBytes(sum.configRevisionBytes)})</div>
                         <div><strong>Chat Messages:</strong> ${formatNumber(sum.chatMessageCount)} (${formatBytes(sum.chatBytes)})</div>
+                        <div><strong>Photos &amp; Files:</strong> ${formatNumber(sum.blobCount || 0)} (${formatBytes(sum.blobBytes || 0)})</div>
                         <div><strong>Registered Users:</strong> ${formatNumber(sum.userCount)}</div>
                     </div>
                 `;
@@ -647,7 +667,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             if (eventsBody) {
                 if (!detail.events || detail.events.length === 0) {
-                    eventsBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--muted); padding: 16px;">No event scouting entries recorded for Team ${teamNumber}.</td></tr>`;
+                    eventsBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--muted); padding: 16px;">No event scouting entries recorded for Team ${teamNumber}.</td></tr>`;
                 } else {
                     eventsBody.innerHTML = detail.events.map(ev => `
                         <tr>
@@ -655,6 +675,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                             <td>${formatNumber(ev.matchCount)}</td>
                             <td>${formatNumber(ev.pitCount)}</td>
                             <td>${formatNumber(ev.qualCount)}</td>
+                            <td>${formatNumber(ev.photoCount || 0)} <span style="font-size: 11px; color: var(--muted);">(${formatBytes(ev.photoBytes || 0)})</span></td>
                             <td><strong>${formatBytes(ev.totalBytes)}</strong></td>
                         </tr>
                     `).join("");
@@ -664,7 +685,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             console.error("Failed to load team detailed storage:", err);
             Obsidianscout.showToast("Failed to load team details: " + (err.message || "Unknown error"), "error");
             if (eventsBody) {
-                eventsBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger); padding: 16px;">Error loading event breakdown: ${escapeHtml(err.message)}</td></tr>`;
+                eventsBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger); padding: 16px;">Error loading event breakdown: ${escapeHtml(err.message)}</td></tr>`;
             }
         }
     }

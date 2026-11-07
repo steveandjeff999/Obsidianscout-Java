@@ -423,10 +423,12 @@
                         <div>
                             <h3 style="margin: 0; font-size: 16px; color: var(--accent-3);" data-i18n="cluster.wide_actions_title"><span class="material-symbols-outlined">public</span> Cluster-Wide Actions (All Servers)</h3>
                             <p class="notice" style="margin-top: 4px; margin-bottom: 0;" data-i18n="cluster.wide_actions_notice">Perform maintenance or force updates across every node in the CockroachDB cluster at once.</p>
+                            <p id="cloudflared-rollout-status" class="notice hidden" style="margin-top: 6px; margin-bottom: 0; font-weight: 600;"></p>
                         </div>
                         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                             <button id="btn-cluster-logs" class="btn-action logs" type="button" style="padding: 8px 14px;" data-i18n="cluster.btn_view_logs">View All Cluster Logs</button>
                             <button id="btn-cluster-keys" class="btn-action config" type="button" style="padding: 8px 14px;" data-i18n="cluster.btn_regen_keys">Regenerate Cluster Keys</button>
+                            <button id="btn-cluster-cloudflared" class="btn-action config" type="button" style="padding: 8px 14px;" data-i18n="cluster.btn_update_tunnel_all">Update Tunnel on All</button>
                             <button id="btn-cluster-reinstall" class="btn-action reinstall" type="button" style="padding: 8px 14px;" data-i18n="cluster.btn_force_reinstall">Force Reinstall All</button>
                             <button id="btn-cluster-reboot" class="btn-action reboot" type="button" style="padding: 8px 14px;" data-i18n="cluster.btn_reboot_all">Reboot Entire Cluster</button>
                         </div>
@@ -807,6 +809,30 @@
             <div class="modal-footer">
                 <button id="modal-reinstall-cancel" class="btn ghost" type="button" data-i18n="btn.cancel">Cancel</button>
                 <button id="modal-reinstall-confirm" class="btn secondary" style="background: var(--warning); color: white;" type="button" data-i18n="cluster.modal_reinstall_confirm">Force Reinstall</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- cloudflared Upgrade Modal -->
+    <div id="cloudflared-modal" class="modal-backdrop" role="dialog" aria-modal="true">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2 class="modal-title" data-i18n="cluster.modal_tunnel_title"><span class="material-symbols-outlined">cloud_sync</span> Update Cloudflare Tunnel</h2>
+                <button type="button" class="modal-close" id="modal-cloudflared-cancel-x" aria-label="Close">&#x2715;</button>
+            </div>
+            <div style="padding: 20px;">
+                <p id="modal-cloudflared-text" style="margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink);">
+                    Install this cloudflared version?
+                </p>
+                <div class="field" style="margin-top: 16px;">
+                    <label for="modal-cloudflared-version" data-i18n="cluster.tunnel_version">cloudflared version</label>
+                    <input id="modal-cloudflared-version" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 2025.10.1" />
+                    <p id="modal-cloudflared-hint" class="notice mt-4" style="margin-top: 4px;"></p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="modal-cloudflared-cancel" class="btn ghost" type="button" data-i18n="btn.cancel">Cancel</button>
+                <button id="modal-cloudflared-confirm" class="btn" type="button" data-i18n="cluster.modal_tunnel_confirm">Update</button>
             </div>
         </div>
     </div>

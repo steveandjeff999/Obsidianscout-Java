@@ -43,7 +43,22 @@ data class StorageOverviewDto(
     val systemConfigRecords: Long,
     val errorReportsBytes: Long = 0,
     val errorReportsRecords: Long = 0,
-    val categories: List<StorageCategoryBreakdown>
+    val categories: List<StorageCategoryBreakdown>,
+    /** Photos and files in the blob store (SeaweedFS). Not part of the database totals above. */
+    val blobStorageEnabled: Boolean = false,
+    val blobObjects: Long = 0,
+    val blobBytes: Long = 0,
+    /** Written to a server's local disk while SeaweedFS was unreachable, waiting to be moved in. */
+    val blobPendingLocal: Long = 0,
+    val blobKinds: List<BlobKindUsageDto> = emptyList()
+)
+
+@Serializable
+data class BlobKindUsageDto(
+    val kind: String,
+    val label: String,
+    val objects: Long,
+    val bytes: Long
 )
 
 @Serializable
@@ -77,6 +92,10 @@ data class TeamStorageUsageDto(
     val chatMessageCount: Long = 0L,
     val chatBytes: Long = 0L,
     val userCount: Long = 0L,
+    /** Photos and files in the blob store owned by this team (a photo shared with alliance partners counts once, here). */
+    val blobCount: Long = 0L,
+    val blobBytes: Long = 0L,
+    /** Database bytes plus [blobBytes]. */
     val totalBytes: Long = 0L,
     val totalRecords: Long = 0L
 )
@@ -87,7 +106,11 @@ data class TeamEventUsageDto(
     val matchCount: Long,
     val pitCount: Long,
     val qualCount: Long,
-    val totalBytes: Long
+    /** Database bytes of the entries plus [photoBytes]. */
+    val totalBytes: Long,
+    /** Photos those entries point to in the blob store. */
+    val photoCount: Long = 0L,
+    val photoBytes: Long = 0L
 )
 
 @Serializable
@@ -103,7 +126,10 @@ data class StorageActionResultDto(
     val success: Boolean,
     val message: String,
     val affectedRecords: Long = 0,
-    val freedBytesEstimate: Long = 0
+    val freedBytesEstimate: Long = 0,
+    /** Photos and files removed from the blob store because nothing else used them. */
+    val freedBlobCount: Long = 0,
+    val freedBlobBytes: Long = 0
 )
 
 object StorageManagementService {
@@ -310,6 +336,17 @@ object StorageManagementService {
             qfCategory
         )
 
+        val blobUsage = getBlobUsage()
+        val categoriesWithBlobs = if (blobUsage.objects > 0 || com.obsidianscout.blob.BlobService.isEnabled) {
+            categories + StorageCategoryBreakdown(
+                category = "Photos & Files (Blob Store)",
+                description = "Profile pictures, Event Info attachments and scouting photos, kept in SeaweedFS instead of the database. Not included in the database size.",
+                isApiCache = false,
+                recordCount = blobUsage.objects,
+                estimatedBytes = blobUsage.bytes
+            )
+        } else categories
+
         return StorageOverviewDto(
             databaseType = config.type.lowercase(),
             isCockroach = DatabaseFactory.isCockroach,
@@ -328,8 +365,48 @@ object StorageManagementService {
             systemConfigRecords = totalConfigRecords,
             errorReportsBytes = reportedErrorsBytes,
             errorReportsRecords = reportedErrorsCount,
-            categories = categories
+            categories = categoriesWithBlobs,
+            blobStorageEnabled = com.obsidianscout.blob.BlobService.isEnabled,
+            blobObjects = blobUsage.objects,
+            blobBytes = blobUsage.bytes,
+            blobPendingLocal = blobUsage.pendingLocal,
+            blobKinds = blobUsage.kinds
         )
+    }
+
+    private data class BlobUsage(val objects: Long, val bytes: Long, val pendingLocal: Long, val kinds: List<BlobKindUsageDto>)
+
+    private val BLOB_KIND_LABELS = linkedMapOf(
+        com.obsidianscout.blob.BlobService.KIND_PIT_PHOTO to "Pit scouting photos",
+        com.obsidianscout.blob.BlobService.KIND_SCOUTING_PHOTO to "Match & qualitative photos",
+        com.obsidianscout.blob.BlobService.KIND_EVENT_FILE to "Event Info files",
+        com.obsidianscout.blob.BlobService.KIND_AVATAR to "Profile pictures"
+    )
+
+    /** Totals from the blob index (blob_objects): one cheap grouped query, no SeaweedFS calls. */
+    private fun getBlobUsage(): BlobUsage = try {
+        readTransaction {
+            val n = BlobObjects.id.count()
+            val bytes = BlobObjects.sizeBytes.sum()
+            val rows = BlobObjects.select(BlobObjects.kind, BlobObjects.backend, n, bytes)
+                .groupBy(BlobObjects.kind, BlobObjects.backend)
+                .map { Triple(it[BlobObjects.kind], it[BlobObjects.backend], it[n] to (it[bytes] ?: 0L)) }
+            val byKind = rows.groupBy { it.first }.mapValues { (_, list) -> list.sumOf { it.third.first } to list.sumOf { it.third.second } }
+            val kinds = (BLOB_KIND_LABELS.keys + byKind.keys).distinct().mapNotNull { kind ->
+                val (count, size) = byKind[kind] ?: (0L to 0L)
+                if (count == 0L && kind !in BLOB_KIND_LABELS) null
+                else BlobKindUsageDto(kind, BLOB_KIND_LABELS[kind] ?: kind, count, size)
+            }
+            BlobUsage(
+                objects = rows.sumOf { it.third.first },
+                bytes = rows.sumOf { it.third.second },
+                pendingLocal = rows.filter { it.second == "local" }.sumOf { it.third.first },
+                kinds = kinds
+            )
+        }
+    } catch (e: Exception) {
+        consoleLog.warn("[StorageManagement] Blob usage unavailable: ${e.message}")
+        BlobUsage(0, 0, 0, emptyList())
     }
 
     /**
@@ -430,6 +507,8 @@ object StorageManagementService {
                 SELECT team_number, program FROM chat_messages
                 UNION
                 SELECT owner_team_number AS team_number, program FROM analytics_reports
+                UNION
+                SELECT team_number, program FROM blob_objects WHERE team_number IS NOT NULL AND program IS NOT NULL
             )
             SELECT 
                 t.team_number,
@@ -449,7 +528,9 @@ object StorageManagementService {
                 COALESCE(c.cnt, 0) AS chat_cnt,
                 COALESCE(c.bytes, 0) AS chat_bytes,
                 COALESCE(u.cnt, 0) AS user_cnt,
-                COALESCE(u.bytes, 0) AS user_bytes
+                COALESCE(u.bytes, 0) AS user_bytes,
+                COALESCE(b.cnt, 0) AS blob_cnt,
+                COALESCE(b.bytes, 0) AS blob_bytes
             FROM (SELECT DISTINCT team_number, program FROM all_teams) t
             LEFT JOIN (
                 SELECT owner_team_number, program, COUNT(*) AS cnt, SUM(COALESCE(LENGTH(data_json), 0)) AS bytes
@@ -489,7 +570,11 @@ object StorageManagementService {
                 SELECT team_number, program, COUNT(*) AS cnt, SUM(COALESCE(LENGTH(profile_picture), 0) + COALESCE(LENGTH(tour_progress), 0)) AS bytes
                 FROM users GROUP BY team_number, program
             ) u ON t.team_number = u.team_number AND t.program = u.program
-            ORDER BY (COALESCE(m.bytes, 0) + COALESCE(p.bytes, 0) + COALESCE(q.bytes, 0) + COALESCE(rev.bytes, 0) + COALESCE(c.bytes, 0)) DESC, t.team_number ASC
+            LEFT JOIN (
+                SELECT team_number, program, COUNT(*) AS cnt, SUM(size_bytes) AS bytes
+                FROM blob_objects WHERE team_number IS NOT NULL GROUP BY team_number, program
+            ) b ON t.team_number = b.team_number AND t.program = b.program
+            ORDER BY (COALESCE(m.bytes, 0) + COALESCE(p.bytes, 0) + COALESCE(q.bytes, 0) + COALESCE(rev.bytes, 0) + COALESCE(c.bytes, 0) + COALESCE(b.bytes, 0)) DESC, t.team_number ASC
         """.trimIndent()
 
         return try {
@@ -512,8 +597,10 @@ object StorageManagementService {
                 val chatBytes = rs.getLong("chat_bytes")
                 val userCnt = rs.getLong("user_cnt")
                 val userBytes = rs.getLong("user_bytes")
+                val blobCnt = rs.getLong("blob_cnt")
+                val blobBytes = rs.getLong("blob_bytes")
 
-                val totalBytes = matchBytes + pitBytes + qualBytes + cfgBytes + revBytes + repBytes + chatBytes + userBytes
+                val totalBytes = matchBytes + pitBytes + qualBytes + cfgBytes + revBytes + repBytes + chatBytes + userBytes + blobBytes
                 val totalRecords = matchCnt + pitCnt + qualCnt + cfgCnt + revCnt + repCnt + chatCnt + userCnt
 
                 TeamStorageUsageDto(
@@ -533,6 +620,8 @@ object StorageManagementService {
                     chatMessageCount = chatCnt,
                     chatBytes = chatBytes,
                     userCount = userCnt,
+                    blobCount = blobCnt,
+                    blobBytes = blobBytes,
                     totalBytes = totalBytes,
                     totalRecords = totalRecords
                 )
@@ -621,12 +710,56 @@ object StorageManagementService {
             consoleLog.error("[StorageManagement] Error retrieving team event details: ${e.message}")
         }
 
+        val photos = try { photoUsageByEvent(teamNumber, program) } catch (e: Exception) {
+            consoleLog.warn("[StorageManagement] Photo usage per event unavailable: ${e.message}")
+            emptyMap()
+        }
+        val withPhotos = eventUsages.map { ev ->
+            val (count, bytes) = photos[ev.eventKey] ?: (0L to 0L)
+            ev.copy(photoCount = count, photoBytes = bytes, totalBytes = ev.totalBytes + bytes)
+        }.sortedByDescending { it.totalBytes }
+
         return TeamDetailStorageDto(
             teamNumber = teamNumber,
             program = program,
             summary = summary,
-            events = eventUsages
+            events = withPhotos
         )
+    }
+
+    /** eventKey -> (photo count, bytes) for the photos [teamNumber]'s entries point to, by reading their blob URLs. */
+    private fun photoUsageByEvent(teamNumber: Int, program: String): Map<String, Pair<Long, Long>> {
+        val idsByEvent = HashMap<String, MutableSet<java.util.UUID>>()
+        readTransaction {
+            for ((table, cols) in listOf(
+                ScoutingEntries to Triple(ScoutingEntries.ownerTeamNumber, ScoutingEntries.program, ScoutingEntries.eventKey) to ScoutingEntries.dataJson,
+                PitScoutingEntries to Triple(PitScoutingEntries.ownerTeamNumber, PitScoutingEntries.program, PitScoutingEntries.eventKey) to PitScoutingEntries.dataJson,
+                QualitativeScoutingEntries to Triple(QualitativeScoutingEntries.ownerTeamNumber, QualitativeScoutingEntries.program, QualitativeScoutingEntries.eventKey) to QualitativeScoutingEntries.dataJson
+            ).map { (pair, data) -> pair.first to (pair.second to data) }) {
+                val (keys, dataCol) = cols
+                val (ownerCol, programCol, eventCol) = keys
+                table.select(eventCol, dataCol).where {
+                    (ownerCol eq teamNumber) and (programCol eq program) and (dataCol like "%${com.obsidianscout.blob.BlobService.URL_PREFIX}%")
+                }.forEach { row ->
+                    val event = row[eventCol] ?: return@forEach
+                    val ids = com.obsidianscout.blob.BlobMigrationService.blobIdsIn(row[dataCol])
+                    if (ids.isNotEmpty()) idsByEvent.getOrPut(event) { HashSet() } += ids
+                }
+            }
+        }
+        val allIds = idsByEvent.values.flatten().toSet()
+        if (allIds.isEmpty()) return emptyMap()
+        val sizes = HashMap<java.util.UUID, Long>()
+        allIds.chunked(500).forEach { chunk ->
+            readTransaction {
+                BlobObjects.select(BlobObjects.id, BlobObjects.sizeBytes).where { BlobObjects.id inList chunk }
+                    .forEach { sizes[it[BlobObjects.id].value] = it[BlobObjects.sizeBytes] }
+            }
+        }
+        return idsByEvent.mapValues { (_, ids) ->
+            val known = ids.filter { it in sizes }
+            known.size.toLong() to known.sumOf { sizes.getValue(it) }
+        }
     }
 
     // ── Safe API Cache Purge Actions ─────────────────────────────────────────
@@ -711,7 +844,23 @@ object StorageManagementService {
         }
 
         var deletedRecords = 0L
+        val photoIds = HashSet<java.util.UUID>()
         transaction {
+            // Photos these entries point to; freed below once the delete has committed, unless another row uses them.
+            photoIds += photoIdsIn(
+                ScoutingEntries.select(ScoutingEntries.dataJson).where {
+                    (ScoutingEntries.eventKey eq trimmedKey) and (ScoutingEntries.program eq program) and
+                        (if (teamNumber != null) ScoutingEntries.ownerTeamNumber eq teamNumber else Op.TRUE)
+                }.map { it[ScoutingEntries.dataJson] } +
+                PitScoutingEntries.select(PitScoutingEntries.dataJson).where {
+                    (PitScoutingEntries.eventKey eq trimmedKey) and (PitScoutingEntries.program eq program) and
+                        (if (teamNumber != null) PitScoutingEntries.ownerTeamNumber eq teamNumber else Op.TRUE)
+                }.map { it[PitScoutingEntries.dataJson] } +
+                QualitativeScoutingEntries.select(QualitativeScoutingEntries.dataJson).where {
+                    (QualitativeScoutingEntries.eventKey eq trimmedKey) and (QualitativeScoutingEntries.program eq program) and
+                        (if (teamNumber != null) QualitativeScoutingEntries.ownerTeamNumber eq teamNumber else Op.TRUE)
+                }.map { it[QualitativeScoutingEntries.dataJson] }
+            )
             if (teamNumber != null) {
                 deletedRecords += ScoutingEntries.deleteWhere {
                     (ScoutingEntries.eventKey eq trimmedKey) and (ScoutingEntries.ownerTeamNumber eq teamNumber) and (ScoutingEntries.program eq program)
@@ -736,12 +885,15 @@ object StorageManagementService {
         }
 
         com.obsidianscout.scouting.EntrySync.markBulkChange()
+        val freed = com.obsidianscout.blob.BlobService.freeIfUnreferenced(photoIds)
         val targetDesc = if (teamNumber != null) "Team $teamNumber ($program)" else "all teams ($program)"
-        consoleLog.info("[StorageManagement] DELETED scouting data for event $trimmedKey ($targetDesc): $deletedRecords entries permanently deleted.")
+        consoleLog.info("[StorageManagement] DELETED scouting data for event $trimmedKey ($targetDesc): $deletedRecords entries permanently deleted, ${freed.count} photo(s) freed.")
         return StorageActionResultDto(
             success = true,
-            message = "Permanently deleted $deletedRecords scouting records for event '$trimmedKey' ($targetDesc).",
-            affectedRecords = deletedRecords
+            message = "Permanently deleted $deletedRecords scouting records for event '$trimmedKey' ($targetDesc)." + freedMessage(photoIds.size, freed),
+            affectedRecords = deletedRecords,
+            freedBlobCount = freed.count.toLong(),
+            freedBlobBytes = freed.bytes
         )
     }
 
@@ -754,7 +906,19 @@ object StorageManagementService {
         val progLower = program.trim().lowercase()
 
         var deletedRecords = 0L
+        val photoIds = HashSet<java.util.UUID>()
         transaction {
+            // Photos and files the team's rows point to; freed below once the delete has committed, unless another
+            // row (an alliance partner's copy) still uses them. Profile pictures stay: the users aren't deleted.
+            val progs = listOf(progUpper, progLower)
+            photoIds += photoIdsIn(
+                ScoutingEntries.select(ScoutingEntries.dataJson).where { (ScoutingEntries.ownerTeamNumber eq teamNumber) and (ScoutingEntries.program inList progs) }.map { it[ScoutingEntries.dataJson] } +
+                PitScoutingEntries.select(PitScoutingEntries.dataJson).where { (PitScoutingEntries.ownerTeamNumber eq teamNumber) and (PitScoutingEntries.program inList progs) }.map { it[PitScoutingEntries.dataJson] } +
+                QualitativeScoutingEntries.select(QualitativeScoutingEntries.dataJson).where { (QualitativeScoutingEntries.ownerTeamNumber eq teamNumber) and (QualitativeScoutingEntries.program inList progs) }.map { it[QualitativeScoutingEntries.dataJson] }
+            )
+            EventInfoFiles.select(EventInfoFiles.data).where { (EventInfoFiles.teamNumber eq teamNumber) and (EventInfoFiles.program inList progs) }
+                .forEach { row -> com.obsidianscout.blob.BlobService.idFromRef(row[EventInfoFiles.data])?.let { photoIds += it } }
+
             // Delete Scouting Entries
             deletedRecords += ScoutingEntries.deleteWhere {
                 (ScoutingEntries.ownerTeamNumber eq teamNumber) and ((ScoutingEntries.program eq progUpper) or (ScoutingEntries.program eq progLower))
@@ -868,12 +1032,39 @@ object StorageManagementService {
         }
 
         com.obsidianscout.scouting.EntrySync.markBulkChange()
-        consoleLog.info("[StorageManagement] DELETED entire dataset for Team $teamNumber ($program): $deletedRecords records permanently deleted.")
+        val freed = com.obsidianscout.blob.BlobService.freeIfUnreferenced(photoIds)
+        consoleLog.info("[StorageManagement] DELETED entire dataset for Team $teamNumber ($program): $deletedRecords records permanently deleted, ${freed.count} photo(s)/file(s) freed.")
         return StorageActionResultDto(
             success = true,
-            message = "Permanently deleted all scouting entries, configs, revisions, chat, event info, and reports for Team $teamNumber ($program) ($deletedRecords records deleted).",
-            affectedRecords = deletedRecords
+            message = "Permanently deleted all scouting entries, configs, revisions, chat, event info, and reports for Team $teamNumber ($program) ($deletedRecords records deleted)." + freedMessage(photoIds.size, freed),
+            affectedRecords = deletedRecords,
+            freedBlobCount = freed.count.toLong(),
+            freedBlobBytes = freed.bytes
         )
+    }
+
+    private fun photoIdsIn(texts: List<String>): Set<java.util.UUID> =
+        texts.flatMapTo(HashSet()) { com.obsidianscout.blob.BlobMigrationService.blobIdsIn(it) }
+
+    /** Sentence appended to a delete result saying what happened to the photos and files the rows pointed to. */
+    private fun freedMessage(candidates: Int, freed: com.obsidianscout.blob.BlobService.FreedBlobs): String {
+        if (candidates == 0) return ""
+        val kept = candidates - freed.count
+        return when {
+            freed.skippedReason != null ->
+                " Their $candidates photo(s)/file(s) will be removed by the weekly cleanup (${freed.skippedReason})."
+            kept > 0 ->
+                " Freed ${freed.count} photo(s)/file(s) (${formatBytes(freed.bytes)}); kept $kept still used by other entries (such as alliance partners' copies)."
+            else ->
+                " Freed ${freed.count} photo(s)/file(s) (${formatBytes(freed.bytes)}) from the blob store."
+        }
+    }
+
+    private fun formatBytes(bytes: Long): String = when {
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024L * 1024 -> "%.1f KB".format(bytes / 1024.0)
+        bytes < 1024L * 1024 * 1024 -> "%.1f MB".format(bytes / (1024.0 * 1024))
+        else -> "%.2f GB".format(bytes / (1024.0 * 1024 * 1024))
     }
 
     fun pruneConfigRevisions(keepLatestPerKind: Int = 10): StorageActionResultDto {
@@ -969,6 +1160,9 @@ object StorageManagementService {
         )
     }
 
+    /** Appended to every reclaim result: VACUUM can't touch photos and files, which live in SeaweedFS now. */
+    private const val BLOB_RECLAIM_NOTE = " Photos and files are in the blob store, not the database, so VACUUM doesn't shrink them. Deleting team or event data here frees their photos right away; photos removed elsewhere are cleaned up about a week after nothing uses them (see Blob Storage)."
+
     fun reclaimDiskSpace(): StorageActionResultDto {
         val config = AppConfigLoader.load().database
         val type = config.type.lowercase()
@@ -983,7 +1177,7 @@ object StorageManagementService {
                 }
                 StorageActionResultDto(
                     success = true,
-                    message = "Successfully executed SQLite VACUUM to defragment database and reclaim physical disk space."
+                    message = "Successfully executed SQLite VACUUM to defragment database and reclaim physical disk space." + BLOB_RECLAIM_NOTE
                 )
             } else if (type == "postgres" && !DatabaseFactory.isCockroach) {
                 // In Postgres autocommit is required for VACUUM
@@ -995,12 +1189,12 @@ object StorageManagementService {
                 }
                 StorageActionResultDto(
                     success = true,
-                    message = "Successfully triggered PostgreSQL VACUUM to reclaim space from deleted rows."
+                    message = "Successfully triggered PostgreSQL VACUUM to reclaim space from deleted rows." + BLOB_RECLAIM_NOTE
                 )
             } else {
                 StorageActionResultDto(
                     success = true,
-                    message = "CockroachDB automatically handles disk space reclamation using background MVCC garbage collection."
+                    message = "CockroachDB automatically handles disk space reclamation using background MVCC garbage collection." + BLOB_RECLAIM_NOTE
                 )
             }
         } catch (e: Exception) {

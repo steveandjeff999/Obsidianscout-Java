@@ -6,6 +6,9 @@
     let pendingConfigTargetIp = "local";
     let autoRefreshInterval = null;
     let currentNodes = [];
+    let latestCloudflaredVersion = null;
+    let recommendedCloudflaredVersion = null;
+    let cloudflaredPollTimer = null;
 
     document.addEventListener("DOMContentLoaded", async () => {
         try {
@@ -628,6 +631,10 @@
             openReinstallModal("all");
         });
 
+        document.getElementById("btn-cluster-cloudflared")?.addEventListener("click", () => {
+            openCloudflaredModal("all");
+        });
+
         document.getElementById("btn-cluster-reboot")?.addEventListener("click", () => {
             openRebootModal("all");
         });
@@ -645,6 +652,10 @@
         document.getElementById("modal-reinstall-cancel")?.addEventListener("click", closeReinstallModal);
         document.getElementById("modal-reinstall-cancel-x")?.addEventListener("click", closeReinstallModal);
         document.getElementById("modal-reinstall-confirm")?.addEventListener("click", executeForceReinstallNode);
+
+        document.getElementById("modal-cloudflared-cancel")?.addEventListener("click", closeCloudflaredModal);
+        document.getElementById("modal-cloudflared-cancel-x")?.addEventListener("click", closeCloudflaredModal);
+        document.getElementById("modal-cloudflared-confirm")?.addEventListener("click", executeCloudflaredUpgrade);
 
         startAutoRefresh();
     }
@@ -673,7 +684,10 @@
         try {
             const resp = await apiRequest("/api/admin/cluster/nodes");
             currentNodes = resp.nodes || [];
+            latestCloudflaredVersion = resp.latestCloudflaredVersion || null;
+            recommendedCloudflaredVersion = resp.recommendedCloudflaredVersion || null;
             const localIp = resp.localNodeIp || "127.0.0.1";
+            scheduleCloudflaredPoll();
 
             renderServerList(currentNodes, localIp);
             fetchNodeLogs();
@@ -753,6 +767,8 @@
                 uptimeBadgeHtml = `<span class="node-badge uptime" title="Uptime: ${escapeHtml(uptimeStr)}"><i class="fa-regular fa-clock"></i> ${escapeHtml(uptimeStr)}</span>`;
             }
 
+            const cfBadgeHtml = isOffline ? "" : cloudflaredBadge(node);
+
             html += `
                 <div class="server-item ${isSelected ? "active-selected" : ""}" data-ip="${escapeHtml(node.ip)}">
                     <div class="server-info-col">
@@ -764,6 +780,7 @@
                                 <span class="node-badge" style="background: rgba(59, 130, 246, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);">${escapeHtml(versionStr)}</span>
                                 ${modeBadgeHtml}
                                 ${uptimeBadgeHtml}
+                                ${cfBadgeHtml}
                             </div>
                             <div style="font-size: 12px; color: var(--text-muted, #94a3b8); margin-top: 2px;">
                                 Server Version: <strong style="color: #38bdf8;">${escapeHtml(versionStr)}</strong> | Mode: <strong style="color: ${modeLabelColor};">${escapeHtml(rawMode)}</strong> | Uptime: <strong style="color: ${isOffline ? '#f87171' : '#34d399'};">${escapeHtml(uptimeStr)}</strong> | App Port: <strong>${node.appPort}</strong> | Cockroach DB Port: <strong>${node.dbPort}</strong> | Role: ${escapeHtml(node.role || "Gateway")}
@@ -773,6 +790,7 @@
                     <div class="server-actions-col">
                         <button class="btn-action logs btn-server-logs" data-ip="${escapeHtml(node.ip)}" type="button"><span class="material-symbols-outlined">search</span> View Logs</button>
                         <button class="btn-action config btn-server-config" data-ip="${escapeHtml(node.ip)}" type="button"><span class="material-symbols-outlined">settings</span> Edit app-config.json</button>
+                        <button class="btn-action config btn-server-cloudflared" data-ip="${escapeHtml(node.ip)}" type="button" ${isOffline ? "disabled" : ""}><span class="material-symbols-outlined">cloud_sync</span> Update Tunnel</button>
                         <button class="btn-action reinstall btn-server-reinstall" data-ip="${escapeHtml(node.ip)}" type="button"><i class="fa-solid fa-rotate"></i> Force Reinstall</button>
                         <button class="btn-action reboot btn-server-reboot" data-ip="${escapeHtml(node.ip)}" type="button"><span class="material-symbols-outlined">warning</span> Reboot</button>
                     </div>
@@ -811,6 +829,16 @@
                 const ip = btn.getAttribute("data-ip");
                 if (ip) {
                     openReinstallModal(ip);
+                }
+            });
+        });
+
+        container.querySelectorAll(".btn-server-cloudflared").forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const ip = btn.getAttribute("data-ip");
+                if (ip) {
+                    openCloudflaredModal(ip);
                 }
             });
         });
@@ -1080,6 +1108,138 @@
             setTimeout(() => fetchNodeLogs(), 2000);
         } catch (e) {
             showToastMsg(`Force reinstall request failed: ${e.message}`, "error");
+        }
+    }
+
+    // ---- cloudflared (Cloudflare Tunnel) upgrades ----
+
+    function isCloudflaredUpgradeBusy(state) {
+        return !!state && (state.startsWith("Upgrading") || state.startsWith("Queued"));
+    }
+
+    function isCloudflaredRolloutBusy(state) {
+        return !!state && state.startsWith("Rolling out");
+    }
+
+    function compareCfVersions(a, b) {
+        const pa = String(a).split(".").map(n => parseInt(n, 10) || 0);
+        const pb = String(b).split(".").map(n => parseInt(n, 10) || 0);
+        for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+            const d = (pa[i] || 0) - (pb[i] || 0);
+            if (d !== 0) return d;
+        }
+        return 0;
+    }
+
+    function cloudflaredBadge(node) {
+        const state = node.cloudflaredUpgradeState || "";
+        const ver = node.cloudflaredVersion;
+        const target = recommendedCloudflaredVersion;
+        let label, title, style;
+        if (isCloudflaredUpgradeBusy(state)) {
+            label = state;
+            title = "cloudflared upgrade in progress";
+            style = "background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35);";
+        } else if (state.startsWith("Rolled back") || state.startsWith("Upgrade failed")) {
+            label = `Tunnel ${ver || "?"} (last upgrade failed)`;
+            title = state;
+            style = "background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35);";
+        } else if (!ver) {
+            label = "Tunnel: not installed";
+            title = "cloudflared is not installed on this server";
+            style = "background: rgba(156, 163, 175, 0.2); color: #9ca3af; border: 1px solid rgba(156, 163, 175, 0.4);";
+        } else if (target && compareCfVersions(ver, target) < 0) {
+            label = `Tunnel ${ver} (update: ${target})`;
+            title = `cloudflared ${ver} is installed; ${target} is the recommended release`;
+            style = "background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);";
+        } else {
+            label = `Tunnel ${ver}`;
+            title = target ? "cloudflared is on or past the recommended release" : `cloudflared ${ver}`;
+            style = "background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35);";
+        }
+        const lastResult = (!isCloudflaredUpgradeBusy(state) && state && title !== state) ? ` Last upgrade: ${state}` : "";
+        return `<span class="node-badge" style="${style}" title="${escapeHtml(title + "." + lastResult)}"><span class="material-symbols-outlined" style="font-size: 14px; vertical-align: -2px;">cloud</span> ${escapeHtml(label)}</span>`;
+    }
+
+    // The rollout runs on whichever server started it, so show whichever server reports one (a running one first).
+    function renderCloudflaredRollout() {
+        const el = document.getElementById("cloudflared-rollout-status");
+        if (!el) return;
+        const states = currentNodes.map(n => n.cloudflaredRollout).filter(Boolean);
+        const state = states.find(isCloudflaredRolloutBusy) || states[0] || "";
+        if (!state) {
+            el.classList.add("hidden");
+            return;
+        }
+        el.classList.remove("hidden");
+        el.textContent = `Tunnel rollout: ${state}`;
+        el.style.color = isCloudflaredRolloutBusy(state) ? "#38bdf8" : (state.startsWith("Finished") ? "#34d399" : "#f87171");
+    }
+
+    // While an upgrade or rollout is running, refresh the server list every 10s so the page moves on its own.
+    function scheduleCloudflaredPoll() {
+        renderCloudflaredRollout();
+        if (cloudflaredPollTimer) {
+            clearTimeout(cloudflaredPollTimer);
+            cloudflaredPollTimer = null;
+        }
+        const busy = currentNodes.some(n => isCloudflaredUpgradeBusy(n.cloudflaredUpgradeState) || isCloudflaredRolloutBusy(n.cloudflaredRollout));
+        if (busy) {
+            cloudflaredPollTimer = setTimeout(() => {
+                cloudflaredPollTimer = null;
+                if (!document.hidden) loadClusterNodes();
+                else scheduleCloudflaredPoll();
+            }, 10000);
+        }
+    }
+
+    function openCloudflaredModal(targetIp) {
+        pendingActionTargetIp = targetIp || selectedNodeIp || "all";
+        const modalText = document.getElementById("modal-cloudflared-text");
+        if (modalText) {
+            if (pendingActionTargetIp === "all") {
+                const online = currentNodes.filter(n => (n.status || "").toLowerCase() !== "offline").length;
+                modalText.innerHTML = `Install this cloudflared version on <strong>all ${online} online servers</strong>, one at a time.<br><br>Each server must finish with its tunnel connected again before the next one starts. If a server fails, it goes back to its old version and the rollout stops there.`;
+            } else {
+                modalText.innerHTML = `Install this cloudflared version on <strong style="font-family: monospace;">${escapeHtml(pendingActionTargetIp)}</strong>?<br><br>The tunnel on this server drops for a few seconds. If it doesn't reconnect within 90 seconds, the server goes back to its old version.`;
+            }
+        }
+        const input = document.getElementById("modal-cloudflared-version");
+        if (input) input.value = recommendedCloudflaredVersion || "";
+        const hint = document.getElementById("modal-cloudflared-hint");
+        if (hint) {
+            const parts = [];
+            if (recommendedCloudflaredVersion) parts.push(`Recommended: ${recommendedCloudflaredVersion} (newest release at least 3 days old)`);
+            if (latestCloudflaredVersion && latestCloudflaredVersion !== recommendedCloudflaredVersion) parts.push(`newest: ${latestCloudflaredVersion}`);
+            hint.textContent = parts.length
+                ? parts.join("; ") + ". Enter an older version to roll back."
+                : "Could not reach GitHub for the release list. Enter a version such as 2025.10.1.";
+        }
+        document.getElementById("cloudflared-modal")?.classList.add("show");
+    }
+
+    function closeCloudflaredModal() {
+        document.getElementById("cloudflared-modal")?.classList.remove("show");
+    }
+
+    async function executeCloudflaredUpgrade() {
+        const target = pendingActionTargetIp || "all";
+        const version = (document.getElementById("modal-cloudflared-version")?.value || "").trim();
+        if (version && !/^\d{4}\.\d+\.\d+$/.test(version)) {
+            showToastMsg(`"${version}" is not a cloudflared version (expected e.g. 2025.10.1).`, "error");
+            return;
+        }
+        closeCloudflaredModal();
+        try {
+            const base = target === "all"
+                ? "/api/admin/cluster/cloudflared-upgrade-all"
+                : `/api/admin/cluster/nodes/${encodeURIComponent(target)}/cloudflared-upgrade`;
+            const url = version ? `${base}?version=${encodeURIComponent(version)}` : base;
+            const resp = await apiRequest(url, { method: "POST" });
+            showToastMsg(resp.message || "cloudflared upgrade started.", resp.success ? "success" : "error");
+            setTimeout(() => loadClusterNodes(), 1500);
+        } catch (e) {
+            showToastMsg(`cloudflared upgrade request failed: ${e.message}`, "error");
         }
     }
 

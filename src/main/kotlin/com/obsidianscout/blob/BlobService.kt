@@ -517,6 +517,39 @@ object BlobService {
         orphans.forEach { delete(it) }
     }
 
+    data class FreedBlobs(val count: Int, val bytes: Long, val skippedReason: String? = null)
+
+    /**
+     * Deletes those of [candidates] that no row references any more, right away rather than at the weekly garbage
+     * collection. Call after the rows that pointed at them are committed as deleted. A photo copied to an alliance
+     * partner (or otherwise still used) is kept. Reads go to the primary database only, and nothing is deleted
+     * during quorum loss; the regular garbage collection catches anything skipped.
+     */
+    fun freeIfUnreferenced(candidates: Collection<UUID>): FreedBlobs {
+        if (candidates.isEmpty()) return FreedBlobs(0, 0)
+        if (!isEnabled) return FreedBlobs(0, 0, "blob storage isn't running on this server")
+        val primary = DatabaseFactory.primaryDatabase ?: return FreedBlobs(0, 0, "database not ready")
+        if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) return FreedBlobs(0, 0, "cluster quorum lost")
+        return try {
+            val referenced = BlobMigrationService.collectReferencedIds(primary)
+            val orphans = candidates.toSet().filterNot { it in referenced }
+            if (orphans.isEmpty() || com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) return FreedBlobs(0, 0)
+            var bytes = 0L
+            var count = 0
+            for (id in orphans) {
+                val size = meta(id)?.sizeBytes ?: continue
+                delete(id)
+                bytes += size
+                count++
+            }
+            if (count > 0) log.info("[Blobs] Freed $count file(s) (${bytes} bytes) no longer used after a delete.")
+            FreedBlobs(count, bytes)
+        } catch (e: Exception) {
+            log.warn("[Blobs] Freeing files after a delete failed; the weekly cleanup will retry: ${e.message}")
+            FreedBlobs(0, 0, e.message ?: e.javaClass.simpleName)
+        }
+    }
+
     fun sha256(bytes: ByteArray): String =
         MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
