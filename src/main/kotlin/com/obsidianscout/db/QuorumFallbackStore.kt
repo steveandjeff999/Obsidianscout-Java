@@ -9,7 +9,9 @@ import com.zaxxer.hikari.HikariDataSource
 import kotlinx.coroutines.*
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.core.dao.id.java.UUIDTable
 import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.core.statements.UpdateBuilder
 import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.io.File
@@ -95,6 +97,11 @@ object QuorumFallbackStore {
 
     private const val MIRRORED_CONFIG_REVISIONS = 500
     private const val MIRRORED_REPORTED_ERRORS = 200
+    private const val MIRRORED_CHAT_MESSAGES = 2000
+    /** Ids per IN (...) list, well under SQLite's bound-parameter limit. */
+    private const val ID_CHUNK = 500
+    /** How often a sync compares full rows rather than only id + timestamp. */
+    private val FULL_COMPARE_INTERVAL: java.time.Duration = java.time.Duration.ofMinutes(15)
 
     @Volatile
     var lastSyncInstant: Instant? = null
@@ -138,6 +145,8 @@ object QuorumFallbackStore {
     fun init(appConfig: AppConfig) {
         this.config = appConfig.quorum_fallback
         this.isEnabled = config.enabled
+        // A new file, an older release's file or a changed config: the first sync compares full rows.
+        lastFullCompareInstant = null
 
         if (!isEnabled) {
             disableAndPurge(updateConfigFile = false)
@@ -351,10 +360,55 @@ object QuorumFallbackStore {
         }
     }
 
+    /** What the last successful sync did. */
+    data class SyncResult(val fullCompare: Boolean, val rowsWritten: Int, val rowsDeleted: Int)
+
+    @Volatile
+    var lastSyncResult: SyncResult? = null
+        private set
+
+    /** Set by the last sync that compared full rows; null until the first one after init. */
+    @Volatile
+    private var lastFullCompareInstant: Instant? = null
+
     /**
-     * Snapshots critical data from CockroachDB to local SQLite.
+     * How one table is mirrored. The mirror holds exactly the rows that [where] (and [newest]/[limit], when set)
+     * selects; anything else already in the mirror is removed.
+     *
+     * [version] is a timestamp most writes bump. Ordinary syncs read only `id` + [version] and fetch full rows just
+     * for ids that are new or whose timestamp moved. Some updates leave the timestamp alone, so the periodic full
+     * compare reads whole rows and fixes whatever the light syncs missed. Tables without one are small and are
+     * compared in full on every sync.
      */
-    fun syncFromCockroach(): Boolean {
+    private class MirrorSpec(
+        val table: UUIDTable,
+        val enabled: Boolean = true,
+        val where: (() -> Op<Boolean>)? = null,
+        val newest: Column<*>? = null,
+        val limit: Int = 0,
+        val version: Column<*>? = null,
+        excluded: Set<Column<*>> = emptySet(),
+    ) {
+        val columns: List<Column<*>> = table.columns.filterNot { it in excluded }
+
+        fun query(fields: List<Expression<*>>): Query {
+            val base = table.select(fields)
+            val filtered = where?.let { op -> base.where { op() } } ?: base
+            return if (newest != null) filtered.orderBy(newest, SortOrder.DESC).limit(limit) else filtered
+        }
+    }
+
+    private class TableChanges(val spec: MirrorSpec, val upserts: List<ResultRow>, val deletes: List<UUID>)
+
+    /**
+     * Brings the local SQLite mirror up to date with CockroachDB, writing only the rows that changed.
+     *
+     * Large tables are checked by `id` + timestamp, so a quiet sync reads little from CockroachDB and writes nothing
+     * to SQLite. Every [FULL_COMPARE_INTERVAL], on the first sync after init, and when [forceFull] is set, full rows
+     * are compared instead, which catches edits that didn't bump the timestamp. All changes go into one SQLite
+     * transaction, so readers always see a consistent mirror.
+     */
+    fun syncFromCockroach(forceFull: Boolean = false): Boolean {
         if (!isEnabled || CockroachOrchestrator.isQuorumLost || !DatabaseFactory.isReady || sqliteDb == null) {
             return false
         }
@@ -364,643 +418,46 @@ object QuorumFallbackStore {
 
         try {
             val targetDb = sqliteDb ?: return false
-            val isMirrorAll = config.mirror_all_data
-            val retentionDays = config.scouting_retention_days.toLong().coerceAtLeast(1L)
-            val today = LocalDate.now(ZoneOffset.UTC)
-            val minDate = today.minusDays(retentionDays)
-            val maxDate = today.plusDays(retentionDays)
-            val cutoffInstant = Instant.now().minus(retentionDays, java.time.temporal.ChronoUnit.DAYS)
+            val startedAt = Instant.now()
+            val lastFull = lastFullCompareInstant
+            val fullCompare = forceFull || lastFull == null ||
+                    java.time.Duration.between(lastFull, startedAt) >= FULL_COMPARE_INTERVAL
 
-            // 1. Read datasets from CockroachDB based on configured categories
-            val usersList = if (config.mirror_users || isMirrorAll) {
-                // Profile pictures (up to 1 MB each) are left out: fallback reads can live without avatars.
-                DatabaseFactory.readTransaction { Users.select(Users.columns - Users.profilePicture).toList() }
-            } else emptyList()
+            val changes = buildMirrorSpecs(startedAt).map { diffTable(it, fullCompare, targetDb) }
+            val written = changes.sumOf { it.upserts.size }
+            val deleted = changes.sumOf { it.deletes.size }
 
-            val userSessionsList = if (config.mirror_users || isMirrorAll) {
-                DatabaseFactory.readTransaction { UserSessions.selectAll().toList() }
-            } else emptyList()
-
-            // Game, Pit, and Qualitative configs are fundamental to app operation and always mirrored
-            val scoutingConfigsList = DatabaseFactory.readTransaction { ScoutingConfigs.selectAll().toList() }
-            val pitConfigsList = DatabaseFactory.readTransaction { PitScoutingConfigs.selectAll().toList() }
-            val qualConfigsList = DatabaseFactory.readTransaction { QualitativeScoutingConfigs.selectAll().toList() }
-            val defaultConfigsList = DatabaseFactory.readTransaction { DefaultConfigs.selectAll().toList() }
-            // History and error logs only grow; an outage needs the recent end of them, not every row ever written.
-            val configRevisionsList = DatabaseFactory.readTransaction {
-                ConfigRevisions.selectAll().orderBy(ConfigRevisions.createdAt, SortOrder.DESC).limit(MIRRORED_CONFIG_REVISIONS).toList()
-            }
-            val appSettingsList = DatabaseFactory.readTransaction { AppSettings.selectAll().toList() }
-            val teamCacheOverridesList = DatabaseFactory.readTransaction { TeamCacheOverrides.selectAll().toList() }
-            val bannersList = DatabaseFactory.readTransaction { Banners.selectAll().toList() }
-
-            val analyticsReportsList = if (config.mirror_custom_analytics || isMirrorAll) {
-                DatabaseFactory.readTransaction { AnalyticsReports.selectAll().toList() }
-            } else emptyList()
-
-            val reportedErrorsList = DatabaseFactory.readTransaction {
-                ReportedErrors.selectAll().orderBy(ReportedErrors.createdAt, SortOrder.DESC).limit(MIRRORED_REPORTED_ERRORS).toList()
-            }
-
-            val alliancesList = if (config.mirror_alliances || isMirrorAll) {
-                DatabaseFactory.readTransaction { ScoutingAlliances.selectAll().toList() }
-            } else emptyList()
-
-            val allianceMembershipsList = if (config.mirror_alliances || isMirrorAll) {
-                DatabaseFactory.readTransaction { AllianceMemberships.selectAll().toList() }
-            } else emptyList()
-
-            val allianceSelectionsList = if (config.mirror_alliances || isMirrorAll) {
-                DatabaseFactory.readTransaction { AllianceSelections.selectAll().toList() }
-            } else emptyList()
-
-            val chatGroupsList = if (config.mirror_chat || isMirrorAll) {
-                DatabaseFactory.readTransaction { ChatGroups.selectAll().toList() }
-            } else emptyList()
-
-            val chatMessagesList = if (config.mirror_chat || isMirrorAll) {
-                DatabaseFactory.readTransaction { 
-                    ChatMessages.selectAll().orderBy(ChatMessages.createdAt, SortOrder.DESC).limit(2000).toList() 
-                }
-            } else emptyList()
-
-            val lastReadsList = if (config.mirror_chat || isMirrorAll) {
-                DatabaseFactory.readTransaction { UserChatLastRead.selectAll().toList() }
-            } else emptyList()
-
-            val clusterSecretsList = if (config.mirror_notifications_secrets || isMirrorAll) {
-                DatabaseFactory.readTransaction { ClusterSecrets.selectAll().toList() }
-            } else emptyList()
-
-            val fcmConfigsList = if (config.mirror_notifications_secrets || isMirrorAll) {
-                DatabaseFactory.readTransaction { FcmConfigs.selectAll().toList() }
-            } else emptyList()
-
-            val fcmTokensList = if (config.mirror_notifications_secrets || isMirrorAll) {
-                DatabaseFactory.readTransaction { FcmDeviceTokens.selectAll().toList() }
-            } else emptyList()
-
-            val pushSubsList = if (config.mirror_notifications_secrets || isMirrorAll) {
-                DatabaseFactory.readTransaction { PushSubscriptions.selectAll().toList() }
-            } else emptyList()
-
-            // Events, Teams & Matches API data
-            val allEvents = if (config.mirror_api_data || config.mirror_scouting || isMirrorAll) {
-                DatabaseFactory.readTransaction { ApiEvents.selectAll().toList() }
-            } else emptyList()
-
-            val activeEventsList = if (isMirrorAll) {
-                allEvents
-            } else if (config.mirror_api_data || config.mirror_scouting) {
-                allEvents.filter { row ->
-                    val startStr = row[ApiEvents.startDate]
-                    val endStr = row[ApiEvents.endDate]
-                    val start = parseDate(startStr)
-                    val end = parseDate(endStr) ?: start
-                    if (start != null || end != null) {
-                        val effectiveStart = start ?: end!!
-                        val effectiveEnd = end ?: start!!
-                        !effectiveStart.isAfter(maxDate) && !effectiveEnd.isBefore(minDate)
-                    } else {
-                        val year = row[ApiEvents.year]
-                        val updated = row[ApiEvents.updatedAt]
-                        (year >= today.year - 1 && year <= today.year + 1) && updated.isAfter(cutoffInstant)
+            if (written > 0 || deleted > 0) {
+                transaction(
+                    transactionIsolation = java.sql.Connection.TRANSACTION_SERIALIZABLE,
+                    readOnly = false,
+                    db = targetDb
+                ) {
+                    // Remove children before parents, then write parents before children.
+                    for (change in changes.asReversed()) {
+                        val table = change.spec.table
+                        for (chunk in change.deletes.chunked(ID_CHUNK)) {
+                            table.deleteWhere { table.id inList chunk }
+                        }
                     }
-                }
-            } else emptyList()
-
-            val activeEventKeys = activeEventsList.map { it[ApiEvents.eventKey] }.toSet()
-
-            val teamsList = if (config.mirror_api_data || isMirrorAll) {
-                DatabaseFactory.readTransaction {
-                    if (isMirrorAll || activeEventKeys.isEmpty()) {
-                        ApiTeams.selectAll().toList()
-                    } else {
-                        ApiTeams.selectAll().where { ApiTeams.eventKey inList activeEventKeys }.toList()
-                    }
-                }
-            } else emptyList()
-
-            val matchesList = if (config.mirror_api_data || isMirrorAll) {
-                DatabaseFactory.readTransaction {
-                    if (isMirrorAll || activeEventKeys.isEmpty()) {
-                        ApiMatches.selectAll().toList()
-                    } else {
-                        ApiMatches.selectAll().where { ApiMatches.eventKey inList activeEventKeys }.toList()
-                    }
-                }
-            } else emptyList()
-
-            // Scouting entries
-            val matchEntriesList = if (config.mirror_scouting || isMirrorAll) {
-                DatabaseFactory.readTransaction {
-                    if (isMirrorAll) {
-                        ScoutingEntries.selectAll().toList()
-                    } else if (activeEventKeys.isEmpty()) {
-                        ScoutingEntries.selectAll()
-                            .where { (ScoutingEntries.createdAt greaterEq cutoffInstant) or (ScoutingEntries.isPrescout eq true) }
-                            .toList()
-                    } else {
-                        ScoutingEntries.selectAll()
-                            .where { 
-                                (ScoutingEntries.eventKey inList activeEventKeys) or 
-                                (ScoutingEntries.createdAt greaterEq cutoffInstant) or 
-                                (ScoutingEntries.isPrescout eq true) 
+                    for (change in changes) {
+                        if (change.upserts.isEmpty()) continue
+                        val table = change.spec.table
+                        val columns = change.spec.columns
+                        for (chunk in change.upserts.chunked(ID_CHUNK)) {
+                            table.batchUpsert(chunk, table.id, shouldReturnGeneratedValues = false) { row ->
+                                copyColumns(this, row, columns)
                             }
-                            .toList()
-                    }
-                }
-            } else emptyList()
-
-            val pitEntriesList = if (config.mirror_scouting || isMirrorAll) {
-                DatabaseFactory.readTransaction {
-                    if (isMirrorAll) {
-                        PitScoutingEntries.selectAll().toList()
-                    } else if (activeEventKeys.isEmpty()) {
-                        PitScoutingEntries.selectAll()
-                            .where { (PitScoutingEntries.createdAt greaterEq cutoffInstant) or (PitScoutingEntries.isPrescout eq true) }
-                            .toList()
-                    } else {
-                        PitScoutingEntries.selectAll()
-                            .where { 
-                                (PitScoutingEntries.eventKey inList activeEventKeys) or 
-                                (PitScoutingEntries.createdAt greaterEq cutoffInstant) or 
-                                (PitScoutingEntries.isPrescout eq true) 
-                            }
-                            .toList()
-                    }
-                }
-            } else emptyList()
-
-            val qualEntriesList = if (config.mirror_scouting || isMirrorAll) {
-                DatabaseFactory.readTransaction {
-                    if (isMirrorAll) {
-                        QualitativeScoutingEntries.selectAll().toList()
-                    } else if (activeEventKeys.isEmpty()) {
-                        QualitativeScoutingEntries.selectAll()
-                            .where { (QualitativeScoutingEntries.createdAt greaterEq cutoffInstant) or (QualitativeScoutingEntries.isPrescout eq true) }
-                            .toList()
-                    } else {
-                        QualitativeScoutingEntries.selectAll()
-                            .where { 
-                                (QualitativeScoutingEntries.eventKey inList activeEventKeys) or 
-                                (QualitativeScoutingEntries.createdAt greaterEq cutoffInstant) or 
-                                (QualitativeScoutingEntries.isPrescout eq true) 
-                            }
-                            .toList()
-                    }
-                }
-            } else emptyList()
-
-            // 2. Batch mirror into local SQLite inside a single atomic transaction
-            transaction(
-                transactionIsolation = java.sql.Connection.TRANSACTION_SERIALIZABLE,
-                readOnly = false,
-                db = targetDb
-            ) {
-                // Users
-                Users.deleteAll()
-                for (row in usersList) {
-                    Users.insert {
-                        it[id] = EntityID(row[Users.id].value, Users)
-                        it[username] = row[Users.username]
-                        it[teamNumber] = row[Users.teamNumber]
-                        it[program] = row[Users.program]
-                        it[passwordHash] = row[Users.passwordHash]
-                        it[role] = row[Users.role]
-                        it[createdAt] = row[Users.createdAt]
-                        it[email] = row[Users.email]
-                        it[profilePicture] = null
-                        it[notificationPreference] = row[Users.notificationPreference]
-                        it[tourProgress] = row[Users.tourProgress]
-                        it[nodeAlertsEnabled] = row[Users.nodeAlertsEnabled]
-                        it[bugReportPreference] = row[Users.bugReportPreference]
-                        it[localAiEnabled] = row.getOrNull(Users.localAiEnabled) ?: false
-                        it[nonScoutingToolsEnabled] = row.getOrNull(Users.nonScoutingToolsEnabled) ?: false
-                        it[lastLogin] = row[Users.lastLogin]
-                    }
-                }
-
-                // UserSessions
-                UserSessions.deleteAll()
-                for (row in userSessionsList) {
-                    UserSessions.insert {
-                        it[id] = EntityID(row[UserSessions.id].value, UserSessions)
-                        it[userId] = EntityID(row[UserSessions.userId].value, Users)
-                        it[clientType] = row[UserSessions.clientType]
-                        it[deviceName] = row[UserSessions.deviceName]
-                        it[userAgent] = row[UserSessions.userAgent]
-                        it[ipAddress] = row[UserSessions.ipAddress]
-                        it[createdAt] = row[UserSessions.createdAt]
-                        it[lastActiveAt] = row[UserSessions.lastActiveAt]
-                        it[expiresAt] = row[UserSessions.expiresAt]
-                    }
-                }
-
-                // Configs
-                ScoutingConfigs.deleteAll()
-                for (row in scoutingConfigsList) {
-                    ScoutingConfigs.insert {
-                        it[id] = EntityID(row[ScoutingConfigs.id].value, ScoutingConfigs)
-                        it[teamNumber] = row[ScoutingConfigs.teamNumber]
-                        it[program] = row[ScoutingConfigs.program]
-                        it[configJson] = row[ScoutingConfigs.configJson]
-                        it[updatedAt] = row[ScoutingConfigs.updatedAt]
-                    }
-                }
-
-                PitScoutingConfigs.deleteAll()
-                for (row in pitConfigsList) {
-                    PitScoutingConfigs.insert {
-                        it[id] = EntityID(row[PitScoutingConfigs.id].value, PitScoutingConfigs)
-                        it[teamNumber] = row[PitScoutingConfigs.teamNumber]
-                        it[program] = row[PitScoutingConfigs.program]
-                        it[configJson] = row[PitScoutingConfigs.configJson]
-                        it[updatedAt] = row[PitScoutingConfigs.updatedAt]
-                    }
-                }
-
-                QualitativeScoutingConfigs.deleteAll()
-                for (row in qualConfigsList) {
-                    QualitativeScoutingConfigs.insert {
-                        it[id] = EntityID(row[QualitativeScoutingConfigs.id].value, QualitativeScoutingConfigs)
-                        it[teamNumber] = row[QualitativeScoutingConfigs.teamNumber]
-                        it[program] = row[QualitativeScoutingConfigs.program]
-                        it[configJson] = row[QualitativeScoutingConfigs.configJson]
-                        it[updatedAt] = row[QualitativeScoutingConfigs.updatedAt]
-                    }
-                }
-
-                DefaultConfigs.deleteAll()
-                for (row in defaultConfigsList) {
-                    DefaultConfigs.insert {
-                        it[id] = EntityID(row[DefaultConfigs.id].value, DefaultConfigs)
-                        it[name] = row[DefaultConfigs.name]
-                        it[program] = row[DefaultConfigs.program]
-                        it[configType] = row[DefaultConfigs.configType]
-                        it[configJson] = row[DefaultConfigs.configJson]
-                        it[isDefault] = row[DefaultConfigs.isDefault]
-                        it[updatedAt] = row[DefaultConfigs.updatedAt]
-                    }
-                }
-
-                ConfigRevisions.deleteAll()
-                for (row in configRevisionsList) {
-                    ConfigRevisions.insert {
-                        it[id] = EntityID(row[ConfigRevisions.id].value, ConfigRevisions)
-                        it[teamNumber] = row[ConfigRevisions.teamNumber]
-                        it[program] = row[ConfigRevisions.program]
-                        it[configKind] = row[ConfigRevisions.configKind]
-                        it[version] = row[ConfigRevisions.version]
-                        it[title] = row[ConfigRevisions.title]
-                        it[configJson] = row[ConfigRevisions.configJson]
-                        it[changeSummary] = row[ConfigRevisions.changeSummary]
-                        it[savedByUsername] = row[ConfigRevisions.savedByUsername]
-                        it[createdAt] = row[ConfigRevisions.createdAt]
-                    }
-                }
-
-                // App Settings
-                AppSettings.deleteAll()
-                for (row in appSettingsList) {
-                    AppSettings.insert {
-                        it[id] = EntityID(row[AppSettings.id].value, AppSettings)
-                        it[teamNumber] = row[AppSettings.teamNumber]
-                        it[program] = row[AppSettings.program]
-                        it[settingsJson] = row[AppSettings.settingsJson]
-                        it[updatedAt] = row[AppSettings.updatedAt]
-                    }
-                }
-
-                // Teams' changes to the event cache
-                TeamCacheOverrides.deleteAll()
-                for (row in teamCacheOverridesList) {
-                    TeamCacheOverrides.insert {
-                        it[id] = EntityID(row[TeamCacheOverrides.id].value, TeamCacheOverrides)
-                        it[teamNumber] = row[TeamCacheOverrides.teamNumber]
-                        it[program] = row[TeamCacheOverrides.program]
-                        it[kind] = row[TeamCacheOverrides.kind]
-                        it[eventKey] = row[TeamCacheOverrides.eventKey]
-                        it[recordKey] = row[TeamCacheOverrides.recordKey]
-                        it[removed] = row[TeamCacheOverrides.removed]
-                        it[created] = row[TeamCacheOverrides.created]
-                        it[patchJson] = row[TeamCacheOverrides.patchJson]
-                        it[updatedAt] = row[TeamCacheOverrides.updatedAt]
-                    }
-                }
-
-                // Banners
-                Banners.deleteAll()
-                for (row in bannersList) {
-                    Banners.insert {
-                        it[id] = EntityID(row[Banners.id].value, Banners)
-                        it[teamNumber] = row[Banners.teamNumber]
-                        it[program] = row[Banners.program]
-                        it[message] = row[Banners.message]
-                        it[bannerType] = row[Banners.bannerType]
-                        it[isDismissible] = row[Banners.isDismissible]
-                        it[isExpandable] = row[Banners.isExpandable]
-                        it[expandableMessage] = row[Banners.expandableMessage]
-                        it[showOnLogin] = row[Banners.showOnLogin]
-                        it[isActive] = row[Banners.isActive]
-                        it[createdAt] = row[Banners.createdAt]
-                        it[updatedAt] = row[Banners.updatedAt]
-                    }
-                }
-
-                // Alliances
-                ScoutingAlliances.deleteAll()
-                for (row in alliancesList) {
-                    ScoutingAlliances.insert {
-                        it[id] = EntityID(row[ScoutingAlliances.id].value, ScoutingAlliances)
-                        it[name] = row[ScoutingAlliances.name]
-                        it[ownerTeamNumber] = row[ScoutingAlliances.ownerTeamNumber]
-                        it[program] = row[ScoutingAlliances.program]
-                        it[eventKey] = row[ScoutingAlliances.eventKey]
-                        it[notes] = row[ScoutingAlliances.notes]
-                        it[createdAt] = row[ScoutingAlliances.createdAt]
-                        it[updatedAt] = row[ScoutingAlliances.updatedAt]
-                        it[matchConfigJson] = row[ScoutingAlliances.matchConfigJson]
-                        it[pitConfigJson] = row[ScoutingAlliances.pitConfigJson]
-                        it[qualitativeConfigJson] = row[ScoutingAlliances.qualitativeConfigJson]
-                        it[year] = row[ScoutingAlliances.year]
-                        it[eventCode] = row[ScoutingAlliances.eventCode]
-                    }
-                }
-
-                AllianceMemberships.deleteAll()
-                for (row in allianceMembershipsList) {
-                    AllianceMemberships.insert {
-                        it[id] = EntityID(row[AllianceMemberships.id].value, AllianceMemberships)
-                        it[allianceId] = EntityID(row[AllianceMemberships.allianceId].value, ScoutingAlliances)
-                        it[teamNumber] = row[AllianceMemberships.teamNumber]
-                        it[program] = row[AllianceMemberships.program]
-                        it[status] = row[AllianceMemberships.status]
-                        it[invitedAt] = row[AllianceMemberships.invitedAt]
-                        it[respondedAt] = row[AllianceMemberships.respondedAt]
-                        it[disabled] = row[AllianceMemberships.disabled]
-                        it[active] = row[AllianceMemberships.active]
-                    }
-                }
-
-                AllianceSelections.deleteAll()
-                for (row in allianceSelectionsList) {
-                    AllianceSelections.insert {
-                        it[id] = EntityID(row[AllianceSelections.id].value, AllianceSelections)
-                        it[ownerKey] = row[AllianceSelections.ownerKey]
-                        it[eventKey] = row[AllianceSelections.eventKey]
-                        it[selectionJson] = row[AllianceSelections.selectionJson]
-                        it[updatedAt] = row[AllianceSelections.updatedAt]
-                    }
-                }
-
-                // Chat
-                ChatGroups.deleteAll()
-                for (row in chatGroupsList) {
-                    ChatGroups.insert {
-                        it[id] = EntityID(row[ChatGroups.id].value, ChatGroups)
-                        it[teamNumber] = row[ChatGroups.teamNumber]
-                        it[program] = row[ChatGroups.program]
-                        it[groupName] = row[ChatGroups.groupName]
-                        it[createdByUserId] = row[ChatGroups.createdByUserId]?.value?.let { EntityID(it, Users) }
-                        it[createdAt] = row[ChatGroups.createdAt]
-                        it[allowedRoles] = row[ChatGroups.allowedRoles]
-                        it[allowedUserIds] = row[ChatGroups.allowedUserIds]
-                    }
-                }
-
-                ChatMessages.deleteAll()
-                for (row in chatMessagesList) {
-                    ChatMessages.insert {
-                        it[id] = EntityID(row[ChatMessages.id].value, ChatMessages)
-                        it[teamNumber] = row[ChatMessages.teamNumber]
-                        it[program] = row[ChatMessages.program]
-                        it[groupName] = row[ChatMessages.groupName]
-                        it[userId] = EntityID(row[ChatMessages.userId].value, Users)
-                        it[username] = row[ChatMessages.username]
-                        it[content] = row[ChatMessages.content]
-                        it[createdAt] = row[ChatMessages.createdAt]
-                        it[reactionsJson] = row[ChatMessages.reactionsJson]
-                        it[isEdited] = row[ChatMessages.isEdited]
-                        it[updatedAt] = row[ChatMessages.updatedAt]
-                    }
-                }
-
-                UserChatLastRead.deleteAll()
-                for (row in lastReadsList) {
-                    UserChatLastRead.insert {
-                        it[id] = EntityID(row[UserChatLastRead.id].value, UserChatLastRead)
-                        it[userId] = EntityID(row[UserChatLastRead.userId].value, Users)
-                        it[groupName] = row[UserChatLastRead.groupName]
-                        it[lastReadAt] = row[UserChatLastRead.lastReadAt]
-                    }
-                }
-
-                // Secrets & Notifications
-                ClusterSecrets.deleteAll()
-                for (row in clusterSecretsList) {
-                    ClusterSecrets.insert {
-                        it[id] = EntityID(row[ClusterSecrets.id].value, ClusterSecrets)
-                        it[keyName] = row[ClusterSecrets.keyName]
-                        it[keyValue] = row[ClusterSecrets.keyValue]
-                        it[updatedAt] = row[ClusterSecrets.updatedAt]
-                    }
-                }
-
-                FcmConfigs.deleteAll()
-                for (row in fcmConfigsList) {
-                    FcmConfigs.insert {
-                        it[id] = EntityID(row[FcmConfigs.id].value, FcmConfigs)
-                        it[projectId] = row[FcmConfigs.projectId]
-                        it[apiKey] = row[FcmConfigs.apiKey]
-                        it[appId] = row[FcmConfigs.appId]
-                        it[messagingSenderId] = row[FcmConfigs.messagingSenderId]
-                        it[serviceAccountJson] = row[FcmConfigs.serviceAccountJson]
-                        it[vapidKey] = row[FcmConfigs.vapidKey]
-                        it[enabled] = row[FcmConfigs.enabled]
-                        it[updatedAt] = row[FcmConfigs.updatedAt]
-                    }
-                }
-
-                FcmDeviceTokens.deleteAll()
-                for (row in fcmTokensList) {
-                    FcmDeviceTokens.insert {
-                        it[id] = EntityID(row[FcmDeviceTokens.id].value, FcmDeviceTokens)
-                        it[userId] = EntityID(row[FcmDeviceTokens.userId].value, Users)
-                        it[deviceToken] = row[FcmDeviceTokens.deviceToken]
-                        it[platform] = row[FcmDeviceTokens.platform]
-                        it[updatedAt] = row[FcmDeviceTokens.updatedAt]
-                    }
-                }
-
-                PushSubscriptions.deleteAll()
-                for (row in pushSubsList) {
-                    PushSubscriptions.insert {
-                        it[id] = EntityID(row[PushSubscriptions.id].value, PushSubscriptions)
-                        it[userId] = EntityID(row[PushSubscriptions.userId].value, Users)
-                        it[endpoint] = row[PushSubscriptions.endpoint]
-                        it[p256dh] = row[PushSubscriptions.p256dh]
-                        it[auth] = row[PushSubscriptions.auth]
-                        it[createdAt] = row[PushSubscriptions.createdAt]
-                    }
-                }
-
-                // Custom Analytics Page Reports
-                AnalyticsReports.deleteAll()
-                for (row in analyticsReportsList) {
-                    AnalyticsReports.insert {
-                        it[id] = EntityID(row[AnalyticsReports.id].value, AnalyticsReports)
-                        it[ownerTeamNumber] = row[AnalyticsReports.ownerTeamNumber]
-                        it[program] = row[AnalyticsReports.program]
-                        it[userId] = EntityID(row[AnalyticsReports.userId].value, Users)
-                        it[title] = row[AnalyticsReports.title]
-                        it[category] = row[AnalyticsReports.category]
-                        it[description] = row[AnalyticsReports.description]
-                        it[configJson] = row[AnalyticsReports.configJson]
-                        it[isShared] = row[AnalyticsReports.isShared]
-                        it[isDefault] = row[AnalyticsReports.isDefault]
-                        it[createdAt] = row[AnalyticsReports.createdAt]
-                        it[updatedAt] = row[AnalyticsReports.updatedAt]
-                    }
-                }
-
-                // Reported Errors
-                ReportedErrors.deleteAll()
-                for (row in reportedErrorsList) {
-                    ReportedErrors.insert {
-                        it[id] = EntityID(row[ReportedErrors.id].value, ReportedErrors)
-                        it[errorType] = row[ReportedErrors.errorType]
-                        it[errorMessage] = row[ReportedErrors.errorMessage]
-                        it[errorStack] = row[ReportedErrors.errorStack]
-                        it[requestDetails] = row[ReportedErrors.requestDetails]
-                        it[clientIp] = row[ReportedErrors.clientIp]
-                        it[teamNumber] = row[ReportedErrors.teamNumber]
-                        it[program] = row[ReportedErrors.program]
-                        it[userRole] = row[ReportedErrors.userRole]
-                        it[username] = row[ReportedErrors.username]
-                        it[status] = row[ReportedErrors.status]
-                        it[createdAt] = row[ReportedErrors.createdAt]
-                        it[resolvedAt] = row[ReportedErrors.resolvedAt]
-                        it[resolvedBy] = row[ReportedErrors.resolvedBy]
-                    }
-                }
-
-                // Events, Teams & Matches
-                ApiEvents.deleteAll()
-                for (row in activeEventsList) {
-                    ApiEvents.insert {
-                        it[id] = EntityID(row[ApiEvents.id].value, ApiEvents)
-                        it[eventKey] = row[ApiEvents.eventKey]
-                        it[year] = row[ApiEvents.year]
-                        it[eventCode] = row[ApiEvents.eventCode]
-                        it[name] = row[ApiEvents.name]
-                        it[startDate] = row[ApiEvents.startDate]
-                        it[endDate] = row[ApiEvents.endDate]
-                        it[timezone] = row[ApiEvents.timezone]
-                        it[dataJson] = row[ApiEvents.dataJson]
-                        it[updatedAt] = row[ApiEvents.updatedAt]
-                    }
-                }
-
-                ApiTeams.deleteAll()
-                for (row in teamsList) {
-                    ApiTeams.insert {
-                        it[id] = EntityID(row[ApiTeams.id].value, ApiTeams)
-                        it[eventKey] = row[ApiTeams.eventKey]
-                        it[teamKey] = row[ApiTeams.teamKey]
-                        it[teamNumber] = row[ApiTeams.teamNumber]
-                        it[name] = row[ApiTeams.name]
-                        it[nickname] = row[ApiTeams.nickname]
-                        it[city] = row[ApiTeams.city]
-                        it[state] = row[ApiTeams.state]
-                        it[country] = row[ApiTeams.country]
-                        it[opr] = row[ApiTeams.opr]
-                        it[epa] = row[ApiTeams.epa]
-                        it[dataJson] = row[ApiTeams.dataJson]
-                        it[updatedAt] = row[ApiTeams.updatedAt]
-                    }
-                }
-
-                ApiMatches.deleteAll()
-                for (row in matchesList) {
-                    ApiMatches.insert {
-                        it[id] = EntityID(row[ApiMatches.id].value, ApiMatches)
-                        it[matchKey] = row[ApiMatches.matchKey]
-                        it[eventKey] = row[ApiMatches.eventKey]
-                        it[compLevel] = row[ApiMatches.compLevel]
-                        it[setNumber] = row[ApiMatches.setNumber]
-                        it[matchNumber] = row[ApiMatches.matchNumber]
-                        it[scheduledTime] = row[ApiMatches.scheduledTime]
-                        it[actualTime] = row[ApiMatches.actualTime]
-                        it[redTeams] = row[ApiMatches.redTeams]
-                        it[blueTeams] = row[ApiMatches.blueTeams]
-                        it[dataJson] = row[ApiMatches.dataJson]
-                        it[updatedAt] = row[ApiMatches.updatedAt]
-                    }
-                }
-
-                // 7-day scouting data
-                ScoutingEntries.deleteAll()
-                for (row in matchEntriesList) {
-                    ScoutingEntries.insert {
-                        it[id] = EntityID(row[ScoutingEntries.id].value, ScoutingEntries)
-                        it[ownerTeamNumber] = row[ScoutingEntries.ownerTeamNumber]
-                        it[program] = row[ScoutingEntries.program]
-                        it[targetTeamNumber] = row[ScoutingEntries.targetTeamNumber]
-                        it[eventKey] = row[ScoutingEntries.eventKey]
-                        it[matchKey] = row[ScoutingEntries.matchKey]
-                        it[matchNumber] = row[ScoutingEntries.matchNumber]
-                        it[dataJson] = row[ScoutingEntries.dataJson]
-                        it[submittedByUserId] = EntityID(row[ScoutingEntries.submittedByUserId].value, Users)
-                        it[createdAt] = row[ScoutingEntries.createdAt]
-                        it[isPrescout] = row[ScoutingEntries.isPrescout]
-                        it[hasDiscrepancy] = row[ScoutingEntries.hasDiscrepancy]
-                        it[conflictingTeams] = row[ScoutingEntries.conflictingTeams]
-                        it[ScoutingEntries.updatedAt] = row[ScoutingEntries.updatedAt]
-                    }
-                }
-
-                PitScoutingEntries.deleteAll()
-                for (row in pitEntriesList) {
-                    PitScoutingEntries.insert {
-                        it[id] = EntityID(row[PitScoutingEntries.id].value, PitScoutingEntries)
-                        it[ownerTeamNumber] = row[PitScoutingEntries.ownerTeamNumber]
-                        it[program] = row[PitScoutingEntries.program]
-                        it[targetTeamNumber] = row[PitScoutingEntries.targetTeamNumber]
-                        it[eventKey] = row[PitScoutingEntries.eventKey]
-                        it[dataJson] = row[PitScoutingEntries.dataJson]
-                        it[submittedByUserId] = EntityID(row[PitScoutingEntries.submittedByUserId].value, Users)
-                        it[createdAt] = row[PitScoutingEntries.createdAt]
-                        it[isPrescout] = row[PitScoutingEntries.isPrescout]
-                        it[hasDiscrepancy] = row[PitScoutingEntries.hasDiscrepancy]
-                        it[conflictingTeams] = row[PitScoutingEntries.conflictingTeams]
-                        it[PitScoutingEntries.updatedAt] = row[PitScoutingEntries.updatedAt]
-                    }
-                }
-
-                QualitativeScoutingEntries.deleteAll()
-                for (row in qualEntriesList) {
-                    QualitativeScoutingEntries.insert {
-                        it[id] = EntityID(row[QualitativeScoutingEntries.id].value, QualitativeScoutingEntries)
-                        it[ownerTeamNumber] = row[QualitativeScoutingEntries.ownerTeamNumber]
-                        it[program] = row[QualitativeScoutingEntries.program]
-                        it[targetTeamNumber] = row[QualitativeScoutingEntries.targetTeamNumber]
-                        it[eventKey] = row[QualitativeScoutingEntries.eventKey]
-                        it[matchKey] = row[QualitativeScoutingEntries.matchKey]
-                        it[matchNumber] = row[QualitativeScoutingEntries.matchNumber]
-                        it[dataJson] = row[QualitativeScoutingEntries.dataJson]
-                        it[submittedByUserId] = EntityID(row[QualitativeScoutingEntries.submittedByUserId].value, Users)
-                        it[createdAt] = row[QualitativeScoutingEntries.createdAt]
-                        it[isPrescout] = row[QualitativeScoutingEntries.isPrescout]
-                        it[hasDiscrepancy] = row[QualitativeScoutingEntries.hasDiscrepancy]
-                        it[conflictingTeams] = row[QualitativeScoutingEntries.conflictingTeams]
-                        it[QualitativeScoutingEntries.updatedAt] = row[QualitativeScoutingEntries.updatedAt]
+                        }
                     }
                 }
             }
 
+            if (fullCompare) lastFullCompareInstant = startedAt
+            lastSyncResult = SyncResult(fullCompare, written, deleted)
             lastSyncInstant = Instant.now()
-            lastSyncStatus = "Healthy (Synced ${java.time.format.DateTimeFormatter.ISO_INSTANT.format(lastSyncInstant)})"
+            val mode = if (fullCompare) "full compare" else "quick check"
+            lastSyncStatus = "Healthy (Synced ${java.time.format.DateTimeFormatter.ISO_INSTANT.format(lastSyncInstant)}, $mode: $written written, $deleted removed)"
             return true
         } catch (e: Throwable) {
             lastSyncStatus = "Sync failed: ${e.message}"
@@ -1012,6 +469,198 @@ object QuorumFallbackStore {
                 org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
             }
         }
+    }
+
+    /** The mirrored tables in parent-before-child order, scoped by the current config and date window. */
+    private fun buildMirrorSpecs(now: Instant): List<MirrorSpec> {
+        val all = config.mirror_all_data
+        val users = config.mirror_users || all
+        val alliances = config.mirror_alliances || all
+        val chat = config.mirror_chat || all
+        val secrets = config.mirror_notifications_secrets || all
+        val analytics = config.mirror_custom_analytics || all
+        val apiData = config.mirror_api_data || all
+        val scouting = config.mirror_scouting || all
+
+        val retentionDays = config.scouting_retention_days.toLong().coerceAtLeast(1L)
+        val today = LocalDate.ofInstant(now, ZoneOffset.UTC)
+        val minDate = today.minusDays(retentionDays)
+        val maxDate = today.plusDays(retentionDays)
+        val cutoff = now.minus(retentionDays, ChronoUnit.DAYS)
+
+        // Active events are picked by date in Kotlin, from a read that leaves out the JSON payload.
+        val eventsWanted = apiData || scouting
+        val activeEvents = if (!eventsWanted) emptyList() else DatabaseFactory.readTransaction {
+            ApiEvents.select(ApiEvents.id, ApiEvents.eventKey, ApiEvents.year, ApiEvents.startDate, ApiEvents.endDate, ApiEvents.updatedAt).toList()
+        }.filter { all || isEventInWindow(it, today, minDate, maxDate, cutoff) }
+        val activeEventIds = activeEvents.map { it[ApiEvents.id].value }
+        val activeEventKeys = activeEvents.map { it[ApiEvents.eventKey] }.toSet()
+        // With no active events the old behavior was to mirror every team and match; keep that.
+        val eventScoped = !all && activeEventKeys.isNotEmpty()
+
+        return listOf(
+            // Profile pictures (up to 1 MB each) are left out: fallback reads can live without avatars.
+            // Users stay on a full compare every sync: the table is small and role or password changes matter.
+            MirrorSpec(Users, enabled = users, excluded = setOf(Users.profilePicture)),
+            MirrorSpec(UserSessions, enabled = users, version = UserSessions.lastActiveAt),
+            // Game, pit and qualitative configs are fundamental to app operation and always mirrored.
+            MirrorSpec(ScoutingConfigs, version = ScoutingConfigs.updatedAt),
+            MirrorSpec(PitScoutingConfigs, version = PitScoutingConfigs.updatedAt),
+            MirrorSpec(QualitativeScoutingConfigs, version = QualitativeScoutingConfigs.updatedAt),
+            MirrorSpec(DefaultConfigs, version = DefaultConfigs.updatedAt),
+            // History only grows; an outage needs the recent end of it. Revisions never change once written.
+            MirrorSpec(ConfigRevisions, newest = ConfigRevisions.createdAt, limit = MIRRORED_CONFIG_REVISIONS, version = ConfigRevisions.createdAt),
+            MirrorSpec(AppSettings, version = AppSettings.updatedAt),
+            MirrorSpec(TeamCacheOverrides, version = TeamCacheOverrides.updatedAt),
+            MirrorSpec(Banners, version = Banners.updatedAt),
+            MirrorSpec(ScoutingAlliances, enabled = alliances, version = ScoutingAlliances.updatedAt),
+            MirrorSpec(AllianceMemberships, enabled = alliances),
+            MirrorSpec(AllianceSelections, enabled = alliances, version = AllianceSelections.updatedAt),
+            MirrorSpec(ChatGroups, enabled = chat),
+            MirrorSpec(ChatMessages, enabled = chat, newest = ChatMessages.createdAt, limit = MIRRORED_CHAT_MESSAGES, version = ChatMessages.updatedAt),
+            MirrorSpec(UserChatLastRead, enabled = chat, version = UserChatLastRead.lastReadAt),
+            MirrorSpec(ClusterSecrets, enabled = secrets),
+            MirrorSpec(FcmConfigs, enabled = secrets),
+            MirrorSpec(FcmDeviceTokens, enabled = secrets, version = FcmDeviceTokens.updatedAt),
+            MirrorSpec(PushSubscriptions, enabled = secrets),
+            MirrorSpec(AnalyticsReports, enabled = analytics, version = AnalyticsReports.updatedAt),
+            // Status changes don't touch a timestamp; the periodic full compare picks them up.
+            MirrorSpec(ReportedErrors, newest = ReportedErrors.createdAt, limit = MIRRORED_REPORTED_ERRORS, version = ReportedErrors.createdAt),
+            MirrorSpec(
+                ApiEvents,
+                enabled = eventsWanted && (all || activeEventIds.isNotEmpty()),
+                where = if (all) null else ({ ApiEvents.id inList activeEventIds }),
+                version = ApiEvents.updatedAt
+            ),
+            MirrorSpec(
+                ApiTeams,
+                enabled = apiData,
+                where = if (eventScoped) ({ ApiTeams.eventKey inList activeEventKeys }) else null,
+                version = ApiTeams.updatedAt
+            ),
+            MirrorSpec(
+                ApiMatches,
+                enabled = apiData,
+                where = if (eventScoped) ({ ApiMatches.eventKey inList activeEventKeys }) else null,
+                version = ApiMatches.updatedAt
+            ),
+            MirrorSpec(
+                ScoutingEntries,
+                enabled = scouting,
+                where = when {
+                    all -> null
+                    activeEventKeys.isEmpty() -> ({ (ScoutingEntries.createdAt greaterEq cutoff) or (ScoutingEntries.isPrescout eq true) })
+                    else -> ({
+                        (ScoutingEntries.eventKey inList activeEventKeys) or
+                                (ScoutingEntries.createdAt greaterEq cutoff) or
+                                (ScoutingEntries.isPrescout eq true)
+                    })
+                },
+                version = ScoutingEntries.updatedAt
+            ),
+            MirrorSpec(
+                PitScoutingEntries,
+                enabled = scouting,
+                where = when {
+                    all -> null
+                    activeEventKeys.isEmpty() -> ({ (PitScoutingEntries.createdAt greaterEq cutoff) or (PitScoutingEntries.isPrescout eq true) })
+                    else -> ({
+                        (PitScoutingEntries.eventKey inList activeEventKeys) or
+                                (PitScoutingEntries.createdAt greaterEq cutoff) or
+                                (PitScoutingEntries.isPrescout eq true)
+                    })
+                },
+                version = PitScoutingEntries.updatedAt
+            ),
+            MirrorSpec(
+                QualitativeScoutingEntries,
+                enabled = scouting,
+                where = when {
+                    all -> null
+                    activeEventKeys.isEmpty() -> ({ (QualitativeScoutingEntries.createdAt greaterEq cutoff) or (QualitativeScoutingEntries.isPrescout eq true) })
+                    else -> ({
+                        (QualitativeScoutingEntries.eventKey inList activeEventKeys) or
+                                (QualitativeScoutingEntries.createdAt greaterEq cutoff) or
+                                (QualitativeScoutingEntries.isPrescout eq true)
+                    })
+                },
+                version = QualitativeScoutingEntries.updatedAt
+            ),
+        )
+    }
+
+    /** Works out which rows of one table the mirror needs to write and which it should drop. */
+    private fun diffTable(spec: MirrorSpec, fullCompare: Boolean, targetDb: Database): TableChanges {
+        val table = spec.table
+        if (!spec.enabled) {
+            val stale = mirrorRead(targetDb) { table.select(table.id).map { it[table.id].value } }
+            return TableChanges(spec, emptyList(), stale)
+        }
+
+        val version = spec.version
+        if (fullCompare || version == null) {
+            val source = DatabaseFactory.readTransaction { spec.query(spec.columns).toList() }
+            val mirror = mirrorRead(targetDb) { table.select(spec.columns).associateBy { it[table.id].value } }
+            val sourceIds = source.mapTo(HashSet(source.size)) { it[table.id].value }
+            val upserts = source.filter { row ->
+                val existing = mirror[row[table.id].value]
+                existing == null || spec.columns.any { normalizeForCompare(row.getOrNull(it)) != normalizeForCompare(existing.getOrNull(it)) }
+            }
+            return TableChanges(spec, upserts, mirror.keys.filterNot { it in sourceIds })
+        }
+
+        val fields = listOf(table.id, version)
+        val sourceVersions = DatabaseFactory.readTransaction {
+            spec.query(fields).associate { it[table.id].value to normalizeForCompare(it.getOrNull(version)) }
+        }
+        val mirrorVersions = mirrorRead(targetDb) {
+            table.select(fields).associate { it[table.id].value to normalizeForCompare(it.getOrNull(version)) }
+        }
+        val changedIds = sourceVersions.filter { (id, v) -> !mirrorVersions.containsKey(id) || mirrorVersions[id] != v }.keys.toList()
+        val upserts = changedIds.chunked(ID_CHUNK).flatMap { chunk ->
+            DatabaseFactory.readTransaction { table.select(spec.columns).where { table.id inList chunk }.toList() }
+        }
+        return TableChanges(spec, upserts, mirrorVersions.keys.filterNot { it in sourceVersions })
+    }
+
+    private fun <T> mirrorRead(db: Database, block: Transaction.() -> T): T = transaction(
+        transactionIsolation = java.sql.Connection.TRANSACTION_SERIALIZABLE,
+        readOnly = false,
+        db = db
+    ) { block() }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun copyColumns(target: UpdateBuilder<*>, row: ResultRow, columns: List<Column<*>>) {
+        for (column in columns) {
+            var value = row.getOrNull(column)
+            if (value == null && !column.columnType.nullable) {
+                // A legacy NULL in a column the schema now requires: use the column default, as the old copy did.
+                value = column.defaultValueFun?.invoke() ?: continue
+            }
+            target[column as Column<Any?>] = value
+        }
+    }
+
+    /**
+     * Puts a value in a form that compares equal whether it came from CockroachDB or the SQLite mirror.
+     * CockroachDB keeps microseconds and SQLite keeps milliseconds, so timestamps are compared to the millisecond.
+     */
+    internal fun normalizeForCompare(value: Any?): Any? = when (value) {
+        is EntityID<*> -> value.value
+        is Instant -> value.truncatedTo(ChronoUnit.MILLIS)
+        else -> value
+    }
+
+    private fun isEventInWindow(row: ResultRow, today: LocalDate, minDate: LocalDate, maxDate: LocalDate, cutoff: Instant): Boolean {
+        val start = parseDate(row[ApiEvents.startDate])
+        val end = parseDate(row[ApiEvents.endDate]) ?: start
+        if (start != null || end != null) {
+            val effectiveStart = start ?: end!!
+            val effectiveEnd = end ?: start!!
+            return !effectiveStart.isAfter(maxDate) && !effectiveEnd.isBefore(minDate)
+        }
+        val year = row[ApiEvents.year]
+        return year >= today.year - 1 && year <= today.year + 1 && row[ApiEvents.updatedAt].isAfter(cutoff)
     }
 
     fun getStatus(localIp: String = "127.0.0.1"): QuorumFallbackStatusDto {

@@ -9,4 +9,4 @@ if %ERRORLEVEL% NEQ 0 (
     pause
     exit /b %ERRORLEVEL%
 )
-echo GraalVM installation completed successfully!
+echo GraalVM installation completed successfully.

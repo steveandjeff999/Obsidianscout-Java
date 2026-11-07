@@ -17,7 +17,7 @@ if exist .update_result del /q .update_result
 :: The native binary stages the update (.update_result); :finalize below applies it
 if defined NATIVE_EXEC (
     echo [ObsidianScout Native] Running native update utility: !NATIVE_EXEC! --update
-    !NATIVE_EXEC! --update %*
+    .\!NATIVE_EXEC! --update %*
     goto finalize
 )
 
@@ -29,7 +29,7 @@ if not exist "!GRAAL_JAVA!" (
 if not exist "!GRAAL_JAVA!" (
     echo [ObsidianScout] GraalVM JDK 25 not detected. Auto-installing GraalVM for maximum performance...
     if exist install-graal.bat (
-        call install-graal.bat
+        call .\install-graal.bat
     ) else if exist scripts\install-graal.bat (
         call scripts\install-graal.bat
     )
@@ -76,7 +76,8 @@ for %%s in (run.sh run.bat update.sh update.bat reset-superadmin.sh reset-supera
 )
 
 :: Recursively copy all updated files and subdirectories with retries and stdin redirection
-timeout /t 3 >nul 2>&1
+:: ping, not timeout: timeout returns at once when there is no console
+ping -n 4 127.0.0.1 >nul 2>&1
 
 :: Remove every old native executable (stale names would otherwise win in run.bat); the copy
 :: below brings in whatever the new release ships - nothing if it is JAR-only
@@ -94,7 +95,7 @@ set /a COPY_ATTEMPTS+=1
 xcopy /e /y /h /i /r /k /c "!SRC_ROOT!\*" "." <nul >nul
 if errorlevel 1 (
     if !COPY_ATTEMPTS! LSS 5 (
-        timeout /t 2 >nul 2>&1
+        ping -n 3 127.0.0.1 >nul 2>&1
         goto copy_loop_upd
     )
 )
@@ -115,7 +116,7 @@ exit /b 0
 
 :finish_update
 echo.
-echo Update completed successfully!
+echo Update completed successfully.
 pause
 exit /b 0
 

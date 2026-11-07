@@ -195,7 +195,8 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "    if exist .oom_occurred (\r\n" +
             "        del /q .oom_occurred >nul 2>&1\r\n" +
             "        set HEAP_SIZE=768m\r\n" +
-            "        echo [OOM-Recovery] Low-RAM OutOfMemoryError detected! Capping max heap at 768m to protect Pi 4B physical RAM...\r\n" +
+            // No literal "!" in echo text: with delayed expansion on, cmd treats it as a variable delimiter and eats it.
+            "        echo [OOM-Recovery] Low-RAM OutOfMemoryError detected. Capping max heap at 768m to protect Pi 4B physical RAM...\r\n" +
             "    ) else (\r\n" +
             "        echo [ObsidianScout] Low-RAM/Low-CPU mode enabled. Dynamic heap ^(256m to 512m^)...\r\n" +
             "    )\r\n" +
@@ -204,10 +205,12 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "    if \"%HEAP_SIZE%\"==\"\" set HEAP_SIZE=2048m\r\n" +
             "    if exist .oom_occurred (\r\n" +
             "        del /q .oom_occurred >nul 2>&1\r\n" +
-            "        if \"!HEAP_SIZE!\"==\"1024m\" set HEAP_SIZE=1536m\r\n" +
-            "        if \"!HEAP_SIZE!\"==\"1536m\" set HEAP_SIZE=2048m\r\n" +
-            "        if \"!HEAP_SIZE!\"==\"2048m\" set HEAP_SIZE=3072m\r\n" +
+            // Largest size first: each line sees the value the previous one just set (delayed expansion),
+            // so ascending order would climb all the way to 4096m on one OOM. This way it steps once, like run.sh.
             "        if \"!HEAP_SIZE!\"==\"3072m\" set HEAP_SIZE=4096m\r\n" +
+            "        if \"!HEAP_SIZE!\"==\"2048m\" set HEAP_SIZE=3072m\r\n" +
+            "        if \"!HEAP_SIZE!\"==\"1536m\" set HEAP_SIZE=2048m\r\n" +
+            "        if \"!HEAP_SIZE!\"==\"1024m\" set HEAP_SIZE=1536m\r\n" +
             "        echo [OOM-Recovery] Auto-escalating max heap RAM to !HEAP_SIZE! with thorough GC protections...\r\n" +
             "        set JAVA_OPTS=-Djava.awt.headless=true --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:CICompilerCount=2 -XX:CompileThreshold=1500 -Xms256m -Xmx!HEAP_SIZE! -XX:+AlwaysPreTouch -XX:+ExitOnOutOfMemoryError -XX:+UseStringDeduplication -XX:SoftRefLRUPolicyMSPerMB=0 -XX:GCTimeRatio=4 -XX:MaxMetaspaceSize=192m -Xss256k -Dio.netty.allocator.type=pooled -Dio.netty.allocator.maxOrder=6 -Dio.netty.eventLoopThreads=2 -XX:MaxDirectMemorySize=64m\r\n" +
             "    ) else if \"%USE_ZGC%\"==\"1\" (\r\n" +
@@ -219,8 +222,10 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "    )\r\n" +
             ")\r\n" +
             "set EXEC_CMD=\r\n" +
-            "if exist obsidianscout-server-native-windows-x86_64.exe set EXEC_CMD=obsidianscout-server-native-windows-x86_64.exe -Xmx1536m\r\n" +
-            "if exist obsidianscout-server-native.exe set EXEC_CMD=obsidianscout-server-native.exe -Xmx1536m\r\n" +
+            // Local programs get an explicit .\ so they still start where NoDefaultCurrentDirectoryInExePath is set
+            // (cmd then stops looking in the current folder for bare names).
+            "if exist obsidianscout-server-native-windows-x86_64.exe set EXEC_CMD=.\\obsidianscout-server-native-windows-x86_64.exe -Xmx1536m\r\n" +
+            "if exist obsidianscout-server-native.exe set EXEC_CMD=.\\obsidianscout-server-native.exe -Xmx1536m\r\n" +
             "if defined EXEC_CMD (\r\n" +
             "    echo [ObsidianScout] Native executable detected, running native binary: !EXEC_CMD!\r\n" +
             "    !EXEC_CMD!\r\n" +
@@ -232,7 +237,7 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "    )\r\n" +
             "    if not exist \"!GRAAL_JAVA!\" (\r\n" +
             "        echo [ObsidianScout] GraalVM JDK 25 not detected. Auto-installing GraalVM for high-performance execution...\r\n" +
-            "        if exist install-graal.bat call install-graal.bat\r\n" +
+            "        if exist install-graal.bat call .\\install-graal.bat\r\n" +
             "        if exist \"%USERPROFILE%\\.graalvm\\graalvm-jdk-25\\bin\\java.exe\" set GRAAL_JAVA=%USERPROFILE%\\.graalvm\\graalvm-jdk-25\\bin\\java.exe\r\n" +
             "    )\r\n" +
             "    if exist \"!GRAAL_JAVA!\" (\r\n" +
@@ -244,9 +249,11 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "set EXIT_CODE=%ERRORLEVEL%\r\n" +
             "if \"%EXIT_CODE%\"==\"3\" echo 1 > .oom_occurred\r\n" +
             "if \"%EXIT_CODE%\"==\"137\" echo 1 > .oom_occurred\r\n" +
-            "timeout /t 3 >nul 2>&1\r\n" +
+            // ping, not timeout: timeout returns at once without a console (service wrappers, Task Scheduler),
+            // which turns a crash on boot into a tight restart loop. -n 4 waits about 3 seconds, -n 3 about 2.
+            "ping -n 4 127.0.0.1 >nul 2>&1\r\n" +
             "if exist .update_pending (\r\n" +
-            "    echo [Updater] FAULTY INSTALLATION DETECTED! Server exited with code !EXIT_CODE! while update was pending testing.\r\n" +
+            "    echo [Updater] FAULTY INSTALLATION DETECTED. Server exited with code !EXIT_CODE! while update was pending testing.\r\n" +
             "    echo [Updater] Initiating automatic rollback to previous working version...\r\n" +
             "    if exist .backup\\obsidianscout-server.jar (\r\n" +
             "        !JAVA_EXEC! --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -cp .backup\\obsidianscout-server.jar com.obsidianscout.utils.UpdateRecoveryManagerKt --check-and-rollback !EXIT_CODE! >nul 2>&1\r\n" +
@@ -290,14 +297,14 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "            if not exist .update_tmp_cfg mkdir .update_tmp_cfg\r\n" +
             "            copy /y \"config\\app-config.json\" \".update_tmp_cfg\\app-config.json\" >nul\r\n" +
             "        )\r\n" +
-            "        timeout /t 3 >nul 2>&1\r\n" +
+            "        ping -n 4 127.0.0.1 >nul 2>&1\r\n" +
             "        set COPY_ATTEMPTS=0\r\n" +
             "        :copy_loop_std\r\n" +
             "        set /a COPY_ATTEMPTS+=1\r\n" +
             "        xcopy /e /y /h /i /r /k /c \"!SRC_ROOT!\\*\" \".\" <nul >nul\r\n" +
             "        if errorlevel 1 (\r\n" +
             "            if !COPY_ATTEMPTS! LSS 5 (\r\n" +
-            "                timeout /t 2 >nul 2>&1\r\n" +
+            "                ping -n 3 127.0.0.1 >nul 2>&1\r\n" +
             "                goto copy_loop_std\r\n" +
             "            )\r\n" +
             "        )\r\n" +
@@ -488,7 +495,7 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "    if exist \"%%f\" set NATIVE_EXEC=%%f\r\n" +
             ")\r\n" +
             "if defined NATIVE_EXEC (\r\n" +
-            "    !NATIVE_EXEC! --reset-superadmin %*\r\n" +
+            "    .\\!NATIVE_EXEC! --reset-superadmin %*\r\n" +
             "    exit /b %ERRORLEVEL%\r\n" +
             ")\r\n" +
             "java --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -cp obsidianscout-server.jar com.obsidianscout.utils.ResetSuperAdminKt %*\r\n" +
@@ -799,11 +806,11 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "setlocal enabledelayedexpansion\r\n" +
                 "set BINARY_NAME=obsidianscout-server-native-$arch.exe\r\n" +
                 "if exist \"!BINARY_NAME!\" (\r\n" +
-                "    set EXEC_CMD=!BINARY_NAME!\r\n" +
+                "    set EXEC_CMD=.\\!BINARY_NAME!\r\n" +
                 ") else if exist obsidianscout-server-native.exe (\r\n" +
-                "    set EXEC_CMD=obsidianscout-server-native.exe\r\n" +
+                "    set EXEC_CMD=.\\obsidianscout-server-native.exe\r\n" +
                 ") else if exist obsidianscout-server-native-$arch (\r\n" +
-                "    set EXEC_CMD=obsidianscout-server-native-$arch\r\n" +
+                "    set EXEC_CMD=.\\obsidianscout-server-native-$arch\r\n" +
                 ") else (\r\n" +
                 "    echo [ObsidianScout Native] Native binary not found, checking GraalVM JDK for high-performance JVM execution...\r\n" +
                 "    set GRAAL_JAVA=%USERPROFILE%\\.graalvm\\graalvm-jdk-25\\bin\\java.exe\r\n" +
@@ -812,7 +819,7 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "    )\r\n" +
                 "    if not exist \"!GRAAL_JAVA!\" (\r\n" +
                 "        echo [ObsidianScout] Auto-installing GraalVM JDK 25 for high-performance execution...\r\n" +
-                "        if exist install-graal.bat call install-graal.bat\r\n" +
+                "        if exist install-graal.bat call .\\install-graal.bat\r\n" +
                 "        if exist \"%USERPROFILE%\\.graalvm\\graalvm-jdk-25\\bin\\java.exe\" set GRAAL_JAVA=%USERPROFILE%\\.graalvm\\graalvm-jdk-25\\bin\\java.exe\r\n" +
                 "    )\r\n" +
                 "    if exist \"!GRAAL_JAVA!\" (\r\n" +
@@ -826,12 +833,25 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "echo [ObsidianScout Native] Starting server ($arch native binary)...\r\n" +
                 "%EXEC_CMD%\r\n" +
                 "set EXIT_CODE=%ERRORLEVEL%\r\n" +
-                "timeout /t 3 >nul 2>&1\r\n" +
+                // ping, not timeout: timeout returns at once without a console (see run.bat above).
+                "ping -n 4 127.0.0.1 >nul 2>&1\r\n" +
                 "if exist .update_pending (\r\n" +
-                "    echo [Updater] Faulty installation detected! Server exited with code !EXIT_CODE! while update was pending testing.\r\n" +
+                "    echo [Updater] Faulty installation detected. Server exited with code !EXIT_CODE! while update was pending testing.\r\n" +
                 "    echo [Updater] Initiating automatic rollback...\r\n" +
+                // --check-and-rollback exits 10 once it has rolled back (and blacklisted the version). Native-only
+                // machines often have no java on PATH, so fall back to the backed-up native binary, which takes the same flag.
+                "    set CHECK_RC=1\r\n" +
                 "    if exist .backup\\obsidianscout-server.jar (\r\n" +
                 "        java --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -cp .backup\\obsidianscout-server.jar com.obsidianscout.utils.UpdateRecoveryManagerKt --check-and-rollback !EXIT_CODE! >nul 2>&1\r\n" +
+                "        set CHECK_RC=!ERRORLEVEL!\r\n" +
+                "    )\r\n" +
+                "    if not \"!CHECK_RC!\"==\"10\" (\r\n" +
+                "        for %%f in (.backup\\obsidianscout-server-native*.exe) do (\r\n" +
+                "            if not \"!CHECK_RC!\"==\"10\" (\r\n" +
+                "                \"%%f\" --check-and-rollback !EXIT_CODE! >nul 2>&1\r\n" +
+                "                set CHECK_RC=!ERRORLEVEL!\r\n" +
+                "            )\r\n" +
+                "        )\r\n" +
                 "    )\r\n" +
                 "    del /q obsidianscout-server-native* >nul 2>&1\r\n" +
                 "    if exist .backup\\obsidianscout-server-native* copy /y \".backup\\obsidianscout-server-native*\" \".\" >nul\r\n" +
@@ -861,14 +881,14 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "            if not exist .update_tmp_cfg mkdir .update_tmp_cfg\r\n" +
                 "            copy /y \"config\\app-config.json\" \".update_tmp_cfg\\app-config.json\" >nul\r\n" +
                 "        )\r\n" +
-                "        timeout /t 3 >nul 2>&1\r\n" +
+                "        ping -n 4 127.0.0.1 >nul 2>&1\r\n" +
                 "        set COPY_ATTEMPTS=0\r\n" +
                 "        :copy_loop_native\r\n" +
                 "        set /a COPY_ATTEMPTS+=1\r\n" +
                 "        xcopy /e /y /h /i /r /k /c \"!SRC_ROOT!\\*\" \".\" <nul >nul\r\n" +
                 "        if errorlevel 1 (\r\n" +
                 "            if !COPY_ATTEMPTS! LSS 5 (\r\n" +
-                "                timeout /t 2 >nul 2>&1\r\n" +
+                "                ping -n 3 127.0.0.1 >nul 2>&1\r\n" +
                 "                goto copy_loop_native\r\n" +
                 "            )\r\n" +
                 "        )\r\n" +
@@ -930,6 +950,24 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "    if [ -f .update_pending ]; then\n" +
                 "        echo \"[Updater] Faulty installation detected! Exited code \$EXIT_CODE while update was pending.\"\n" +
                 "        echo \"[Updater] Restoring backup...\"\n" +
+                // Blacklist the failed version and file the crash report (exit 10 = rolled back), as run.sh in the JVM
+                // bundle does. Try java first, then the backed-up native binary for machines without java.
+                "        CHECK_RC=1\n" +
+                "        if [ -f .backup/obsidianscout-server.jar ] && command -v java >/dev/null 2>&1; then\n" +
+                "            CHECK_RC=0\n" +
+                "            java --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -cp .backup/obsidianscout-server.jar com.obsidianscout.utils.UpdateRecoveryManagerKt --check-and-rollback \$EXIT_CODE >/dev/null 2>&1 || CHECK_RC=\$?\n" +
+                "        fi\n" +
+                "        if [ \"\$CHECK_RC\" -ne 10 ]; then\n" +
+                "            for rbin in .backup/obsidianscout-server-native*; do\n" +
+                "                if [ -f \"\$rbin\" ] && [ \"\$CHECK_RC\" -ne 10 ]; then\n" +
+                "                    chmod +x \"\$rbin\" 2>/dev/null || true\n" +
+                "                    CHECK_RC=0\n" +
+                "                    \"./\$rbin\" --check-and-rollback \$EXIT_CODE >/dev/null 2>&1 || CHECK_RC=\$?\n" +
+                "                fi\n" +
+                "            done\n" +
+                "        fi\n" +
+                "        # The rollback restores the launcher scripts, and the copy drops their executable bit\n" +
+                "        chmod +x ./*.sh 2>/dev/null || true\n" +
                 "        rm -f obsidianscout-server-native*\n" +
                 "        for nfile in .backup/obsidianscout-server-native*; do\n" +
                 "            if [ -f \"\$nfile\" ]; then cp \"\$nfile\" ./ && chmod +x \"./\$(basename \"\$nfile\")\"; fi\n" +
@@ -976,7 +1014,7 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "    if exist \"%%f\" set NATIVE_EXEC=%%f\r\n" +
                 ")\r\n" +
                 "if defined NATIVE_EXEC (\r\n" +
-                "    !NATIVE_EXEC! --reset-superadmin %*\r\n" +
+                "    .\\!NATIVE_EXEC! --reset-superadmin %*\r\n" +
                 "    exit /b %ERRORLEVEL%\r\n" +
                 ")\r\n" +
                 "java --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -cp obsidianscout-server.jar com.obsidianscout.utils.ResetSuperAdminKt %*\r\n" +

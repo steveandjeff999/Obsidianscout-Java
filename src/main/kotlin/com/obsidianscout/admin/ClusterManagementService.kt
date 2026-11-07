@@ -1087,7 +1087,8 @@ object ClusterManagementService {
         val isLocal = (targetIp == localIp || targetIp == "127.0.0.1" || targetIp == "local" || targetIp.isBlank())
 
         if (isLocal) {
-            val ok = com.obsidianscout.db.QuorumFallbackStore.syncFromCockroach()
+            // A sync an admin asks for compares full rows, so it also catches edits that left updated_at alone.
+            val ok = com.obsidianscout.db.QuorumFallbackStore.syncFromCockroach(forceFull = true)
             if (ok) {
                 ActionResultResponse(true, "Quorum Fallback synchronization completed successfully.", localIp)
             } else {
