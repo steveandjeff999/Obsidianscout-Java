@@ -199,6 +199,7 @@ export const PAGE_SEARCH_KEYWORDS = {
     "backup": ["export", "import", "data sharing", "json export", "copia de seguridad"],
     "migration": ["database migration", "postgres", "sqlite", "transfer", "migracion"],
     "redis-status": ["redis", "cache", "memory", "cluster cache", "failover", "estado de redis"],
+    "blob-storage": ["blob", "seaweedfs", "minio", "photos", "images", "files", "object storage", "migration progress", "almacenamiento"],
     "tutorials": ["onboarding", "guide", "walkthrough", "help", "tutoriales", "guias"],
     "docs": ["documentation", "api docs", "manual", "documentacion"],
     "contact": ["support", "email", "bug report", "feedback", "contacto"]
@@ -229,7 +230,7 @@ export function updateSectionHeaderVisibility(sidebar) {
 export function adjustNavForRole(user) {
     if (!user || isPublicMode()) return;
     const role = user.role;
-    const superAdminPages = ["cluster-management", "storage-manager", "error-reports", "load-profiler", "server-insights", "fcm-settings", "migration", "default-configs", "redis-status"];
+    const superAdminPages = ["cluster-management", "storage-manager", "error-reports", "load-profiler", "server-insights", "fcm-settings", "migration", "default-configs", "redis-status", "blob-storage"];
 
     // Reset all standard links to visible first before applying role restrictions
     document.querySelectorAll('.sidebar-link[data-page]').forEach((link) => {

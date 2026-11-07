@@ -456,6 +456,31 @@ object EventInfoFiles : UUIDTable("event_info_files") {
     }
 }
 
+/**
+ * Index of binary objects (photos, attachments) kept in the object store instead of in database rows.
+ * Columns that used to hold base64 now hold a reference (`blob:<id>` or `/api/blobs/<id>`); this row says where the bytes live.
+ */
+object BlobObjects : UUIDTable("blob_objects") {
+    /** "seaweed" or "local". */
+    val backend = varchar("backend", 16)
+    /** SeaweedFS file id ("3,01637037d6") or a path relative to the local blob directory. */
+    val storeKey = varchar("store_key", 255)
+    val kind = varchar("kind", 32)
+    val teamNumber = integer("team_number").nullable()
+    val program = varchar("program", 8).nullable()
+    val contentType = varchar("content_type", 128)
+    val sizeBytes = long("size_bytes")
+    val sha256 = varchar("sha256", 64)
+    /** SeaweedFS replication the object was written with ("000" = one copy), so it can be re-replicated later. */
+    val replication = varchar("replication", 8).default("000")
+    val createdAt = timestamp("created_at")
+
+    init {
+        index("idx_blob_objects_team_program", false, teamNumber, program)
+        index("idx_blob_objects_kind_created", false, kind, createdAt)
+    }
+}
+
 object ChatMessages : UUIDTable("chat_messages") {
     val teamNumber = integer("team_number")
     val program = varchar("program", 8).default("FRC")

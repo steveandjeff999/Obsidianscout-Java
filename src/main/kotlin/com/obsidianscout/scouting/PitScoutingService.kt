@@ -294,7 +294,7 @@ object PitScoutingService {
             )
         }
 
-        val cleanData = sanitizePitData(request.data)
+        val cleanData = sanitizePitData(request.data, session.teamNumber, session.program)
         val dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), cleanData)
         val now = Instant.now()
         val callerUuid = UUID.fromString(session.userId)
@@ -381,7 +381,7 @@ object PitScoutingService {
         if (meta.targetTeamNumber == null) {
             throw ApiException(HttpStatusCode.BadRequest, "Team is required")
         }
-        val cleanData = sanitizePitData(request.data)
+        val cleanData = sanitizePitData(request.data, session.teamNumber, session.program)
         val dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), cleanData)
         val completeness = computeCompleteness(config, cleanData)
 
@@ -495,7 +495,19 @@ object PitScoutingService {
 
 private const val MAX_PIT_IMAGE_BYTES = 2L * 1024 * 1024
 
-internal fun sanitizePitData(data: JsonObject): JsonObject {
+/**
+ * Strips photo metadata and enforces the size cap. With [teamNumber] given and blob storage running, each photo
+ * is then moved to the blob store and replaced by its `/api/blobs/<id>` URL. Must not be called inside a transaction.
+ */
+internal fun sanitizePitData(data: JsonObject, teamNumber: Int? = null, program: String? = null): JsonObject {
+    val clean = sanitizePitImages(data)
+    if (teamNumber == null || !com.obsidianscout.blob.BlobService.isEnabled) return clean
+    return com.obsidianscout.blob.BlobMigrationService.offloadImages(
+        clean, com.obsidianscout.blob.BlobService.KIND_PIT_PHOTO, teamNumber, program, mutableListOf()
+    ) ?: clean
+}
+
+private fun sanitizePitImages(data: JsonObject): JsonObject {
     val sanitized = mutableMapOf<String, JsonElement>()
     for ((key, value) in data) {
         if (value is JsonPrimitive && value.isString) {

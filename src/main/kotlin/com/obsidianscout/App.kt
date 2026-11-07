@@ -371,6 +371,8 @@ fun Application.module(appConfig: AppConfig) {
             call.response.headers.append("Cloudflare-CDN-Cache-Control", "no-store")
         } else if (path.startsWith("/models/") || isVersionedAsset(call)) {
             // Set by CachingHeaders once the status is known.
+        } else if (path.startsWith("/api/blobs/")) {
+            // Blob URLs never change content; the route sets its own long-lived header.
         } else if (isAvatarPath(path) && call.request.queryParameters["v"] != null) {
             // The avatar route sets its own long-lived header on success.
         } else if (!isAsset) {
@@ -755,6 +757,8 @@ fun Application.module(appConfig: AppConfig) {
                 com.obsidianscout.db.LiveInvalidationRelay.start()
                 com.obsidianscout.slack.SlackSocketSupervisor.start()
                 com.obsidianscout.cache.RedisClusterCoordinator.init(appConfig)
+                // Downloads/starts SeaweedFS and moves base64 photos and files out of the database in the background.
+                com.obsidianscout.blob.BlobService.start(appConfig, isCluster = isAutonomousCockroach)
                 consoleLog.info("[Database] Background database initialization completed successfully.")
                 
                 // Mark update boot successful once startup completes
@@ -781,6 +785,7 @@ fun Application.module(appConfig: AppConfig) {
         com.obsidianscout.slack.SlackNotificationRelay.stop()
         com.obsidianscout.db.LiveInvalidationRelay.stop()
         com.obsidianscout.db.AutoBackupScheduler.stop()
+        com.obsidianscout.blob.BlobService.stop()
         com.obsidianscout.db.QuorumFallbackStore.stop()
         com.obsidianscout.admin.PeerLoadRouter.stop()
         com.obsidianscout.admin.NodeMonitoringService.stop()

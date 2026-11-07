@@ -1741,6 +1741,7 @@
   "nav.docs": "Docs",
   "nav.error-reports": "Error Reports",
   "nav.redis-status": "Redis Cache",
+  "nav.blob-storage": "Blob Storage",
   "nav.load-profiler": "Load Profiler",
   "nav.server-insights": "Server Insights",
   "nav.error_reports": "Error Reports",

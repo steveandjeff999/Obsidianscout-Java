@@ -1741,6 +1741,7 @@
   "nav.docs": "Belgeler",
   "nav.error-reports": "Hata Raporları",
   "nav.redis-status": "Redis Önbelleği",
+  "nav.blob-storage": "Dosya Depolama",
   "nav.load-profiler": "Yük Profili",
   "nav.server-insights": "Sunucu Bilgileri",
   "nav.error_reports": "Hata Raporları",

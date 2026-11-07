@@ -536,12 +536,16 @@ object AuthService {
         }
         if (newProfilePicture != null && !clearProfilePicture) validateProfilePicture(newProfilePicture)
         val newHash = newPasswordHash
+        // The picture goes to the blob store first (it must not happen inside the transaction); the row keeps a reference.
+        val storedPicture: String? = if (newProfilePicture != null && !clearProfilePicture) storeProfilePicture(newProfilePicture) else null
+        var replacedPicture: String? = null
 
         var customPagesChange: Pair<Boolean, UserRecord>? = null
-        val result = transaction {
+        val result = try { transaction {
             val targetRow = Users.selectAll().where { Users.id eq targetUuid }
                 .firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "User not found")
+            if (clearProfilePicture || storedPicture != null) replacedPicture = targetRow[Users.profilePicture]
 
             val targetRole = try { UserRole.valueOf(targetRow[Users.role]) } catch (_: Exception) { UserRole.SCOUT }
             val targetTeam = targetRow[Users.teamNumber]
@@ -658,8 +662,8 @@ object AuthService {
                 }
                 if (clearProfilePicture) {
                     stmt[profilePicture] = null
-                } else if (newProfilePicture != null) {
-                    stmt[profilePicture] = newProfilePicture
+                } else if (storedPicture != null) {
+                    stmt[profilePicture] = storedPicture
                 }
                 if (newTourProgress != null) {
                     stmt[tourProgress] = newTourProgress
@@ -687,7 +691,11 @@ object AuthService {
                 customPagesChange = false to record
             }
             record
+        } } catch (e: Throwable) {
+            com.obsidianscout.blob.BlobService.deleteRef(storedPicture)
+            throw e
         }
+        if (replacedPicture != storedPicture) com.obsidianscout.blob.BlobService.deleteRef(replacedPicture)
         customPagesChange?.let { (isCustom, record) ->
             val settingsService = com.obsidianscout.integrations.SettingsService
             if (isCustom) {
@@ -1165,7 +1173,10 @@ object AuthService {
             },
             createdAt = row[Users.createdAt].toString(),
             email = row[Users.email],
-            profilePicture = row.getOrNull(Users.profilePicture),
+            // A blob reference means nothing to a client, so records carry the avatar URL instead.
+            profilePicture = row.getOrNull(Users.profilePicture)?.let {
+                if (it.startsWith(com.obsidianscout.blob.BlobService.REF_PREFIX)) com.obsidianscout.db.ChatService.avatarUrl(row[Users.id].value, it) else it
+            },
             notificationPreference = row[Users.notificationPreference],
             tourProgress = row[Users.tourProgress],
             nodeAlertsEnabled = row.getOrNull(Users.nodeAlertsEnabled) ?: false,
@@ -1203,6 +1214,23 @@ object AuthService {
         if (decodeProfilePicture(picture) == null) {
             throw ApiException(HttpStatusCode.BadRequest, "Profile picture must be a PNG, JPEG, WebP or GIF image")
         }
+    }
+
+    /** Puts a validated picture data URL in the blob store and returns the reference to keep in the row. */
+    private fun storeProfilePicture(picture: String): String {
+        if (!com.obsidianscout.blob.BlobService.isEnabled) return picture
+        val (type, bytes) = decodeProfilePicture(picture) ?: return picture
+        return com.obsidianscout.blob.BlobService.ref(
+            com.obsidianscout.blob.BlobService.put(bytes, type, com.obsidianscout.blob.BlobService.KIND_AVATAR, null, null)
+        )
+    }
+
+    /** Content type and bytes of a stored picture: a blob reference, or a data URL from before the blob store. */
+    fun loadProfilePicture(stored: String): Pair<String, ByteArray>? {
+        if (stored.startsWith(com.obsidianscout.blob.BlobService.REF_PREFIX)) {
+            return com.obsidianscout.blob.BlobService.getByRef(stored)?.let { it.meta.contentType to it.bytes }
+        }
+        return decodeProfilePicture(stored)
     }
 
     /** Returns the content type and bytes of a stored profile picture data URL, or null if it isn't one. */

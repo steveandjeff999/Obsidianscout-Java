@@ -381,6 +381,32 @@ object ClusterManagementService {
         }
     }
 
+    /**
+     * Signed GET of [path] (e.g. "/api/admin/cluster/nodes/local/...") on every node in [nodes] except this one,
+     * in parallel. Each result is the response body, or the failure (offline, non-200).
+     */
+    suspend fun getFromPeers(nodes: List<ClusterNodeInfo>, path: String, timeoutSeconds: Long = 5): List<Pair<ClusterNodeInfo, Result<String>>> =
+        withContext(Dispatchers.IO) {
+            val localIp = getLocalTailscaleIp()
+            val defaultPort = AppConfigLoader.load().server.port
+            coroutineScope {
+                nodes.filter { !it.isLocal && it.ip != localIp }.map { node ->
+                    async {
+                        val appPort = if (node.appPort > 0) node.appPort else defaultPort
+                        node to runCatching {
+                            val req = buildSignedClusterRequest("http://${node.ip}:$appPort$path", "GET")
+                                .timeout(Duration.ofSeconds(timeoutSeconds))
+                                .GET()
+                                .build()
+                            val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
+                            if (resp.statusCode() != 200) throw IllegalStateException("HTTP ${resp.statusCode()}")
+                            resp.body()
+                        }
+                    }
+                }.awaitAll()
+            }
+        }
+
     private fun buildSignedClusterRequest(urlStr: String, method: String, bodyBytes: ByteArray = ByteArray(0)): HttpRequest.Builder {
         val secret = com.obsidianscout.auth.ClusterSecretService.getSessionSecret()
         val timestamp = System.currentTimeMillis().toString()

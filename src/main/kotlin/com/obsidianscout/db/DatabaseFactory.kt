@@ -51,6 +51,7 @@ object DatabaseFactory {
         Banners,
         EventInfoPosts,
         EventInfoFiles,
+        BlobObjects,
         ChatMessages,
         UserChatLastRead,
         ChatGroups,

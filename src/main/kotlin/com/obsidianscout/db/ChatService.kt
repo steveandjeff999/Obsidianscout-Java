@@ -101,7 +101,7 @@ object ChatService {
      */
     internal fun avatarUrl(userId: UUID, picture: String?): String? =
         picture?.takeIf { it.isNotBlank() }?.let {
-            if (it.startsWith("data:")) "/api/users/$userId/avatar?v=${Integer.toHexString(it.hashCode())}" else it
+            if (it.startsWith("data:") || it.startsWith(com.obsidianscout.blob.BlobService.REF_PREFIX)) "/api/users/$userId/avatar?v=${Integer.toHexString(it.hashCode())}" else it
         }
 
     /** userId -> (picture length, avatar URL), so a picture (up to 1 MB) is only read again when its length changes. */

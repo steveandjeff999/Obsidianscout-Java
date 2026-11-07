@@ -30,7 +30,8 @@ data class AppConfig(
     val quorum_fallback: QuorumFallbackConfig = QuorumFallbackConfig(),
     val auto_backup: AutoBackupConfig = AutoBackupConfig(),
     val local_ai: LocalAiConfig = LocalAiConfig(),
-    val redis: RedisConfig = RedisConfig()
+    val redis: RedisConfig = RedisConfig(),
+    val blob_storage: BlobStorageConfig = BlobStorageConfig()
 ) {
     fun getEffectiveSiteUrl(): String {
         val trimmed = site_url.trim()
@@ -82,6 +83,26 @@ data class RedisConfig(
     val max_memory_percent: Double = 0.40,
     val min_memory_mb: Long = 64L,
     val max_memory_mb: Long = 8192L
+)
+
+/**
+ * Photos and attachments live in a SeaweedFS object store that every server downloads and runs itself
+ * (like CockroachDB), instead of as base64 in database rows. Existing rows are moved over automatically.
+ */
+@Serializable
+data class BlobStorageConfig(
+    val enabled: Boolean = true,
+    /** SeaweedFS release downloaded from github.com/seaweedfs/seaweedfs. */
+    val seaweed_version: String = "4.48",
+    /** gRPC listens on each port + 10000, which SeaweedFS assumes when nodes find each other. */
+    val master_port: Int = 9333,
+    val volume_port: Int = 9340,
+    /** Where blobs go when SeaweedFS can't run on this machine (and where local-only servers keep them). */
+    val local_directory: String = "data/blobs",
+    /** Move existing base64 rows out of the database in the background. */
+    val migrate_existing: Boolean = true,
+    /** Rows moved per batch; each batch is its own short transaction. */
+    val migration_batch_size: Int = 50
 )
 
 @Serializable

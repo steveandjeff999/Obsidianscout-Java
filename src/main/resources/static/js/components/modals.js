@@ -48,12 +48,16 @@ export function showImageModal(imageSrc, title = "Robot Photo Preview") {
 }
 
 const IMAGE_DATA_URL = /^data:image\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=\s]+$/i;
+/** Photos the server moved out of entries into its blob store: same-origin, fixed shape, never arbitrary URLs. */
+const BLOB_IMAGE_URL = /^\/api\/blobs\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /**
- * True when a scouting value is an uploaded photo (an image data URL).
+ * True when a scouting value is an uploaded photo (an image data URL, or a blob-store URL).
  */
 export function isImageValue(value) {
-    return typeof value === "string" && value.startsWith("data:image/") && IMAGE_DATA_URL.test(value);
+    if (typeof value !== "string") return false;
+    if (value.startsWith("/api/blobs/")) return BLOB_IMAGE_URL.test(value);
+    return value.startsWith("data:image/") && IMAGE_DATA_URL.test(value);
 }
 
 function escAttr(value) {

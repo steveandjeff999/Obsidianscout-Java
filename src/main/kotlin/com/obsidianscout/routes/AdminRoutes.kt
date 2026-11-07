@@ -246,6 +246,20 @@ fun Route.adminRoutes() {
                     call.respond(HttpStatusCode.NoContent)
                 }
 
+                // Blob Storage page: SeaweedFS state and how much base64 is still waiting to leave the database.
+                get("/blob-storage/status") {
+                    call.requireSuperAdmin()
+                    call.respond(com.obsidianscout.blob.BlobStatusService.status())
+                }
+
+                post("/blob-storage/run") {
+                    call.requireSuperAdmin()
+                    val started = com.obsidianscout.blob.BlobService.requestPass()
+                    com.obsidianscout.blob.BlobStatusService.invalidate()
+                    if (started) call.respond(HttpStatusCode.Accepted, mapOf("status" to "queued"))
+                    else call.respond(HttpStatusCode.Conflict, mapOf("status" to "Blob storage is not running on this server"))
+                }
+
                 get("/email-settings") {
                     call.requireSuperAdmin()
                     val smtp = SettingsService.getSmtpSettings()
@@ -1164,6 +1178,12 @@ fun Route.adminRoutes() {
                         call.requireSuperAdminOrClusterAuth()
                         val req = call.receive<com.obsidianscout.routes.RedisInstallRequest>()
                         call.respond(com.obsidianscout.admin.ClusterManagementService.applyLocalRedisInstall(req))
+                    }
+                    // Blob Storage page: this server's view of which SeaweedFS ports it can reach on the others.
+                    get("/nodes/local/blob-storage/probe") {
+                        call.requireSuperAdminOrClusterAuth()
+                        val targets = call.request.queryParameters["targets"].orEmpty().split(',').filter { it.isNotBlank() }
+                        call.respond(com.obsidianscout.blob.BlobNetworkService.probe(targets))
                     }
                     get("/nodes/local/redis/config") {
                         call.requireSuperAdminOrClusterAuth()

@@ -945,7 +945,7 @@ function formatFieldValue(field, value, isMatch = false) {
     if (value === null || value === undefined || value === "") {
         return "--";
     }
-    if (field.type === "image" || field.type === "image_upload" || field.type === "photo" || (typeof value === "string" && value.startsWith("data:image/"))) {
+    if (field.type === "image" || field.type === "image_upload" || field.type === "photo" || (typeof value === "string" && (value.startsWith("data:image/") || value.startsWith("/api/blobs/")))) {
         return "📷 [Photo]";
     }
     let displayVal;

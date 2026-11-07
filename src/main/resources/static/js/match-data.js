@@ -187,7 +187,7 @@ function formatFieldValue(field, value, isMatch = true) {
     if (value === null || value === undefined || value === "") {
         return "--";
     }
-    if (field.type === "image" || field.type === "image_upload" || field.type === "photo" || (typeof value === "string" && value.startsWith("data:image/"))) {
+    if (field.type === "image" || field.type === "image_upload" || field.type === "photo" || (typeof value === "string" && (value.startsWith("data:image/") || value.startsWith("/api/blobs/")))) {
         return "📷 [Photo]";
     }
     let displayVal;
@@ -630,7 +630,7 @@ function renderDetail(state, entry) {
 
         group.fields.forEach(field => {
             const value = entry.data ? entry.data[field.id] : undefined;
-            const isImage = (field.type === "image" || field.type === "image_upload" || field.type === "photo" || (typeof value === "string" && value.startsWith("data:image/")));
+            const isImage = (field.type === "image" || field.type === "image_upload" || field.type === "photo" || (typeof value === "string" && (value.startsWith("data:image/") || value.startsWith("/api/blobs/"))));
             if (isImage && value) {
                 const item = document.createElement("div");
                 item.className = "pit-detail-item";

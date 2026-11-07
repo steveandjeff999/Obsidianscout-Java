@@ -597,7 +597,7 @@ function renderEntryDetail(state, ui, entry) {
 
         group.fields.forEach((field) => {
             const value = entry.data ? entry.data[field.id] : undefined;
-            const isImage = (field.type === "image" || field.type === "image_upload" || field.type === "photo" || (typeof value === "string" && value.startsWith("data:image/")));
+            const isImage = (field.type === "image" || field.type === "image_upload" || field.type === "photo" || (typeof value === "string" && (value.startsWith("data:image/") || value.startsWith("/api/blobs/"))));
             if (isImage && value) {
                 const item = document.createElement("div");
                 item.className = "pit-detail-item";
@@ -1120,7 +1120,7 @@ function formatFieldValue(field, value) {
     if (value === null || value === undefined || value === "") {
         return "--";
     }
-    if (field.type === "image" || field.type === "image_upload" || field.type === "photo" || (typeof value === "string" && value.startsWith("data:image/"))) {
+    if (field.type === "image" || field.type === "image_upload" || field.type === "photo" || (typeof value === "string" && (value.startsWith("data:image/") || value.startsWith("/api/blobs/")))) {
         return "[Photo]";
     }
     if (field.type === "checkbox") {

@@ -14,7 +14,7 @@ object WidgetAccess {
     /** Personal opt-in pages (Settings > Non-Scouting Tools), not role pages. */
     val NON_SCOUTING_TOOL_PAGES = setOf("match-checklist", "battery-tracker")
 
-    private val SUPERADMIN_ONLY_PAGES = setOf("cluster-management", "error-reports", "load-profiler", "server-insights", "fcm-settings", "migration", "backup", "logs", "redis-status")
+    private val SUPERADMIN_ONLY_PAGES = setOf("cluster-management", "error-reports", "load-profiler", "server-insights", "fcm-settings", "migration", "backup", "logs", "redis-status", "blob-storage")
     private val ADMIN_ONLY_BASE_PAGES = setOf("users", "banners", "admin-settings", "default-configs", "config-editor")
     private val BYPASS_PAGES = setOf(
         "settings", "login", "index", "dashboard", "theme-editor", "team", "reset-password", "config-migration", "schema-history"

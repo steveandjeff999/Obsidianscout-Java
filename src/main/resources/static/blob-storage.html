@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>ObsidianScout | Blob Storage</title>
+
+    <link rel="stylesheet" href="/css/app.css" />
+    <style>
+        .bs-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .bs-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .bs-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 600;
+            border: 1px solid var(--border);
+            color: var(--muted);
+            background: var(--surface-2);
+        }
+        .bs-badge .material-symbols-outlined { font-size: 16px; }
+        .bs-badge.good { color: #0f8a5f; background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.35); }
+        .bs-badge.warn { color: #b45309; background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.35); }
+        .bs-badge.bad { color: #c2410c; background: rgba(239, 68, 68, 0.10); border-color: rgba(239, 68, 68, 0.35); }
+        body.theme-dark .bs-badge.good { color: #34d399; }
+        body.theme-dark .bs-badge.warn { color: #fbbf24; }
+        body.theme-dark .bs-badge.bad { color: #f87171; }
+
+        .bs-overall {
+            margin-top: 20px;
+        }
+        .bs-overall-line {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .bs-overall-pct {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--ink);
+            font-variant-numeric: tabular-nums;
+        }
+        .bs-track {
+            height: 10px;
+            border-radius: 999px;
+            background: var(--surface-3, var(--surface-2));
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+        .bs-track.thin { height: 6px; }
+        .bs-fill {
+            height: 100%;
+            width: 0;
+            border-radius: 999px;
+            background: var(--accent);
+            transition: width 600ms ease;
+        }
+        .bs-fill.done { background: #10b981; }
+
+        .bs-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin: 20px 0;
+        }
+        .bs-stat {
+            background: var(--surface-2);
+            padding: 16px;
+            border-radius: var(--radius-sm, 12px);
+            border: 1px solid var(--border);
+        }
+        .bs-stat-label,
+        .bs-stat-detail {
+            font-size: 12px;
+            color: var(--muted);
+        }
+        .bs-stat-value {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--ink);
+            margin: 4px 0;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .bs-cat {
+            padding: 14px 0;
+            border-top: 1px solid var(--border);
+        }
+        .bs-cat:first-of-type { border-top: none; padding-top: 4px; }
+        .bs-cat-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        .bs-cat-name { font-weight: 600; color: var(--ink); }
+        .bs-cat-meta { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+        .bs-kv {
+            display: grid;
+            grid-template-columns: minmax(140px, max-content) 1fr;
+            gap: 6px 16px;
+            font-size: 14px;
+        }
+        .bs-kv dt { color: var(--muted); }
+        .bs-kv dd { margin: 0; color: var(--ink); word-break: break-all; }
+        .bs-mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+
+        .bs-number {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+        }
+        .bs-yes { color: #0f8a5f; font-weight: 600; }
+        .bs-no { color: var(--muted); }
+        .bs-muted { color: var(--muted); font-size: 12px; }
+        body.theme-dark .bs-yes { color: #34d399; }
+        .bs-section { margin-top: 20px; }
+        .bs-two {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .bs-two .card { margin: 0; }
+
+        .bs-alert {
+            border-color: rgba(239, 68, 68, 0.45);
+            background: rgba(239, 68, 68, 0.06);
+        }
+        body.theme-dark .bs-alert { background: rgba(239, 68, 68, 0.10); }
+        .bs-alert h2 {
+            margin: 0 0 6px;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #c2410c;
+        }
+        body.theme-dark .bs-alert h2 { color: #f87171; }
+        .bs-fix-node { margin-top: 14px; }
+        .bs-fix-node strong { color: var(--ink); }
+        .bs-cmd {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            margin-top: 6px;
+        }
+        .bs-cmd code {
+            flex: 1;
+            min-width: 0;
+            display: block;
+            padding: 8px 10px;
+            border-radius: 8px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            font-family: ui-monospace, Consolas, monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            color: var(--ink);
+        }
+        .bs-cmd-label { font-size: 12px; color: var(--muted); margin-top: 8px; }
+        .bs-port {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+        .bs-port .material-symbols-outlined { font-size: 18px; }
+        .bs-port.ok { color: #0f8a5f; }
+        .bs-port.blocked { color: #c2410c; font-weight: 600; }
+        .bs-port.idle { color: var(--muted); }
+        body.theme-dark .bs-port.ok { color: #34d399; }
+        body.theme-dark .bs-port.blocked { color: #f87171; }
+    </style>
+    <link rel="manifest" href="/manifest.json" />
+</head>
+<body data-page="blob-storage">
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+
+    <div class="app-shell">
+        <aside class="sidebar"></aside>
+
+        <main class="main-content">
+            <div id="superadmin-locked" class="card hidden">
+                <h2>Superadmin Access Required</h2>
+                <p class="notice">You must be logged in as a Superadmin (Site Admin) to view Blob Storage.</p>
+                <div class="mt-16">
+                    <a href="/admin-settings" class="btn secondary">&larr; Return to Admin Settings</a>
+                </div>
+            </div>
+
+            <div id="bs-panel">
+                <div class="card">
+                    <div class="bs-header">
+                        <div>
+                            <h1 style="margin: 0; font-size: 24px;">Blob Storage</h1>
+                            <p class="notice" style="margin-top: 4px; margin-bottom: 0;">
+                                Photos and files moving out of the database into SeaweedFS. Updates every few seconds.
+                            </p>
+                        </div>
+                        <div class="bs-actions">
+                            <span id="bs-state" class="bs-badge">Loading…</span>
+                            <button id="bs-run" class="btn secondary" type="button" title="Start a migration pass on this server now instead of waiting up to 10 minutes">
+                                <span class="material-symbols-outlined" aria-hidden="true" style="font-size: 18px; vertical-align: -4px;">play_arrow</span>
+                                Run now
+                            </button>
+                            <a href="/cluster-management" class="btn ghost" style="text-decoration: none;">&larr; Server Management</a>
+                        </div>
+                    </div>
+                    <p id="bs-error" class="notice hidden" style="margin-top: 12px;"></p>
+
+                    <div class="bs-overall">
+                        <div class="bs-overall-line">
+                            <span id="bs-overall-pct" class="bs-overall-pct">–</span>
+                            <span id="bs-overall-text" class="notice" style="margin: 0;"></span>
+                        </div>
+                        <div class="bs-track"><div id="bs-overall-fill" class="bs-fill"></div></div>
+                    </div>
+                </div>
+
+                <div id="bs-firewall" class="card bs-alert hidden" role="alert"></div>
+
+                <div id="bs-stats" class="bs-stats"></div>
+
+                <div class="card">
+                    <h2 style="margin-top: 0; font-size: 18px;">What still has to move</h2>
+                    <p class="notice">Progress by size. The database holds base64, which is about a third larger than the file it stands for.</p>
+                    <div id="bs-categories"></div>
+                </div>
+
+                <div class="bs-two bs-section">
+                    <div class="card">
+                        <h2 style="margin-top: 0; font-size: 18px;">Activity</h2>
+                        <dl id="bs-activity" class="bs-kv"></dl>
+                    </div>
+                    <div class="card">
+                        <h2 style="margin-top: 0; font-size: 18px;">This server</h2>
+                        <dl id="bs-node" class="bs-kv"></dl>
+                    </div>
+                </div>
+
+                <div class="card bs-section">
+                    <h2 style="margin-top: 0; font-size: 18px;">Network</h2>
+                    <p class="notice" id="bs-net-summary">Checking whether the servers can reach each other…</p>
+                    <div class="table-scroll" id="bs-net-table-wrap">
+                        <table class="table">
+                            <thead id="bs-net-head"></thead>
+                            <tbody id="bs-net-body"></tbody>
+                        </table>
+                    </div>
+                    <details id="bs-net-rules" class="bs-section hidden">
+                        <summary>Firewall rules SeaweedFS needs on every server</summary>
+                        <div id="bs-net-rules-body"></div>
+                    </details>
+                </div>
+
+                <div class="card bs-section">
+                    <h2 style="margin-top: 0; font-size: 18px;">Servers</h2>
+                    <p class="notice" id="bs-nodes-note">Each server runs a SeaweedFS volume server; one also runs the master.</p>
+                    <div class="table-scroll">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Server</th>
+                                    <th>App version</th>
+                                    <th>Volume server</th>
+                                    <th>Master</th>
+                                    <th class="bs-number">Volumes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bs-nodes"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="/js/common.js"></script>
+    <script type="module" src="/js/blob-storage.js"></script>
+</body>
+</html>

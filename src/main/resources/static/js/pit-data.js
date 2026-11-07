@@ -353,7 +353,7 @@ function renderDetail(state) {
             const item = document.createElement("div");
             item.className = "pit-detail-item";
             const val = selected.entry.data[field.id];
-            const isImage = (field.type === "image" || field.type === "image_upload" || field.type === "photo" || (typeof val === "string" && val.startsWith("data:image/")));
+            const isImage = (field.type === "image" || field.type === "image_upload" || field.type === "photo" || (typeof val === "string" && (val.startsWith("data:image/") || val.startsWith("/api/blobs/"))));
 
             const label = document.createElement("span");
             label.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : field.label;
@@ -525,7 +525,7 @@ function formatValue(field, value) {
     if (value === null || value === undefined || value === "") {
         return "--";
     }
-    if (field.type === "image" || field.type === "image_upload" || field.type === "photo" || (typeof value === "string" && value.startsWith("data:image/"))) {
+    if (field.type === "image" || field.type === "image_upload" || field.type === "photo" || (typeof value === "string" && (value.startsWith("data:image/") || value.startsWith("/api/blobs/")))) {
         return "📷 [Photo]";
     }
     if (field.type === "checkbox") {

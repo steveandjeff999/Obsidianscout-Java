@@ -333,7 +333,7 @@ fun Route.chatRoutes() {
                                     userId = it[com.obsidianscout.db.Users.id].value.toString(),
                                     username = it[com.obsidianscout.db.Users.username],
                                     role = it[com.obsidianscout.db.Users.role],
-                                    profilePicture = it[com.obsidianscout.db.Users.profilePicture]
+                                    profilePicture = com.obsidianscout.db.ChatService.avatarUrl(it[com.obsidianscout.db.Users.id].value, it[com.obsidianscout.db.Users.profilePicture])
                                 )
                             }
                             .sortedBy { it.username.lowercase() }

@@ -110,6 +110,7 @@ object QuorumFallbackStore {
     var lastSyncStatus: String = "Not initialized"
 
     private val mirroredTables: Array<Table> = arrayOf(
+        BlobObjects,
         Users,
         UserSessions,
         ScoutingConfigs,
@@ -502,6 +503,8 @@ object QuorumFallbackStore {
             // Profile pictures (up to 1 MB each) are left out: fallback reads can live without avatars.
             // Users stay on a full compare every sync: the table is small and role or password changes matter.
             MirrorSpec(Users, enabled = users, excluded = setOf(Users.profilePicture)),
+            // Small index rows saying where each photo lives in the object store, so photos still load during quorum loss.
+            MirrorSpec(BlobObjects),
             MirrorSpec(UserSessions, enabled = users, version = UserSessions.lastActiveAt),
             // Game, pit and qualitative configs are fundamental to app operation and always mirrored.
             MirrorSpec(ScoutingConfigs, version = ScoutingConfigs.updatedAt),

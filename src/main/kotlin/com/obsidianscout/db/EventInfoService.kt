@@ -147,8 +147,13 @@ object EventInfoService {
                 (EventInfoPosts.id eq uuid) and (EventInfoPosts.teamNumber eq teamNumber) and (EventInfoPosts.program eq program)
             }.any()
             if (!owned) return@writeTransactionWithRetry false
+            val refs = EventInfoFiles.select(EventInfoFiles.data).where { EventInfoFiles.postId eq uuid }
+                .map { it[EventInfoFiles.data] }.filter { it.startsWith(com.obsidianscout.blob.BlobService.REF_PREFIX) }
             EventInfoFiles.deleteWhere { EventInfoFiles.postId eq uuid }
-            EventInfoPosts.deleteWhere { EventInfoPosts.id eq uuid } > 0
+            val deleted = EventInfoPosts.deleteWhere { EventInfoPosts.id eq uuid } > 0
+            // Bytes go only once the rows are committed, so a rolled-back delete can't leave a dangling reference.
+            refs.forEach { ref -> PostCommitHook.afterCommit { com.obsidianscout.blob.BlobService.deleteRef(ref) } }
+            deleted
         }
     }
 
@@ -187,8 +192,16 @@ object EventInfoService {
         }
 
         val displaySize = processedBytes.size.toLong()
+        // Stored in the blob store before the transaction; the row keeps a reference (or base64 if blob storage is off).
+        val storedValue = if (com.obsidianscout.blob.BlobService.isEnabled) {
+            com.obsidianscout.blob.BlobService.ref(
+                com.obsidianscout.blob.BlobService.put(stored, contentType, com.obsidianscout.blob.BlobService.KIND_EVENT_FILE, teamNumber, program)
+            )
+        } else {
+            Base64.getEncoder().encodeToString(stored)
+        }
 
-        return writeTransactionWithRetry {
+        val result = try { writeTransactionWithRetry {
             val owned = EventInfoPosts.selectAll().where {
                 (EventInfoPosts.id eq uuid) and (EventInfoPosts.teamNumber eq teamNumber) and (EventInfoPosts.program eq program)
             }.any()
@@ -205,19 +218,29 @@ object EventInfoService {
                 it[EventInfoFiles.fileName] = fileName
                 it[EventInfoFiles.contentType] = contentType
                 it[EventInfoFiles.sizeBytes] = displaySize
-                it[EventInfoFiles.data] = Base64.getEncoder().encodeToString(stored)
+                it[EventInfoFiles.data] = storedValue
                 it[EventInfoFiles.createdAt] = now
             }.value
             EventInfoPosts.update({ EventInfoPosts.id eq uuid }) { it[updatedAt] = now }
             EventInfoFileDto(fileId.toString(), fileName, contentType, displaySize, contentType.startsWith("image/"), fileUrl(fileId))
+        } } catch (e: Throwable) {
+            com.obsidianscout.blob.BlobService.deleteRef(storedValue)
+            throw e
         }
+        if (result == null) com.obsidianscout.blob.BlobService.deleteRef(storedValue)
+        return result
     }
 
     fun getFile(fileId: String): StoredFile? {
         val uuid = parse(fileId) ?: return null
         return readTransaction {
             EventInfoFiles.selectAll().where { EventInfoFiles.id eq uuid }.firstOrNull()?.let {
-                val rawBytes = Base64.getDecoder().decode(it[EventInfoFiles.data])
+                val stored = it[EventInfoFiles.data]
+                val rawBytes = if (stored.startsWith(com.obsidianscout.blob.BlobService.REF_PREFIX)) {
+                    com.obsidianscout.blob.BlobService.getByRef(stored)?.bytes ?: return@readTransaction null
+                } else {
+                    Base64.getDecoder().decode(stored)
+                }
                 val decompressed = if (isGzip(rawBytes) && !isExplicitGzipFile(it[EventInfoFiles.fileName])) {
                     // Rows from before the cap can exceed it; those are served as stored rather than failing.
                     runCatching { decompressGzip(rawBytes) }.getOrDefault(rawBytes)
@@ -238,9 +261,14 @@ object EventInfoService {
     fun deleteFile(fileId: String, teamNumber: Int, program: String): Boolean {
         val uuid = parse(fileId) ?: return false
         return writeTransactionWithRetry {
-            EventInfoFiles.deleteWhere {
+            val ref = EventInfoFiles.select(EventInfoFiles.data).where {
+                (EventInfoFiles.id eq uuid) and (EventInfoFiles.teamNumber eq teamNumber) and (EventInfoFiles.program eq program)
+            }.firstOrNull()?.get(EventInfoFiles.data)?.takeIf { it.startsWith(com.obsidianscout.blob.BlobService.REF_PREFIX) }
+            val deleted = EventInfoFiles.deleteWhere {
                 (EventInfoFiles.id eq uuid) and (EventInfoFiles.teamNumber eq teamNumber) and (EventInfoFiles.program eq program)
             } > 0
+            if (deleted && ref != null) PostCommitHook.afterCommit { com.obsidianscout.blob.BlobService.deleteRef(ref) }
+            deleted
         }
     }
 

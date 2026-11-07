@@ -152,7 +152,7 @@ function buildText(labelText, name, value, controls) {
 
 function buildImagePreview(labelText, value) {
     const group = buildGroup(labelText);
-    if (typeof value === 'string' && value.startsWith('data:image/')) {
+    if (typeof value === 'string' && (value.startsWith('data:image/') || value.startsWith('/api/blobs/'))) {
         const thumb = document.createElement('img');
         thumb.src = value;
         thumb.alt = labelText;

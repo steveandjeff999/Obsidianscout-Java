@@ -1741,6 +1741,7 @@
   "nav.docs": "תיעוד",
   "nav.error-reports": "דוחות שגיאות",
   "nav.redis-status": "מטמון Redis",
+  "nav.blob-storage": "אחסון קבצים",
   "nav.load-profiler": "מדידת עומס",
   "nav.server-insights": "תובנות שרת",
   "nav.error_reports": "דוחות שגיאות",
