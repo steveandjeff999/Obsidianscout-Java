@@ -65,6 +65,7 @@
                                 <option value="obsidiandb">Custom Backup (.obsidiandb)</option>
                                 <option value="csv">Standard CSV Archive (.zip)</option>
                             </select>
+                            <p class="text-muted mt-12">The .obsidiandb backup includes photos (up to a size limit) so it restores on any server. The CSV archive keeps photos as links, so they only restore on this server.</p>
                         </div>
 
                         <div class="field mt-12 hidden" id="field-export-scope">
@@ -77,6 +78,10 @@
 
                         <div class="mt-20">
                             <button id="btn-export" class="btn" type="button">Export and Download</button>
+                        </div>
+                        <div id="export-progress" class="mt-12 hidden" role="status" aria-live="polite">
+                            <progress id="export-progress-bar" max="100" value="0" style="width: 100%;"></progress>
+                            <p id="export-progress-text" class="text-muted mt-8"></p>
                         </div>
                     </div>
 
@@ -108,6 +113,10 @@
 
                         <div class="mt-20">
                             <button id="btn-import" class="btn secondary" type="button" disabled>Import Data</button>
+                        </div>
+                        <div id="import-progress" class="mt-12 hidden" role="status" aria-live="polite">
+                            <progress id="import-progress-bar" max="100" value="0" style="width: 100%;"></progress>
+                            <p id="import-progress-text" class="text-muted mt-8"></p>
                         </div>
                     </div>
                 </div>

@@ -326,10 +326,18 @@ data class ImportReport(
 
 object BackupService {
 
-    /** Largest backup file accepted for import. */
-    const val MAX_IMPORT_BYTES = 100L * 1024 * 1024
-    /** Largest total size a CSV backup zip may expand to, so a small zip can't exhaust memory. */
-    const val MAX_UNZIPPED_BYTES = 512L * 1024 * 1024
+    /**
+     * Largest backup file accepted for import. Backups carry their photos as base64, so they can be large; the
+     * whole file is held in memory while it is imported, so the limit is a quarter of the heap (512 MB on the
+     * default 2 GB heap), never below the old 100 MB and never above 1 GB.
+     */
+    val MAX_IMPORT_BYTES: Long = (Runtime.getRuntime().maxMemory() / 4).coerceIn(100L * 1024 * 1024, 1024L * 1024 * 1024)
+    /**
+     * Largest total size a CSV backup zip may expand to, so a small zip can't exhaust memory. Kept at 512 MB even on a
+     * large heap: the unzipped text is held as Strings and then parsed into rows on top of the raw zip, and CSV
+     * exports carry photos as blob links, so they don't grow with the photo library.
+     */
+    val MAX_UNZIPPED_BYTES: Long = minOf(MAX_IMPORT_BYTES * 2, 512L * 1024 * 1024)
     private const val MAX_ZIP_ENTRIES = 1_000
 
     /** Reads [input] into memory, refusing anything larger than [limit] bytes. */
@@ -353,7 +361,21 @@ object BackupService {
     }
 
 
-    fun exportBackup(teamNumber: Int, type: String, scope: String = "team", program: String = "FRC"): ObsidianDbBackup {
+    /**
+     * Most image data (before base64) a `.obsidiandb` export embeds: half the import limit, so the base64 (a third
+     * larger) plus the rows still fits under [MAX_IMPORT_BYTES] and the export can't exhaust the heap. Images past it
+     * stay as blob links.
+     */
+    val MAX_EXPORT_IMAGE_BYTES: Long = MAX_IMPORT_BYTES / 2
+
+    /**
+     * The backup with photos and profile pictures included as base64 (not as blob links), up to
+     * [MAX_EXPORT_IMAGE_BYTES], so it restores on any server.
+     */
+    fun exportBackup(teamNumber: Int, type: String, scope: String = "team", program: String = "FRC"): ObsidianDbBackup =
+        com.obsidianscout.blob.BackupImages.inline(exportBackupRows(teamNumber, type, scope, program), maxImageBytes = MAX_EXPORT_IMAGE_BYTES)
+
+    private fun exportBackupRows(teamNumber: Int, type: String, scope: String, program: String): ObsidianDbBackup {
         val slackKey = if (scope == "global" || type == "entire") com.obsidianscout.slack.SlackBackup.dataKey() else null
         return transaction {
             val userMap = Users.selectAll()
@@ -737,7 +759,30 @@ object BackupService {
         }
     }
 
+    /**
+     * Imports [backup]. Base64 images in it go into the blob store first, so rows are written with blob links rather
+     * than waiting for the background sweep. CSV imports go through here too.
+     */
     fun importBackup(targetTeamNumber: Int, backup: ObsidianDbBackup, currentUserId: String, isSuperAdmin: Boolean = false, targetProgram: String = "FRC"): ImportReport {
+        if (!com.obsidianscout.blob.BlobService.isEnabled) {
+            return importBackupRows(targetTeamNumber, backup, currentUserId, isSuperAdmin, targetProgram)
+        }
+        // Same team/program mapping importBackupRows applies, so each blob is counted against the team that owns the row.
+        val isGlobalImport = isSuperAdmin && backup.scope == "global"
+        val offloaded = com.obsidianscout.blob.BackupImages.offload(
+            backup,
+            teamFor = { if (isGlobalImport) it else targetTeamNumber },
+            programFor = { if (isGlobalImport) it else targetProgram }
+        )
+        try {
+            return importBackupRows(targetTeamNumber, offloaded.backup, currentUserId, isSuperAdmin, targetProgram)
+        } finally {
+            // Images of skipped duplicates (or of a failed import) aren't referenced by anything; free them now.
+            com.obsidianscout.blob.BlobService.freeIfUnreferenced(offloaded.created)
+        }
+    }
+
+    private fun importBackupRows(targetTeamNumber: Int, backup: ObsidianDbBackup, currentUserId: String, isSuperAdmin: Boolean, targetProgram: String): ImportReport {
         val slackKey = if (backup.slackIntegrations.isNotEmpty()) com.obsidianscout.slack.SlackBackup.dataKey() else null
         return transaction {
             val isGlobalImport = isSuperAdmin && backup.scope == "global"
@@ -1457,8 +1502,13 @@ object BackupService {
         }
     }
 
+    /**
+     * CSV zip export. Photos stay as blob links rather than base64: a base64 photo is far past a spreadsheet cell's
+     * 32,767-character limit, so embedding them would break the file in Excel. A CSV backup therefore restores its
+     * photos only on a server that has those blobs; the `.obsidiandb` export carries the images themselves.
+     */
     fun exportCsv(teamNumber: Int, type: String, scope: String = "team", program: String = "FRC"): ByteArray {
-        val backup = exportBackup(teamNumber, type, scope, program)
+        val backup = exportBackupRows(teamNumber, type, scope, program)
         val files = mutableMapOf<String, String>()
 
         // Serialize Scouting Entries

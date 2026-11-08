@@ -33,6 +33,12 @@ private val consoleLog = org.slf4j.LoggerFactory.getLogger("com.obsidianscout.ut
 object ProxyServer {
     private val client = HttpClient(CIO) {
         install(ClientWebSockets)
+        engine {
+            // CIO's default gives up on any request after 15 s, which cut off backup exports, imports and anything
+            // else the backend takes a while to answer. The backend applies its own timeouts; this only stops a
+            // request that is truly stuck from holding a connection forever.
+            requestTimeout = 15 * 60_000L
+        }
     }
 
     fun start(appConfig: AppConfig, keyStore: KeyStore) {

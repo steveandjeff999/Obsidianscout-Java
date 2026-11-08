@@ -588,7 +588,7 @@ object AllianceService {
         val selectedEventKey = normalizedEventKey?.takeUnless { it == "__NO_EVENT__" }
         val now = Instant.now()
 
-        return transaction {
+        fun requireAcceptedPartner() {
             val isAcceptedPartner = AllianceMemberships
                 .selectAll().where {
                     (AllianceMemberships.allianceId eq allianceUuid) and
@@ -601,6 +601,25 @@ object AllianceService {
             if (!isAcceptedPartner) {
                 throw ApiException(HttpStatusCode.Forbidden, "Source team is not an accepted member of this alliance")
             }
+        }
+
+        // Checked before any photo work, so a refused request costs nothing; checked again below inside the
+        // transaction that copies the rows, in case the membership changed meanwhile.
+        transaction { requireAcceptedPartner() }
+
+        // Move any base64 photos still in either team's rows into the blob store first, so the copies made below
+        // carry blob links. Both sides, because the duplicate check compares dataJson: a base64 row on one side
+        // and a blob link on the other would no longer match and the entry would be copied twice. Only the entry
+        // types being imported, so the request does no more photo work than it needs.
+        for (team in listOf(sourceTeamNumber, session.teamNumber)) {
+            com.obsidianscout.blob.BlobMigrationService.migrateTeamEntries(
+                team, session.program,
+                matchScouting = includeMatchScouting, pitScouting = includePitScouting, qualitativeScouting = includeQualitativeScouting
+            )
+        }
+
+        return transaction {
+            requireAcceptedPartner()
 
             var skippedDuplicates = 0
 

@@ -158,6 +158,9 @@ object MigrationService {
         thread(name = "db-migration-worker") {
             try {
                 runMigrationImpl(sourceType, sqliteInstancePath, pgConfig)
+                // The old server stored photos as base64; put them in the blob store before reporting success.
+                updateStatus(msg = "Moving images into blob storage...", prog = 99)
+                com.obsidianscout.blob.BlobService.migrateNow()
                 com.obsidianscout.scouting.EntrySync.markBulkChange()
                 updateStatus(
                     isRunning = false,

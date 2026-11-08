@@ -73,7 +73,11 @@ object DatabaseFactory {
         SlackIntegrations,
         SlackNotifications,
         SlackUserPreferences,
-        LiveInvalidations
+        LiveInvalidations,
+        BackupUploads,
+        BackupUploadChunks,
+        BackupExports,
+        BackupExportChunks
     )
     private val uuidMigratedTables = listOf(
         "users", "scouting_configs", "pit_scouting_configs",

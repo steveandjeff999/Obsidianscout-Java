@@ -759,6 +759,8 @@ fun Application.module(appConfig: AppConfig) {
                 com.obsidianscout.cache.RedisClusterCoordinator.init(appConfig)
                 // Downloads/starts SeaweedFS and moves base64 photos and files out of the database in the background.
                 com.obsidianscout.blob.BlobService.start(appConfig, isCluster = isAutonomousCockroach)
+                // Clears abandoned backup uploads (parts are stored in the database until imported).
+                com.obsidianscout.db.BackupUploadService.startCleanup()
                 consoleLog.info("[Database] Background database initialization completed successfully.")
                 
                 // Mark update boot successful once startup completes

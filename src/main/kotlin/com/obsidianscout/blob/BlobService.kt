@@ -92,6 +92,8 @@ object BlobService {
     @Volatile private var clusterMode = false
     @Volatile private var orchestrator: SeaweedOrchestrator? = null
     @Volatile private var installed = false
+    @Volatile private var installFailures = 0
+    @Volatile private var nextInstallAttemptMs = 0L
     @Volatile private var lastMasterLeaseMs = 0L
     @Volatile private var seaweed: SeaweedBlobStore? = null
     @Volatile private var local: LocalBlobStore = LocalBlobStore(File(config.local_directory))
@@ -162,8 +164,11 @@ object BlobService {
         private set
     @Volatile var runningPass: PassInfo? = null
         private set
-    @Volatile var movedSinceStart = 0L
-        private set
+    private val movedCounter = java.util.concurrent.atomic.AtomicLong()
+    /** Rows moved into the blob store since this node started (background sweeps and on-demand moves alike). */
+    val movedSinceStart: Long get() = movedCounter.get()
+    /** Adds to [movedSinceStart]; on-demand moves can run alongside the background sweep, hence atomic. */
+    internal fun addMoved(rows: Int) { if (rows > 0) movedCounter.addAndGet(rows.toLong()) }
     private val wake = Channel<Unit>(Channel.CONFLATED)
 
     /** Asks this node to run a maintenance pass now. False when blob storage isn't running here. */
@@ -171,6 +176,27 @@ object BlobService {
         if (!isEnabled) return false
         wake.trySend(Unit)
         return true
+    }
+
+    /**
+     * Moves every base64 image and file still in the database into the blob store now, on the calling thread,
+     * instead of waiting for the background sweep. For callers that just wrote many rows at once (a snapshot
+     * restore, a database migration). Returns the number of rows moved. When the store can't take writes yet,
+     * it wakes the background sweep instead and returns 0. Must not be called inside a transaction.
+     */
+    fun migrateNow(): Int {
+        if (!isEnabled || !config.migrate_existing) return 0
+        if (!canMigrate()) {
+            requestPass()
+            return 0
+        }
+        return try {
+            BlobMigrationService.runOnce(config.migration_batch_size, includeAllEntryTables = true).also { addMoved(it) }
+        } catch (e: Exception) {
+            log.warn("[Blobs] Moving images right away failed, leaving it to the background sweep: ${e.message}")
+            requestPass()
+            0
+        }
     }
 
     private fun runMaintenancePass(includeAllEntryTables: Boolean, collectGarbage: Boolean) {
@@ -204,7 +230,7 @@ object BlobService {
             error = e.message ?: e.javaClass.simpleName
             log.warn("[Blobs] Maintenance pass failed: $error")
         }
-        movedSinceStart += moved
+        addMoved(moved)
         lastPass = PassInfo(node, started, Instant.now(), moved, promoted, outcome, error)
         runningPass = null
     }
@@ -248,9 +274,28 @@ object BlobService {
 
     private fun masterHolder(): String = "${ClusterManagementService.getLocalTailscaleIp()}:${config.master_port}"
 
+    /**
+     * Installs SeaweedFS, backing off after each failure (1 min, doubling to 1 hour). A persistent failure such as a
+     * checksum mismatch or a blocked binary would otherwise re-download the whole release on every 10s coordinator tick.
+     */
+    private fun tryInstall(orch: SeaweedOrchestrator) {
+        val now = System.currentTimeMillis()
+        if (now < nextInstallAttemptMs) return
+        installed = orch.ensureInstalled()
+        if (installed) {
+            installFailures = 0
+            nextInstallAttemptMs = 0L
+            return
+        }
+        installFailures++
+        val waitMs = (60_000L shl (installFailures - 1).coerceAtMost(6)).coerceAtMost(3_600_000L)
+        nextInstallAttemptMs = now + waitMs
+        log.warn("[Blobs] SeaweedFS install attempt $installFailures failed; retrying in ${waitMs / 60_000} min. Files go to local disk until then.")
+    }
+
     private fun coordinate() {
         val orch = orchestrator ?: return
-        if (!installed && orch.isPlatformSupported) installed = orch.ensureInstalled()
+        if (!installed && orch.isPlatformSupported) tryInstall(orch)
 
         val masterAddress: String? = if (!clusterMode) {
             if (!installed) null else {

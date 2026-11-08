@@ -1,5 +1,6 @@
 ﻿package com.obsidianscout.routes
 
+import kotlinx.serialization.json.encodeToStream
 import com.obsidianscout.auth.clientIp
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
@@ -77,6 +78,7 @@ import io.ktor.server.response.respondRedirect
 import io.ktor.server.response.respondText
 import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondFile
+import io.ktor.server.response.respondOutputStream
 import io.ktor.server.request.receiveMultipart
 import io.ktor.http.content.PartData
 import io.ktor.http.content.streamProvider
@@ -549,19 +551,38 @@ fun Route.adminRoutes() {
                         "team"
                     }
 
-                    if (format == "obsidiandb") {
-                        val backup = com.obsidianscout.db.BackupService.exportBackup(session.teamNumber, type, scope, session.program)
-                        val jsonString = JsonSupport.json.encodeToString(com.obsidianscout.db.ObsidianDbBackup.serializer(), backup)
-                        val filename = if (scope == "global") "global_backup_${type}.obsidiandb" else "team_${session.teamNumber}_backup_${type}.obsidiandb"
-                        call.response.headers.append(HttpHeaders.ContentDisposition, "attachment; filename=\"$filename\"")
-                        call.respondText(jsonString, ContentType.Application.Json)
-                    } else if (format == "csv") {
-                        val zipBytes = com.obsidianscout.db.BackupService.exportCsv(session.teamNumber, type, scope, session.program)
-                        val filename = if (scope == "global") "global_backup_${type}.zip" else "team_${session.teamNumber}_backup_${type}.zip"
-                        call.response.headers.append(HttpHeaders.ContentDisposition, "attachment; filename=\"$filename\"")
-                        call.respondBytes(zipBytes, ContentType.Application.Zip)
-                    } else {
+                    if (format != "obsidiandb" && format != "csv") {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Unsupported format: $format")
+                    }
+                    // Still used by the mobile app. The export (with its embedded photos) is held in memory, so it
+                    // shares the node's single heavy-job slot with background imports and exports.
+                    val slot = com.obsidianscout.db.BackupUploadService.heavyJobSlot
+                    var acquired = false
+                    try {
+                        // Flag set inside the block, so a cancellation right after acquiring still releases the slot.
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { slot.acquire(); acquired = true }
+                        if (format == "obsidiandb") {
+                            val backup = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                com.obsidianscout.db.BackupService.exportBackup(session.teamNumber, type, scope, session.program)
+                            }
+                            val filename = if (scope == "global") "global_backup_${type}.obsidiandb" else "team_${session.teamNumber}_backup_${type}.obsidiandb"
+                            call.response.headers.append(HttpHeaders.ContentDisposition, "attachment; filename=\"$filename\"")
+                            // Streamed: building the whole JSON as one String would hold a second copy of every embedded photo.
+                            call.respondOutputStream(ContentType.Application.Json) {
+                                val out = java.io.BufferedOutputStream(this, 64 * 1024)
+                                JsonSupport.json.encodeToStream(com.obsidianscout.db.ObsidianDbBackup.serializer(), backup, out)
+                                out.flush()
+                            }
+                        } else {
+                            val zipBytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                com.obsidianscout.db.BackupService.exportCsv(session.teamNumber, type, scope, session.program)
+                            }
+                            val filename = if (scope == "global") "global_backup_${type}.zip" else "team_${session.teamNumber}_backup_${type}.zip"
+                            call.response.headers.append(HttpHeaders.ContentDisposition, "attachment; filename=\"$filename\"")
+                            call.respondBytes(zipBytes, ContentType.Application.Zip)
+                        }
+                    } finally {
+                        if (acquired) slot.release()
                     }
                 }
 
@@ -625,20 +646,121 @@ fun Route.adminRoutes() {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "No file uploaded")
                     }
 
-                    val report = if (fileName.endsWith(".obsidiandb") || fileName.endsWith(".json")) {
-                        val jsonString = String(fileBytes!!, Charsets.UTF_8)
-                        val backup = JsonSupport.json.decodeFromString<com.obsidianscout.db.ObsidianDbBackup>(jsonString)
-                        val importAsGlobal = isSuperAdmin && requestedScope == "global" && backup.scope == "global"
-                        com.obsidianscout.db.BackupService.importBackup(session.teamNumber, backup, session.userId, importAsGlobal, session.program)
-                    } else if (fileName.endsWith(".zip")) {
-                        val importAsGlobal = isSuperAdmin && requestedScope == "global"
-                        com.obsidianscout.db.BackupService.importCsv(session.teamNumber, fileBytes!!, session.userId, importAsGlobal, session.program)
-                    } else {
-                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Unsupported file format. Please upload .obsidiandb or .zip")
+                    val owner = com.obsidianscout.db.BackupUploadService.Owner(session.userId, session.teamNumber, session.program, isSuperAdmin)
+                    val bytes = java.util.concurrent.atomic.AtomicReference<ByteArray?>(fileBytes)
+                    fileBytes = null
+                    val report = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        com.obsidianscout.db.BackupUploadService.importFile(fileName, bytes, owner, requestedScope)
                     }
-                    com.obsidianscout.scouting.EntrySync.markBulkChange()
 
                     call.respond(report)
+                }
+
+                // Backup export built in the background and downloaded in parts (see BackupExportService): building
+                // can outlast Cloudflare's 100 s limit, and a long download outlasts Ktor's 60 s idle read timeout.
+                route("/export/jobs") {
+                    fun exportOwner(session: com.obsidianscout.auth.UserSession) = com.obsidianscout.db.BackupUploadService.Owner(
+                        session.userId, session.teamNumber, session.program, session.role == com.obsidianscout.auth.UserRole.SUPERADMIN
+                    )
+
+                    post {
+                        val session = call.requireAdmin()
+                        val req = call.receive<com.obsidianscout.db.BackupExportService.StartRequest>()
+                        val started = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            com.obsidianscout.db.BackupExportService.start(exportOwner(session), req)
+                        }
+                        call.respond(HttpStatusCode.Accepted, started)
+                    }
+
+                    get("/{id}") {
+                        val session = call.requireAdmin()
+                        val status = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            com.obsidianscout.db.BackupExportService.status(exportOwner(session), call.parameters["id"] ?: "")
+                        }
+                        call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+                        call.respond(status)
+                    }
+
+                    get("/{id}/parts/{index}") {
+                        val session = call.requireAdmin()
+                        val index = call.parameters["index"]?.toIntOrNull()
+                            ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid part number")
+                        val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            com.obsidianscout.db.BackupExportService.chunk(exportOwner(session), call.parameters["id"] ?: "", index)
+                        }
+                        call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+                        call.respondBytes(bytes, ContentType.Application.OctetStream)
+                    }
+
+                    delete("/{id}") {
+                        val session = call.requireAdmin()
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            com.obsidianscout.db.BackupExportService.delete(exportOwner(session), call.parameters["id"] ?: "")
+                        }
+                        call.respond(HttpStatusCode.NoContent)
+                    }
+                }
+
+                // Backup import in parts, run in the background (see BackupUploadService): keeps every request small
+                // and short, so large backups get through Cloudflare (100 MB bodies, 100 s responses) and the proxies.
+                route("/import/uploads") {
+                    fun uploadOwner(session: com.obsidianscout.auth.UserSession) = com.obsidianscout.db.BackupUploadService.Owner(
+                        session.userId, session.teamNumber, session.program, session.role == com.obsidianscout.auth.UserRole.SUPERADMIN
+                    )
+
+                    post {
+                        val session = call.requireAdmin()
+                        val req = call.receive<com.obsidianscout.db.BackupUploadService.StartRequest>()
+                        val started = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            com.obsidianscout.db.BackupUploadService.start(uploadOwner(session), req)
+                        }
+                        call.respond(HttpStatusCode.Created, started)
+                    }
+
+                    put("/{id}/chunks/{index}") {
+                        val session = call.requireAdmin()
+                        val index = call.parameters["index"]?.toIntOrNull()
+                            ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid part number")
+                        // Checked before reading, so an oversized body is never buffered.
+                        val declared = call.request.headers[HttpHeaders.ContentLength]?.toLongOrNull()
+                            ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.LengthRequired, "Content-Length is required")
+                        if (declared > com.obsidianscout.db.BackupUploadService.CHUNK_BYTES) {
+                            throw com.obsidianscout.auth.ApiException(HttpStatusCode.PayloadTooLarge, "Each part may be at most ${com.obsidianscout.db.BackupUploadService.CHUNK_BYTES} bytes")
+                        }
+                        val bytes = call.receive<ByteArray>()
+                        if (bytes.size.toLong() != declared) {
+                            throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Part $index arrived incomplete (${bytes.size} of $declared bytes)")
+                        }
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            com.obsidianscout.db.BackupUploadService.putChunk(uploadOwner(session), call.parameters["id"] ?: "", index, bytes)
+                        }
+                        call.respond(HttpStatusCode.NoContent)
+                    }
+
+                    post("/{id}/complete") {
+                        val session = call.requireAdmin()
+                        val status = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            com.obsidianscout.db.BackupUploadService.complete(uploadOwner(session), call.parameters["id"] ?: "")
+                        }
+                        call.respond(HttpStatusCode.Accepted, status)
+                    }
+
+                    get("/{id}") {
+                        val session = call.requireAdmin()
+                        val status = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            com.obsidianscout.db.BackupUploadService.status(uploadOwner(session), call.parameters["id"] ?: "")
+                        }
+                        call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+                        call.respond(status)
+                    }
+
+                    delete("/{id}") {
+                        val session = call.requireAdmin()
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            com.obsidianscout.db.BackupUploadService.cancel(uploadOwner(session), call.parameters["id"] ?: "")
+                        }
+                        call.respond(HttpStatusCode.NoContent)
+                    }
                 }
 
                 // SQLite Automated & Manual Snapshots and Database Restoration (Superadmin only)

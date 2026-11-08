@@ -112,6 +112,36 @@ object BlobMigrationService {
         return BlobService.URL_IN_TEXT_REGEX.findAll(text).mapNotNull { runCatching { UUID.fromString(it.groupValues[1]) }.getOrNull() }.toSet()
     }
 
+    /**
+     * Moves the base64 photos in one team's scouting entries (the selected entry tables) into the blob store now.
+     * Used before copying a team's rows elsewhere, so the copies carry blob links, not base64. Returns the number
+     * of rows moved; does nothing while blob storage is off. Must not be called inside a transaction.
+     */
+    fun migrateTeamEntries(
+        teamNumber: Int,
+        program: String,
+        matchScouting: Boolean = true,
+        pitScouting: Boolean = true,
+        qualitativeScouting: Boolean = true,
+        batchSize: Int = 100
+    ): Int {
+        if (!BlobService.isEnabled || !BlobService.canMigrate()) return 0
+        val batch = batchSize.coerceIn(1, 500)
+        var total = 0
+        if (pitScouting) total += drain("pit scouting photos of team $teamNumber") {
+            migrateEntryTable(PitScoutingEntries, PitScoutingEntries.ownerTeamNumber, PitScoutingEntries.program, PitScoutingEntries.dataJson, PitScoutingEntries.updatedAt, BlobService.KIND_PIT_PHOTO, batch, teamNumber to program)
+        }
+        if (matchScouting) total += drain("match scouting photos of team $teamNumber") {
+            migrateEntryTable(ScoutingEntries, ScoutingEntries.ownerTeamNumber, ScoutingEntries.program, ScoutingEntries.dataJson, ScoutingEntries.updatedAt, BlobService.KIND_SCOUTING_PHOTO, batch, teamNumber to program)
+        }
+        if (qualitativeScouting) total += drain("qualitative scouting photos of team $teamNumber") {
+            migrateEntryTable(QualitativeScoutingEntries, QualitativeScoutingEntries.ownerTeamNumber, QualitativeScoutingEntries.program, QualitativeScoutingEntries.dataJson, QualitativeScoutingEntries.updatedAt, BlobService.KIND_SCOUTING_PHOTO, batch, teamNumber to program)
+        }
+        if (total > 0) BlobService.addMoved(total)
+        currentStep = null
+        return total
+    }
+
     /** Runs [step] until it reports nothing left (or no progress), stopping early if the store goes away. */
     private fun drain(label: String, step: () -> Pair<Int, Int>): Int {
         var moved = 0
@@ -190,11 +220,15 @@ object BlobMigrationService {
         dataCol: Column<String>,
         updatedCol: Column<Instant?>,
         kind: String,
-        batch: Int
+        batch: Int,
+        onlyTeam: Pair<Int, String>? = null
     ): Pair<Int, Int> {
         val rows = readTransaction {
             table.select(table.id, ownerCol, programCol, dataCol)
-                .where { dataCol like "%\"data:image/%" }
+                .where {
+                    val hasBase64 = dataCol like "%\"data:image/%"
+                    if (onlyTeam == null) hasBase64 else hasBase64 and (ownerCol eq onlyTeam.first) and (programCol eq onlyTeam.second)
+                }
                 .limit(fetchLimit(batch))
                 .map { Row(it[table.id].value, it[ownerCol], it[programCol], it[dataCol]) }
         }.filterNot { it.id in skipped }.take(batch)

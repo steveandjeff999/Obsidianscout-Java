@@ -1319,6 +1319,13 @@ object SnapshotService {
             val totalRecords = restoredCounts.values.sum()
             consoleLog.info("[SnapshotService] Database restoration completed successfully: $totalRecords records restored in ${durationMs}ms.")
 
+            // Older snapshots hold photos as base64; move them into the blob store now rather than at the next sweep.
+            // Off the request thread: a large restore can have thousands of photos.
+            kotlin.concurrent.thread(name = "snapshot-restore-blobs", isDaemon = true) {
+                val moved = com.obsidianscout.blob.BlobService.migrateNow()
+                if (moved > 0) consoleLog.info("[SnapshotService] Moved $moved restored row(s) of images into the blob store.")
+            }
+
             return DatabaseRestoreReport(
                 success = true,
                 message = "Database restored successfully from snapshot.",

@@ -883,3 +883,83 @@ object SharedLinkAccessLogs : UUIDTable("shared_link_access_logs") {
     }
 }
 
+
+/**
+ * A backup file being uploaded in parts and then imported in the background (see BackupUploadService). Parts keep
+ * every request under a proxy's body limit (Cloudflare refuses bodies over 100 MB), and the background import keeps
+ * every request short (Cloudflare gives up on a response after 100 s). Kept in the database rather than on one node
+ * because the peer load balancer and cloudflared can send each part to a different node. Rows expire within a day.
+ */
+object BackupUploads : UUIDTable("backup_uploads") {
+    val userId = varchar("user_id", 64)
+    val teamNumber = integer("team_number")
+    val program = varchar("program", 8)
+    val isSuperAdmin = bool("is_super_admin")
+    /** "team" or "global", as asked for when the upload started. */
+    val requestedScope = varchar("requested_scope", 16)
+    val fileName = varchar("file_name", 255)
+    val totalBytes = long("total_bytes")
+    val chunkSize = integer("chunk_size")
+    val totalChunks = integer("total_chunks")
+    /** uploading, importing, done or failed. */
+    val state = varchar("state", 16)
+    val reportJson = text("report_json").nullable()
+    val error = text("error").nullable()
+    val createdAt = timestamp("created_at")
+    /** Moves on every part received and, while importing, on the import's heartbeat. */
+    val updatedAt = timestamp("updated_at")
+
+    init {
+        index("idx_backup_uploads_user", false, userId)
+        index("idx_backup_uploads_updated", false, updatedAt)
+    }
+}
+
+/** The parts of a [BackupUploads] file, deleted as soon as the import has read them. */
+object BackupUploadChunks : Table("backup_upload_chunks") {
+    val uploadId = javaUUID("upload_id")
+    val chunkIndex = integer("chunk_index")
+    val data = blob("data")
+    override val primaryKey = PrimaryKey(uploadId, chunkIndex)
+}
+
+/**
+ * A backup export built in the background and kept in parts until the browser has downloaded them (see
+ * BackupExportService). Building can outlast Cloudflare's 100 s response limit and a long download outlasts Ktor's
+ * 60 s idle read timeout, so the page waits for the build and then fetches one part per request. Rows expire within
+ * a couple of hours.
+ */
+object BackupExports : UUIDTable("backup_exports") {
+    val userId = varchar("user_id", 64)
+    val teamNumber = integer("team_number")
+    val program = varchar("program", 8)
+    /** "scouting" or "entire". */
+    val exportType = varchar("export_type", 16)
+    /** "obsidiandb" or "csv". */
+    val format = varchar("format", 16)
+    /** "team" or "global". */
+    val scope = varchar("scope", 16)
+    val fileName = varchar("file_name", 255)
+    val contentType = varchar("content_type", 64)
+    /** building, done or failed. */
+    val state = varchar("state", 16)
+    val totalBytes = long("total_bytes").default(0L)
+    val totalChunks = integer("total_chunks").default(0)
+    val error = text("error").nullable()
+    val createdAt = timestamp("created_at")
+    /** Moves on the build's heartbeat and on every part downloaded. */
+    val updatedAt = timestamp("updated_at")
+
+    init {
+        index("idx_backup_exports_user", false, userId)
+        index("idx_backup_exports_updated", false, updatedAt)
+    }
+}
+
+/** The parts of a finished [BackupExports] file, deleted once downloaded or expired. */
+object BackupExportChunks : Table("backup_export_chunks") {
+    val exportId = javaUUID("export_id")
+    val chunkIndex = integer("chunk_index")
+    val data = blob("data")
+    override val primaryKey = PrimaryKey(exportId, chunkIndex)
+}
