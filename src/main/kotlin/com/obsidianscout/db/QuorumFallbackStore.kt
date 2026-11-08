@@ -602,14 +602,27 @@ object QuorumFallbackStore {
 
         val version = spec.version
         if (fullCompare || version == null) {
-            val source = DatabaseFactory.readTransaction { spec.query(spec.columns).toList() }
-            val mirror = mirrorRead(targetDb) { table.select(spec.columns).associateBy { it[table.id].value } }
-            val sourceIds = source.mapTo(HashSet(source.size)) { it[table.id].value }
-            val upserts = source.filter { row ->
-                val existing = mirror[row[table.id].value]
-                existing == null || spec.columns.any { normalizeForCompare(row.getOrNull(it)) != normalizeForCompare(existing.getOrNull(it)) }
+            // Ids first (small), then full rows one chunk at a time from both sides, so a full compare never holds
+            // a whole table twice - only one chunk of each side, plus the rows that differ.
+            val sourceIds = DatabaseFactory.readTransaction { spec.query(listOf(table.id)).map { it[table.id].value } }
+            val sourceIdSet = sourceIds.toHashSet()
+            val deletes = mirrorRead(targetDb) { table.select(table.id).map { it[table.id].value } }
+                .filterNot { it in sourceIdSet }
+            val upserts = ArrayList<ResultRow>()
+            for (chunk in sourceIds.sorted().chunked(ID_CHUNK)) {
+                val source = DatabaseFactory.readTransaction {
+                    table.select(spec.columns).where { table.id inList chunk }.toList()
+                }
+                val mirror = mirrorRead(targetDb) {
+                    table.select(spec.columns).where { table.id inList chunk }.associateBy { it[table.id].value }
+                }
+                largestFullCompareChunk = maxOf(largestFullCompareChunk, source.size + mirror.size)
+                source.filterTo(upserts) { row ->
+                    val existing = mirror[row[table.id].value]
+                    existing == null || spec.columns.any { normalizeForCompare(row.getOrNull(it)) != normalizeForCompare(existing.getOrNull(it)) }
+                }
             }
-            return TableChanges(spec, upserts, mirror.keys.filterNot { it in sourceIds })
+            return TableChanges(spec, upserts, deletes)
         }
 
         val fields = listOf(table.id, version)
@@ -625,6 +638,10 @@ object QuorumFallbackStore {
         }
         return TableChanges(spec, upserts, mirrorVersions.keys.filterNot { it in sourceVersions })
     }
+
+    /** Most source + mirror rows a full compare has held at once. For tests. */
+    @Volatile
+    internal var largestFullCompareChunk: Int = 0
 
     private fun <T> mirrorRead(db: Database, block: Transaction.() -> T): T = transaction(
         transactionIsolation = java.sql.Connection.TRANSACTION_SERIALIZABLE,

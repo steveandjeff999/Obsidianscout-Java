@@ -214,6 +214,55 @@ class QuorumFallbackIncrementalSyncTest {
         assertEquals(0L, mirror { Users.selectAll().count() })
     }
 
+    private fun addEntries(userId: UUID, count: Int): List<UUID> {
+        val now = Instant.now()
+        val ids = List(count) { UUID.randomUUID() }
+        source {
+            ScoutingEntries.batchInsert(ids.withIndex(), shouldReturnGeneratedValues = false) { (i, entryId) ->
+                this[ScoutingEntries.id] = EntityID(entryId, ScoutingEntries)
+                this[ScoutingEntries.ownerTeamNumber] = 5454
+                this[ScoutingEntries.eventKey] = "2026test"
+                this[ScoutingEntries.matchNumber] = i
+                this[ScoutingEntries.dataJson] = """{"auto":$i}"""
+                this[ScoutingEntries.submittedByUserId] = EntityID(userId, Users)
+                this[ScoutingEntries.createdAt] = now
+                this[ScoutingEntries.updatedAt] = now
+            }
+        }
+        return ids
+    }
+
+    @Test
+    fun fullCompareWorksChunkByChunkAcrossLargeTables() {
+        // More than two chunks (ID_CHUNK = 500), so changes land in different chunks.
+        val user = addUser("heidi")
+        val entries = addEntries(user, 1203)
+        val first = sync()
+        assertTrue(first.rowsWritten >= 1203, "Every row is copied into the empty mirror: $first")
+
+        QuorumFallbackStore.largestFullCompareChunk = 0
+        val quiet = sync(forceFull = true)
+        assertEquals(0, quiet.rowsWritten, "A full compare of unchanged data writes nothing, whatever the chunk")
+        assertEquals(0, quiet.rowsDeleted)
+        assertTrue(QuorumFallbackStore.largestFullCompareChunk in 1..1000,
+            "At most one chunk from each side is held at once, not the whole table: ${QuorumFallbackStore.largestFullCompareChunk}")
+
+        // Edits that leave updated_at alone, spread across chunks, plus deletes.
+        val edited = listOf(entries[3], entries[700], entries[1202])
+        val removed = listOf(entries[10], entries[1100])
+        source {
+            ScoutingEntries.update({ ScoutingEntries.id inList edited }) { it[hasDiscrepancy] = true }
+            ScoutingEntries.deleteWhere { ScoutingEntries.id inList removed }
+        }
+
+        val full = sync(forceFull = true)
+        assertEquals(edited.size, full.rowsWritten, "Exactly the edited rows are written: $full")
+        assertEquals(removed.size, full.rowsDeleted)
+        edited.forEach { assertEquals(true, mirroredEntry(it)?.get(ScoutingEntries.hasDiscrepancy)) }
+        removed.forEach { assertNull(mirroredEntry(it)) }
+        assertEquals(1201L, mirror { ScoutingEntries.selectAll().count() })
+    }
+
     @Test
     fun timestampsCompareEqualAfterSqliteRoundTrip() {
         // CockroachDB hands back microseconds; the mirror must not see that as a change on every sync.
