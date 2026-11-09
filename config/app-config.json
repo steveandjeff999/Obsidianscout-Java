@@ -10,7 +10,7 @@
             "keystorePath": "config/obsidianscout.jks",
             "keystorePassword": "change-me",
             "keyAlias": "obsidianscout",
-            "additionalSans": []
+            "additionalSans": ["obsidianscout.com"]
         },
         "logging": false,
         "mdns": {

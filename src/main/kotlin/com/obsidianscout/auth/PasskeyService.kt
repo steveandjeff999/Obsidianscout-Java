@@ -68,6 +68,15 @@ object PasskeyService {
             val isLocal = candidateLower == "localhost" || candidateLower == "127.0.0.1"
             val matchesSiteUrl = siteHost.isNotBlank() && (candidateLower == siteHost || candidateLower.endsWith(".$siteHost"))
             val isConfiguredHost = candidateLower in configuredHosts(appConfig)
+            // Browsers only accept a domain name as an RP ID, never an IP address (127.0.0.1 is mapped to localhost below).
+            val isIpLiteral = !isLocal && (candidateLower.startsWith("[") || candidateLower.contains(':') ||
+                candidateLower.matches(Regex("""\d{1,3}(\.\d{1,3}){3}""")))
+            if (rawHost.isNotBlank() && isIpLiteral) {
+                throw ApiException(
+                    HttpStatusCode.BadRequest,
+                    "Passkeys can't be used when the site is opened by IP address ($rawHost). Open it at ${appConfig.getEffectiveSiteUrl()} instead."
+                )
+            }
             if (rawHost.isNotBlank() && (isLocal || matchesSiteUrl || isConfiguredHost)) {
                 val rpId = if (candidateLower == "127.0.0.1") "localhost" else (if (matchesSiteUrl) siteHost else rawHost)
                 val scheme = if (isLocal) {
@@ -82,7 +91,13 @@ object PasskeyService {
                 return Pair(rpId, Origin.create(originStr))
             }
             if (rawHost.isNotBlank()) {
-                log.warn("[Passkey] Request from '$rawHost' doesn't match site_url '${appConfig.getEffectiveSiteUrl()}'. Passkeys will fail there until site_url in config/app-config.json is set to this server's address.")
+                // Falling back to site_url's host here would hand the browser an RP ID it must reject for this page
+                // ("relying party ID is not a registrable domain suffix of the current domain"), so stop with a clear message.
+                log.warn("[Passkey] Request from '$rawHost' doesn't match site_url '${appConfig.getEffectiveSiteUrl()}'. Set site_url in config/app-config.json (or add the host to server.https.additionalSans) to enable passkeys there.")
+                throw ApiException(
+                    HttpStatusCode.BadRequest,
+                    "Passkeys aren't set up for $rawHost. Open the site at ${appConfig.getEffectiveSiteUrl()}, or ask an admin to set site_url to this address."
+                )
             }
         }
         val siteUrl = appConfig.getEffectiveSiteUrl()
