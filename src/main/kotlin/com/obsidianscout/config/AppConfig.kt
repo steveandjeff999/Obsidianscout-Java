@@ -76,7 +76,23 @@ data class SecurityConfig(
     /** Leading zero bits a proof-of-work answer needs; 16 takes a phone about a second. */
     val pow_difficulty_bits: Int = 16,
     /** Distinct API paths one client may request in a minute before it looks like scraping. */
-    val scrape_paths_per_minute: Int = 400
+    val scrape_paths_per_minute: Int = 400,
+    /** Confirm self-declared search engine crawlers (Googlebot, Applebot, Bing...) by reverse DNS; verified ones are never blocked. */
+    val verify_crawlers: Boolean = true,
+    /**
+     * Push and email superadmins about each high-severity event and each block (with the cooldown above). Off by
+     * default: superadmins get the daily summary, one notice when blocks surge, and unblock requests.
+     */
+    val instant_alerts: Boolean = false,
+    /** Notify superadmins of each unblock request (someone is waiting on them). */
+    val alert_unblock_requests: Boolean = true,
+    /** One notification when this many addresses are blocked within [surge_window_minutes]... */
+    val surge_block_threshold: Int = 20,
+    val surge_window_minutes: Int = 10,
+    /** ...and at most one such notification per this many minutes. */
+    val surge_cooldown_minutes: Int = 60,
+    /** Local hour (0-23) the daily summary is sent at. */
+    val digest_hour: Int = 8
 )
 
 @Serializable

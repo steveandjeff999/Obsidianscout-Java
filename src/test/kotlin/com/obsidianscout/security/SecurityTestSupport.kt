@@ -25,6 +25,7 @@ object SecurityTestSupport {
         ThreatEngine.clearForTests()
         SessionWatch.clearForTests()
         SecurityLog.clearForTests()
+        VerifiedCrawlers.clearForTests()
         events.clear()
         alerts.clear()
     }

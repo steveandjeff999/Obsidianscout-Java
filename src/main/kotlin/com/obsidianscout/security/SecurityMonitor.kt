@@ -84,6 +84,8 @@ object SecurityMonitor {
         if (skip(call, ip)) return
         val path = call.request.path()
         if (path == "/health" || path == "/api/health") return
+        // Start the reverse DNS check on a claimed crawler's first request, before it has scored anything.
+        VerifiedCrawlers.observe(ip, call.request.headers[HttpHeaders.UserAgent], now)
 
         val uri = call.request.uri
         if (hasInjectionPayload(uri)) {

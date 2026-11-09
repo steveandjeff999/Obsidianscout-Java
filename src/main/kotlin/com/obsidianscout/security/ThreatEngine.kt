@@ -44,6 +44,9 @@ object ThreatEngine {
         val weight = event.type.weight
         if (weight <= 0) return
         if (event.ip == "unknown" || isTrustedProxyAddress(event.ip)) return
+        // A real search engine crawler hitting missing pages isn't an attack: never score it.
+        VerifiedCrawlers.observe(event.ip, event.userAgent, event.at)
+        if (VerifiedCrawlers.isVerified(event.ip)) return
         SecurityStore.halfLifeMs = SecuritySettings.config.score_half_life_minutes.coerceAtLeast(1) * 60_000L
 
         val types = recentTypes.computeIfAbsent(event.ip) { ConcurrentLinkedDeque() }
@@ -65,6 +68,14 @@ object ThreatEngine {
         val reason = "Threat score ${score.toInt()} from ${types.joinToString(", ").ifBlank { "suspicious activity" }}"
         when {
             BlockList.match(ip, countHit = false) != null -> Unit
+            // Claims to be a crawler and the reverse DNS check is still running: decide once it's answered.
+            VerifiedCrawlers.isPending(ip) || VerifiedCrawlers.isVerified(ip) -> Unit
+            CloudflareNetwork.contains(ip) -> {
+                if (SecurityStore.claimOnce("skipblock:$ip", REPORT_ONCE_MS)) {
+                    SecurityEvents.emit(SecurityEvent(SecurityEventType.BLOCK_SKIPPED, ip,
+                        details = "Cloudflare address (shared by Cloudflare's services and every Worker), capped at challenge. $reason"))
+                }
+            }
             !SecuritySettings.enforcing -> {
                 if (SecurityStore.claimOnce("wouldblock:$ip", REPORT_ONCE_MS)) {
                     SecurityEvents.emit(SecurityEvent(SecurityEventType.WOULD_BLOCK, ip, details = "Observe mode, not blocked. $reason"))

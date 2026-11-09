@@ -113,7 +113,7 @@ fun Route.securityRoutes() {
             val session = call.requireSuperAdmin()
             val body = call.receive<ManualBlockRequest>()
             val block = BlockList.manualBlock(body.ipOrCidr, body.minutes, body.reason, session.username)
-                ?: throw ApiException(HttpStatusCode.BadRequest, "Enter a valid IP address or range (not one of this cluster's own addresses).")
+                ?: throw ApiException(HttpStatusCode.BadRequest, "Enter a valid IP address or range (not one of this cluster's own addresses, and not a Cloudflare address).")
             SecurityService.invalidateSummary()
             call.respond(BlockList.find(block.id) ?: throw ApiException(HttpStatusCode.InternalServerError, "Block not saved"))
         }

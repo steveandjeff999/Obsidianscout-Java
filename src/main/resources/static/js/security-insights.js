@@ -29,6 +29,7 @@ const TYPE_LABELS = {
     SESSION_ANOMALY: "Session anomaly",
     TOKEN_REUSE_REVOKED: "Revoked session reused",
     SCRAPING: "Scraping",
+    FAKE_CRAWLER: "Fake crawler",
     CHALLENGE_FAILED: "Security check failed",
     CHALLENGE_REQUIRED: "Security check asked",
     ACCOUNT_PROTECTED: "Account protected",

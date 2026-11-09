@@ -72,8 +72,9 @@ object BlockList {
         return clampDuration(minutes.toLong() * 60_000L)
     }
 
-    /** Loopback, Tailscale peers and the allowlist are never blocked automatically. */
-    fun isExempt(ip: String): Boolean = isTrustedProxyAddress(ip) || Allowlist.isAllowed(ip)
+    /** Loopback, Tailscale peers, the allowlist, verified crawlers and Cloudflare's shared addresses are never blocked automatically. */
+    fun isExempt(ip: String): Boolean = isTrustedProxyAddress(ip) || Allowlist.isAllowed(ip) ||
+        CloudflareNetwork.contains(ip) || VerifiedCrawlers.isVerified(ip)
 
     /** The active block covering [ip], if any. Called on every request, so it only reads memory. */
     fun match(ip: String, now: Long = System.currentTimeMillis(), countHit: Boolean = true): ActiveBlock? {
@@ -115,10 +116,14 @@ object BlockList {
         return block
     }
 
-    /** A superadmin's block. [minutes] is clamped to 1..60. Refuses our own proxies and cluster nodes. */
+    /**
+     * A superadmin's block. [minutes] is clamped to 1..60. Refuses our own proxies and cluster nodes, and anything
+     * covering Cloudflare's addresses (shared by Cloudflare's own services and by every Worker).
+     */
     fun manualBlock(target: String, minutes: Int, reason: String, by: String): ActiveBlock? {
         val range = IpRange.parse(target) ?: return null
         if (range.isSingleAddress && isTrustedProxyAddress(range.text)) return null
+        if (CloudflareNetwork.overlaps(range)) return null
         val block = create(range, reason.ifBlank { "Blocked by $by" }, listOf("MANUAL"), clampDuration(minutes.toLong() * 60_000L), by, 1)
         SecurityEvents.emit(
             SecurityEvent(type = SecurityEventType.BLOCK_APPLIED, ip = range.text, username = by,

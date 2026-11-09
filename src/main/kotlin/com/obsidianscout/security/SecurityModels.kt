@@ -24,6 +24,8 @@ enum class SecurityEventType(val weight: Int, val severity: Severity, val userSc
     SESSION_ANOMALY(30, Severity.HIGH, userScoped = true),
     TOKEN_REUSE_REVOKED(40, Severity.HIGH, userScoped = true),
     SCRAPING(30, Severity.MEDIUM),
+    /** The user agent claims a search engine crawler, but reverse DNS shows the address isn't theirs. */
+    FAKE_CRAWLER(20, Severity.MEDIUM),
     CHALLENGE_FAILED(10, Severity.LOW),
     CHALLENGE_REQUIRED(0, Severity.INFO),
     ACCOUNT_PROTECTED(0, Severity.MEDIUM),
@@ -40,7 +42,10 @@ enum class SecurityEventType(val weight: Int, val severity: Severity, val userSc
     SESSIONS_REVOKED(0, Severity.MEDIUM),
     ADMIN_ACTION(0, Severity.INFO);
 
-    /** Sent to superadmins straight away (subject to the alert cooldown). */
+    /**
+     * Sent to superadmins one by one, but only when instant alerts are turned on (security.instant_alerts). Otherwise
+     * superadmins get the daily summary, a single notice when blocks surge, and unblock requests.
+     */
     val alerts: Boolean
         get() = severity == Severity.HIGH || this == BLOCK_APPLIED || this == WOULD_BLOCK ||
             this == BLOCK_SKIPPED || this == UNBLOCK_REQUESTED || this == SESSIONS_REVOKED

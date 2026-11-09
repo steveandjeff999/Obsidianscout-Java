@@ -23,9 +23,16 @@ import java.time.LocalTime
 import java.util.UUID
 
 /**
- * Tells people about security events: superadmins by push and email for HIGH events, blocks and unblock requests;
- * a team's admins by push when their team's accounts or data are targeted; and a daily digest email. One alert per
- * event type and IP (or account) per cooldown, across the cluster, so an attack sends one alert plus the digest.
+ * Tells people about security events without flooding them. Bots hit every public server all day, so by default
+ * superadmins get:
+ * - the **daily summary** (email and push);
+ * - **one** notification when blocks surge (security.surge_block_threshold blocks within surge_window_minutes),
+ *   then nothing more about the surge for surge_cooldown_minutes;
+ * - each **unblock request**, since a person is waiting on an answer (security.alert_unblock_requests).
+ *
+ * Per-event alerts for high-severity events and single blocks only go out when security.instant_alerts is on,
+ * one per event type and IP (or account) per cooldown across the cluster. A team's admins still get a push when
+ * their own team's accounts or data are targeted.
  */
 object SecurityAlerter {
     private val log = org.slf4j.LoggerFactory.getLogger(SecurityAlerter::class.java)
@@ -63,8 +70,15 @@ object SecurityAlerter {
         event.teamNumber?.let { append(" (team ").append(it).append(')') }
     }
 
+    private val blockTypes = setOf(SecurityEventType.BLOCK_APPLIED, SecurityEventType.WOULD_BLOCK)
+
     fun onEvent(event: SecurityEvent) {
-        val alertsSuperadmins = event.type.alerts
+        if (event.type in blockTypes) trackSurge(event)
+        val config = SecuritySettings.config
+        val alertsSuperadmins = when (event.type) {
+            SecurityEventType.UNBLOCK_REQUESTED -> config.alert_unblock_requests
+            else -> config.instant_alerts && event.type.alerts
+        }
         val alertsTeam = event.type in teamTargetedTypes && event.teamNumber != null && event.teamNumber > 0
         if (!alertsSuperadmins && !alertsTeam) return
         val cooldownMs = SecuritySettings.config.alert_cooldown_minutes.coerceAtLeast(1) * 60_000L
@@ -83,6 +97,43 @@ object SecurityAlerter {
         }
     }
 
+    /**
+     * Counts blocks across the cluster in a sliding window. The block that takes the count to the threshold sends one
+     * notification for the whole surge; the cooldown keeps a long attack from sending another every few minutes.
+     */
+    private fun trackSurge(event: SecurityEvent) {
+        val config = SecuritySettings.config
+        val windowMs = config.surge_window_minutes.coerceAtLeast(1) * 60_000L
+        val threshold = config.surge_block_threshold.coerceAtLeast(2)
+        val count = SecurityStore.addDistinct("surge-blocks", event.ip, windowMs, event.at)
+        if (count < threshold) return
+        if (!SecurityStore.claimOnce("surge-alert", config.surge_cooldown_minutes.coerceAtLeast(1) * 60_000L, event.at)) return
+        val observing = event.type == SecurityEventType.WOULD_BLOCK
+        val title = if (observing) "Many addresses would be blocked" else "Surge of blocked addresses"
+        val body = "$count addresses ${if (observing) "would have been" else "were"} blocked in the last " +
+            "${config.surge_window_minutes} minutes. Nothing more will be sent about it for " +
+            "${config.surge_cooldown_minutes} minutes; see Server Insights for details."
+        val surge = event.copy(type = SecurityEventType.BLOCK_APPLIED, details = body, username = null, teamNumber = null)
+        sink?.let { it(title, body, surge); return }
+        scope.launch {
+            runCatching {
+                pushSuperadmins("Security: $title", body, "security-surge")
+                if (config.alert_email) emailSuperadmins("[SECURITY] $title", listOf(
+                    "What" to body,
+                    "Most recent" to event.details,
+                    "Mode" to SecuritySettings.runtime().mode
+                ))
+            }.onFailure { log.warn("[SecurityAlerter] Surge alert failed: {}", it.message) }
+        }
+    }
+
+    private fun pushSuperadmins(title: String, body: String, tag: String) {
+        if (!SecuritySettings.config.alert_push) return
+        userIds(UserRole.SUPERADMIN).forEach { id ->
+            PushNotificationService.sendSystemNotification(id, title, body, "/server-insights#security", tag, "Security")
+        }
+    }
+
     private fun userIds(role: UserRole, teamNumber: Int? = null): List<UUID> {
         if (!DatabaseFactory.isReady) return emptyList()
         return readTransaction {
@@ -96,12 +147,7 @@ object SecurityAlerter {
 
     private fun notifySuperadmins(title: String, body: String, event: SecurityEvent) {
         val config = SecuritySettings.config
-        val url = "/server-insights#security"
-        if (config.alert_push) {
-            userIds(UserRole.SUPERADMIN).forEach { id ->
-                PushNotificationService.sendSystemNotification(id, "Security: $title", body, url, "security-${event.type.name.lowercase()}", "Security")
-            }
-        }
+        pushSuperadmins("Security: $title", body, "security-${event.type.name.lowercase()}")
         if (config.alert_email && (event.type.severity == Severity.HIGH || event.type == SecurityEventType.BLOCK_APPLIED ||
                 event.type == SecurityEventType.UNBLOCK_REQUESTED || event.type == SecurityEventType.SESSIONS_REVOKED)) {
             emailSuperadmins("[SECURITY] $title", listOf(
@@ -176,7 +222,7 @@ object SecurityAlerter {
 
     private fun maybeSendDigest() {
         if (!SecuritySettings.enabled || !SecuritySettings.config.daily_digest || !DatabaseFactory.isReady) return
-        if (LocalTime.now().hour != 8) return
+        if (LocalTime.now().hour != SecuritySettings.config.digest_hour.coerceIn(0, 23)) return
         if (!com.obsidianscout.admin.NodeMonitoringService.claimNotificationLock("security-digest-${LocalDate.now()}", 23 * 60L)) return
         val since = System.currentTimeMillis() - 24 * 3_600_000L
         val counts = SecurityLog.countsSince(since).filterKeys { it != SecurityEventType.ADMIN_ACTION.name }
@@ -184,6 +230,14 @@ object SecurityAlerter {
         val pending = UnblockRequests.list("pending").size
         if (counts.isEmpty() && protected.isEmpty() && pending == 0) return
         val top = SecurityLog.topIpsSince(since, 10)
+        val blocks = (counts[SecurityEventType.BLOCK_APPLIED.name] ?: 0) + (counts[SecurityEventType.WOULD_BLOCK.name] ?: 0)
+        val high = counts.filterKeys { k -> runCatching { SecurityEventType.valueOf(k).severity == Severity.HIGH }.getOrDefault(false) }.values.sum()
+        pushSuperadmins(
+            "Security: daily summary",
+            "$blocks block${if (blocks == 1) "" else "s"}, $high high-severity event${if (high == 1) "" else "s"}, " +
+                "$pending unblock request${if (pending == 1) "" else "s"} waiting in the last 24 hours.",
+            "security-digest"
+        )
         emailSuperadmins(
             "[SECURITY] Daily summary",
             listOf(

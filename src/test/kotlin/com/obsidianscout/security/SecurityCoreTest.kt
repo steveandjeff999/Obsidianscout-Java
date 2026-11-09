@@ -86,12 +86,12 @@ class SecurityCoreTest {
     }
 
     @Test
-    fun `enforce mode blocks a hostile address and alerts superadmins`() {
+    fun `enforce mode blocks a hostile address without notifying anyone about that one block`() {
         SecurityTestSupport.makeHostile("203.0.113.41")
         val block = assertNotNull(BlockList.match("203.0.113.41"))
         assertEquals(5L, (block.expiresAt - block.createdAt) / 60_000)
         assertTrue(SecurityEventType.BLOCK_APPLIED in SecurityTestSupport.types())
-        assertTrue(SecurityTestSupport.alerts.any { it.second.type == SecurityEventType.BLOCK_APPLIED })
+        assertTrue(SecurityTestSupport.alerts.isEmpty(), "single blocks only appear in the daily summary")
     }
 
     @Test
@@ -417,10 +417,159 @@ class SecurityCoreTest {
     }
 
     @Test
-    fun `alerts are rate limited per type and subject, unblock requests are not`() {
+    fun `with instant alerts on, alerts are rate limited per type and subject, unblock requests are not`() {
+        SecuritySettings.setConfigForTests(SecurityConfig(mode = "enforce", instant_alerts = true))
         repeat(3) { SecurityEvents.emit(SecurityEvent(SecurityEventType.CROSS_TEAM_ACCESS, "203.0.113.120", username = "u")) }
         assertEquals(1, SecurityTestSupport.alerts.count { it.second.type == SecurityEventType.CROSS_TEAM_ACCESS })
         repeat(2) { SecurityEvents.emit(SecurityEvent(SecurityEventType.UNBLOCK_REQUESTED, "203.0.113.121", username = "p")) }
         assertEquals(2, SecurityTestSupport.alerts.count { it.second.type == SecurityEventType.UNBLOCK_REQUESTED })
+    }
+
+    @Test
+    fun `by default superadmins hear only about unblock requests, not individual high events`() {
+        repeat(3) { SecurityEvents.emit(SecurityEvent(SecurityEventType.CROSS_TEAM_ACCESS, "203.0.113.122", username = "u")) }
+        SecurityEvents.emit(SecurityEvent(SecurityEventType.CREDENTIAL_STUFFING, "203.0.113.123"))
+        SecurityEvents.emit(SecurityEvent(SecurityEventType.UNBLOCK_REQUESTED, "203.0.113.124", username = "p"))
+        assertEquals(listOf(SecurityEventType.UNBLOCK_REQUESTED), SecurityTestSupport.alerts.map { it.second.type })
+
+        SecurityTestSupport.reset(SecurityConfig(mode = "enforce", alert_unblock_requests = false))
+        SecurityEvents.emit(SecurityEvent(SecurityEventType.UNBLOCK_REQUESTED, "203.0.113.125", username = "p"))
+        assertTrue(SecurityTestSupport.alerts.isEmpty())
+    }
+
+    @Test
+    fun `a surge of blocks sends one notification, then stays quiet through the cooldown`() {
+        SecuritySettings.setConfigForTests(SecurityConfig(mode = "enforce", surge_block_threshold = 5, surge_window_minutes = 10))
+        (1..12).forEach { SecurityTestSupport.makeHostile("198.18.0.$it") }
+        assertEquals(12, BlockList.activeBlocks().size)
+        val surges = SecurityTestSupport.alerts.filter { it.first.contains("Surge") }
+        assertEquals(1, surges.size)
+        assertTrue(surges.single().second.details.startsWith("5 addresses were blocked"))
+    }
+
+    @Test
+    fun `a few blocks are not a surge`() {
+        SecuritySettings.setConfigForTests(SecurityConfig(mode = "enforce", surge_block_threshold = 5))
+        (1..4).forEach { SecurityTestSupport.makeHostile("198.18.1.$it") }
+        assertTrue(SecurityTestSupport.alerts.isEmpty())
+    }
+
+    // ------------------------------------------------------------------ verified crawlers
+
+    private val googlebotUa = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+
+    private fun fakeDns(ptr: Map<String, String>, forward: Map<String, List<String>>) {
+        VerifiedCrawlers.synchronousForTests = true
+        VerifiedCrawlers.reverseLookup = { ptr[it] }
+        VerifiedCrawlers.forwardLookup = { forward[it] ?: emptyList() }
+    }
+
+    private fun crawl(ip: String, ua: String) = repeat(6) {
+        SecurityEvents.emit(SecurityEvent(SecurityEventType.SCANNER_PATH, ip, userAgent = ua, details = "crawl"))
+    }
+
+    @Test
+    fun `a real Googlebot, confirmed by reverse and forward DNS, is never scored or blocked`() {
+        fakeDns(mapOf("66.249.66.1" to "crawl-66-249-66-1.googlebot.com."), mapOf("crawl-66-249-66-1.googlebot.com" to listOf("66.249.66.1")))
+        crawl("66.249.66.1", googlebotUa)
+        assertTrue(VerifiedCrawlers.isVerified("66.249.66.1"))
+        assertNull(BlockList.match("66.249.66.1"))
+        assertEquals(0.0, ThreatEngine.ipScore("66.249.66.1"))
+        assertNull(BlockList.autoBlock("66.249.66.1", "test", emptyList()))
+    }
+
+    @Test
+    fun `a fake Googlebot is flagged and blocked`() {
+        // Reverse DNS a stranger set on their own address, which the forward record doesn't confirm.
+        fakeDns(mapOf("203.0.113.130" to "crawl.googlebot.com"), mapOf("crawl.googlebot.com" to listOf("66.249.66.9")))
+        crawl("203.0.113.130", googlebotUa)
+        assertFalse(VerifiedCrawlers.isVerified("203.0.113.130"))
+        assertTrue(SecurityEventType.FAKE_CRAWLER in SecurityTestSupport.types())
+        assertNotNull(BlockList.match("203.0.113.130"))
+
+        // A Google Cloud VM's generic name isn't Google's crawler either.
+        fakeDns(mapOf("203.0.113.131" to "131.113.0.203.bc.googleusercontent.com"),
+            mapOf("131.113.0.203.bc.googleusercontent.com" to listOf("203.0.113.131")))
+        crawl("203.0.113.131", googlebotUa)
+        assertFalse(VerifiedCrawlers.isVerified("203.0.113.131"))
+    }
+
+    @Test
+    fun `Applebot and Bing are recognized by their own checks`() {
+        fakeDns(
+            mapOf("17.58.101.1" to "17-58-101-1.applebot.apple.com", "40.77.167.1" to "msnbot-40-77-167-1.search.msn.com"),
+            mapOf("17-58-101-1.applebot.apple.com" to listOf("17.58.101.1"), "msnbot-40-77-167-1.search.msn.com" to listOf("40.77.167.1"))
+        )
+        crawl("17.58.101.1", "Mozilla/5.0 (Macintosh) Applebot/0.1")
+        crawl("40.77.167.1", "Mozilla/5.0 (compatible; bingbot/2.0)")
+        listOf("17.58.101.1", "40.77.167.1").forEach { assertTrue(VerifiedCrawlers.isVerified(it), it) }
+    }
+
+    @Test
+    fun `a DNS timeout is not proof of a fake crawler, and doesn't exempt the address either`() {
+        VerifiedCrawlers.synchronousForTests = true
+        VerifiedCrawlers.reverseLookup = { throw VerifiedCrawlers.LookupUnavailable("timed out") }
+        crawl("203.0.113.134", googlebotUa)
+        assertEquals(VerifiedCrawlers.Status.UNKNOWN, VerifiedCrawlers.status("203.0.113.134"))
+        assertFalse(SecurityEventType.FAKE_CRAWLER in SecurityTestSupport.types())
+        // Treated like any other client: a hostile one is still blocked.
+        SecurityTestSupport.makeHostile("203.0.113.134")
+        assertNotNull(BlockList.match("203.0.113.134"))
+    }
+
+    @Test
+    fun `a missing PTR record is a definite answer, so a claimed Googlebot without one is fake`() {
+        fakeDns(emptyMap(), emptyMap())
+        crawl("203.0.113.135", googlebotUa)
+        assertEquals(VerifiedCrawlers.Status.FAILED, VerifiedCrawlers.status("203.0.113.135"))
+        assertTrue(SecurityEventType.FAKE_CRAWLER in SecurityTestSupport.types())
+    }
+
+    @Test
+    fun `reverse DNS names are built correctly`() {
+        assertEquals("1.66.249.66.in-addr.arpa", VerifiedCrawlers.arpaName("66.249.66.1"))
+        assertEquals("1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa", VerifiedCrawlers.arpaName("2001:db8::1"))
+    }
+
+    // ------------------------------------------------------------------ Cloudflare
+
+    @Test
+    fun `Cloudflare addresses are never blocked automatically, but a Cloudflare user agent earns no trust`() {
+        // Workers (and other Cloudflare-hosted clients) reach us from Cloudflare's ranges and can send any user agent.
+        listOf("104.16.10.1", "2a06:98c0:3600::103", "172.68.1.1").forEach { ip ->
+            repeat(5) {
+                SecurityEvents.emit(SecurityEvent(SecurityEventType.INJECTION_PROBE, ip, userAgent = "Cloudflare-Healthchecks/1.0", details = "test"))
+            }
+            assertNull(BlockList.match(ip), ip)
+            assertFalse(VerifiedCrawlers.isVerified(ip), ip)
+            assertTrue(ThreatEngine.ipScore(ip) > 0, "$ip is still scored, so it is still challenged")
+            assertNull(BlockList.autoBlock(ip, "test", emptyList()))
+        }
+        assertTrue(SecurityTestSupport.events.any { it.type == SecurityEventType.BLOCK_SKIPPED && it.details.startsWith("Cloudflare address") })
+        // Outside Cloudflare's ranges, the same user agent gets blocked like anyone else.
+        repeat(5) {
+            SecurityEvents.emit(SecurityEvent(SecurityEventType.INJECTION_PROBE, "203.0.113.136", userAgent = "Cloudflare-Healthchecks/1.0", details = "test"))
+        }
+        assertNotNull(BlockList.match("203.0.113.136"))
+    }
+
+    @Test
+    fun `superadmins can't block Cloudflare addresses or ranges covering them`() {
+        assertNull(BlockList.manualBlock("104.16.10.1", 10, "", "admin"))
+        assertNull(BlockList.manualBlock("2a06:98c0:3600::103", 10, "", "admin"))
+        assertNull(BlockList.manualBlock("104.0.0.0/8", 10, "", "admin"))
+        assertNotNull(BlockList.manualBlock("203.0.113.137", 10, "", "admin"))
+        assertNotNull(BlockList.manualBlock("203.0.113.0/24", 10, "", "admin"))
+    }
+
+    @Test
+    fun `ordinary browsers are never looked up`() {
+        var lookups = 0
+        VerifiedCrawlers.synchronousForTests = true
+        VerifiedCrawlers.reverseLookup = { lookups++; null }
+        crawl("203.0.113.133", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130")
+        assertEquals(0, lookups)
+        assertNull(VerifiedCrawlers.claimed("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130"))
+        assertEquals("Google", VerifiedCrawlers.claimed(googlebotUa)?.name)
     }
 }
