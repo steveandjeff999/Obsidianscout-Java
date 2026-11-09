@@ -61,7 +61,7 @@
     "google_sheet_password": "",
     "cockroach_port": 26257,
     "site_url": "https://kotlin.obsidianscout.com",
-    "current_version": "0.7.2.0",
+    "current_version": "0.7.2.1",
     "gist_update": {
         "enabled": false,
         "gist_url": "https://gist.githubusercontent.com/steveandjeff999/41b76376d064a6893ff2644b04447d9f/raw/Public-Version.json",
@@ -139,6 +139,13 @@
         "unblock_requests_per_ip_per_day": 3,
         "unblock_message_max_chars": 500,
         "pow_difficulty_bits": 16,
-        "scrape_paths_per_minute": 400
+        "scrape_paths_per_minute": 400,
+        "verify_crawlers": true,
+        "instant_alerts": false,
+        "alert_unblock_requests": true,
+        "surge_block_threshold": 20,
+        "surge_window_minutes": 10,
+        "surge_cooldown_minutes": 60,
+        "digest_hour": 8
     }
 }
