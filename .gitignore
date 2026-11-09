@@ -19,3 +19,4 @@ config/secrets.json*
 config/*.jks
 CHANGE_REPORT.md
 SECURITY_FIXES.md
+docs/INTRUSION_DETECTION_PLAN.md
