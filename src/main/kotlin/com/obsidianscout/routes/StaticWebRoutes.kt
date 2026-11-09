@@ -289,7 +289,8 @@ fun Route.staticWebRoutes() {
             "tutorials" to "tutorials.html",
             "404" to "404.html",
             "500" to "500.html",
-            "503" to "503.html"
+            "503" to "503.html",
+            "blocked" to "blocked.html"
         )
 
         get("/sw.js") {

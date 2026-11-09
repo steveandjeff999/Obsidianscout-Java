@@ -282,14 +282,26 @@ object ServerAnalyticsService {
         droppedBroadcastsCount.incrementAndGet()
     }
 
-    fun recordAuthFailure(ip: String, username: String) {
+    /** Counts the failure and hands it to the intrusion detection system, which also puts it in the audit list. */
+    fun recordAuthFailure(ip: String, username: String, unknownUser: Boolean = false, teamNumber: Int? = null, account: String? = null) {
         failedLoginsWindow.add()
-        recordSecurityAudit("AUTH_FAILURE", username, "UNKNOWN", ip, "Failed login attempt", success = false)
+        com.obsidianscout.security.SecurityEvents.emit(
+            com.obsidianscout.security.SecurityEvent(
+                type = if (unknownUser) com.obsidianscout.security.SecurityEventType.AUTH_FAILURE_UNKNOWN_USER
+                    else com.obsidianscout.security.SecurityEventType.AUTH_FAILURE,
+                ip = ip,
+                username = username.takeIf { it.isNotBlank() },
+                teamNumber = teamNumber,
+                role = "UNKNOWN",
+                account = account,
+                details = if (unknownUser) "Failed login attempt (no such account)" else "Failed login attempt"
+            )
+        )
     }
 
+    /** Counts a 429; the security monitor records the event itself. */
     fun recordRateLimitHit(ip: String, endpoint: String) {
         rateLimitHitsWindow.add()
-        recordSecurityAudit("RATE_LIMIT", "ANONYMOUS", "GUEST", ip, "Rate limit hit on $endpoint", success = false)
     }
 
     fun recordSecurityAudit(

@@ -31,7 +31,8 @@ data class AppConfig(
     val auto_backup: AutoBackupConfig = AutoBackupConfig(),
     val local_ai: LocalAiConfig = LocalAiConfig(),
     val redis: RedisConfig = RedisConfig(),
-    val blob_storage: BlobStorageConfig = BlobStorageConfig()
+    val blob_storage: BlobStorageConfig = BlobStorageConfig(),
+    val security: SecurityConfig = SecurityConfig()
 ) {
     fun getEffectiveSiteUrl(): String {
         val trimmed = site_url.trim()
@@ -44,6 +45,39 @@ data class AppConfig(
         return withScheme.removeSuffix("/")
     }
 }
+
+/**
+ * Intrusion detection and response (com.obsidianscout.security). Runtime switches a superadmin can flip from Server
+ * Insights (mode, automatic session revocation) live in the database; the values here are only their first defaults.
+ */
+@Serializable
+data class SecurityConfig(
+    val enabled: Boolean = true,
+    /** "observe" logs and alerts but blocks nothing; "enforce" also blocks, challenges and protects accounts. */
+    val mode: String = "observe",
+    val watch_threshold: Int = 30,
+    val challenge_threshold: Int = 60,
+    val block_threshold: Int = 100,
+    val score_half_life_minutes: Int = 15,
+    /** Block length for the 1st, 2nd and 3rd+ block within 24 hours. Each is capped at 60 minutes, whatever is set here. */
+    val block_minutes: List<Int> = listOf(5, 15, 60),
+    val retention_days: Int = 90,
+    val admin_action_retention_days: Int = 365,
+    val auto_revoke_sessions: Boolean = false,
+    val alert_email: Boolean = true,
+    val alert_push: Boolean = true,
+    val daily_digest: Boolean = true,
+    val alert_cooldown_minutes: Int = 15,
+    /** IPs or CIDR ranges never blocked automatically, merged with the allowlist kept in the database. */
+    val allowlist: List<String> = emptyList(),
+    val unblock_requests_enabled: Boolean = true,
+    val unblock_requests_per_ip_per_day: Int = 3,
+    val unblock_message_max_chars: Int = 500,
+    /** Leading zero bits a proof-of-work answer needs; 16 takes a phone about a second. */
+    val pow_difficulty_bits: Int = 16,
+    /** Distinct API paths one client may request in a minute before it looks like scraping. */
+    val scrape_paths_per_minute: Int = 400
+)
 
 @Serializable
 data class QuorumFallbackConfig(

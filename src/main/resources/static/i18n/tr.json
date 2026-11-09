@@ -1552,6 +1552,7 @@
   "login.passwords_dont_match": "Şifreler eşleşmiyor",
   "login.registering": "Hesap oluşturuluyor...",
   "login.signing_in": "Giriş yapılıyor...",
+  "login.security_check": "Hızlı bir güvenlik kontrolü yapılıyor...",
   "login.valid_team_number": "Lütfen geçerli bir takım numarası girin",
   "match.blue_alliance": "Mavi İttifak",
   "match.red_alliance": "Kırmızı İttifak",

@@ -1552,6 +1552,7 @@
   "login.passwords_dont_match": "הסיסמאות אינן תואמות",
   "login.registering": "יוצר חשבון...",
   "login.signing_in": "מתחבר...",
+  "login.security_check": "מבצע בדיקת אבטחה מהירה...",
   "login.valid_team_number": "אנא הזן מספר קבוצה תקין",
   "match.blue_alliance": "ברית כחולה",
   "match.red_alliance": "ברית אדומה",

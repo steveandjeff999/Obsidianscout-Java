@@ -1552,6 +1552,7 @@
   "login.passwords_dont_match": "Passwords do not match",
   "login.registering": "Creating account...",
   "login.signing_in": "Signing in...",
+  "login.security_check": "Running a quick security check...",
   "login.valid_team_number": "Please enter a valid team number",
   "match.blue_alliance": "Blue Alliance",
   "match.red_alliance": "Red Alliance",

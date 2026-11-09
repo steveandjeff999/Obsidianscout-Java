@@ -114,6 +114,7 @@ fun Route.eventInfoRoutes() {
             requireEventInfoPage(session)
             val file = EventInfoService.getFile(call.parameters["fileId"].orEmpty())
             if (file == null || file.teamNumber != session.teamNumber || file.program != session.program) {
+                if (file != null) com.obsidianscout.security.SecurityMonitor.crossTeam(call, session, file.teamNumber, "event info file")
                 throw ApiException(HttpStatusCode.NotFound, "File not found")
             }
             val inline = EventInfoService.isInline(file.contentType) && call.request.queryParameters["download"] != "1"

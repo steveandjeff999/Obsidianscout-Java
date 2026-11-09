@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>ObsidianScout | Network Blocked</title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <style>
+        .blocked-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px 16px;
+            box-sizing: border-box;
+        }
+        .blocked-card {
+            width: 100%;
+            max-width: 560px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            box-shadow: var(--shadow);
+            box-sizing: border-box;
+        }
+        .blocked-head {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+        .blocked-head .material-symbols-outlined {
+            font-size: 36px;
+            color: #d92d20;
+        }
+        .blocked-head h1 {
+            margin: 0;
+            font-size: 22px;
+        }
+        .blocked-countdown {
+            font-size: 32px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            margin: 12px 0 4px;
+        }
+        .blocked-form label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            margin: 12px 0 4px;
+        }
+        .blocked-form input,
+        .blocked-form textarea {
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .blocked-form textarea {
+            min-height: 96px;
+            resize: vertical;
+        }
+        .blocked-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        @media (max-width: 480px) {
+            .blocked-row { grid-template-columns: 1fr; }
+            .blocked-card { padding: 20px; }
+        }
+        .blocked-status {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--surface-2);
+            margin-top: 16px;
+        }
+        .blocked-counter {
+            font-size: 12px;
+            color: var(--muted);
+            text-align: right;
+        }
+    </style>
+</head>
+<body data-page="blocked">
+    <script>
+        (function() {
+            try {
+                if ((localStorage.getItem("obsidian-theme") || "light") === "dark") document.body.classList.add("theme-dark");
+            } catch (e) { /* storage unavailable */ }
+        })();
+    </script>
+
+    <div class="blocked-wrap">
+        <div class="blocked-card">
+            <div class="blocked-head">
+                <span class="material-symbols-outlined" aria-hidden="true">block</span>
+                <h1 id="blocked-title">Your network is temporarily blocked</h1>
+            </div>
+            <p id="blocked-intro" class="notice">
+                ObsidianScout saw unusual activity from your network (<span id="blocked-ip">your address</span>) and paused access.
+                Blocks never last more than an hour and lift on their own.
+            </p>
+
+            <div id="blocked-active">
+                <div class="blocked-countdown" id="blocked-countdown" aria-live="polite">--:--</div>
+                <p style="margin-top: 0; color: var(--muted); font-size: 14px;">until the block lifts automatically.</p>
+
+                <div id="blocked-request-panel">
+                    <h2 style="font-size: 17px; margin: 20px 0 4px;">Need access sooner?</h2>
+                    <p class="notice" style="margin-top: 0;">
+                        If you're on a shared network at an event or school, ask an administrator to lift the block.
+                    </p>
+                    <form id="blocked-form" class="blocked-form" novalidate>
+                        <div class="blocked-row">
+                            <div>
+                                <label for="blocked-name">Your name</label>
+                                <input id="blocked-name" type="text" maxlength="100" autocomplete="name" required />
+                            </div>
+                            <div>
+                                <label for="blocked-team">Team number (optional)</label>
+                                <input id="blocked-team" type="number" min="0" max="99999" inputmode="numeric" />
+                            </div>
+                        </div>
+                        <label for="blocked-email">Email for a reply (optional)</label>
+                        <input id="blocked-email" type="email" maxlength="255" autocomplete="email" />
+                        <label for="blocked-message">What were you doing when this happened?</label>
+                        <textarea id="blocked-message" maxlength="500" required></textarea>
+                        <div class="blocked-counter"><span id="blocked-message-count">0</span> / 500</div>
+                        <div style="display: flex; justify-content: flex-end; margin-top: 12px;">
+                            <button id="blocked-submit" class="btn" type="submit">
+                                <span class="material-symbols-outlined" aria-hidden="true" style="font-size: 18px; vertical-align: -4px;">lock_open</span>
+                                Request unblock
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div id="blocked-request-status" class="blocked-status hidden" role="status">
+                    <span class="material-symbols-outlined" id="blocked-status-icon" aria-hidden="true">pending_actions</span>
+                    <div>
+                        <strong id="blocked-status-title">Request sent</strong>
+                        <div id="blocked-status-text" class="notice" style="margin: 2px 0 0;">An administrator will review it. This page updates on its own.</div>
+                    </div>
+                </div>
+                <p id="blocked-error" class="notice hidden" style="color: #d92d20; margin-top: 12px;"></p>
+            </div>
+
+            <div id="blocked-clear" class="hidden">
+                <div class="blocked-status">
+                    <span class="material-symbols-outlined" aria-hidden="true" style="color: #12b76a;">check_circle</span>
+                    <div>
+                        <strong>You're not blocked</strong>
+                        <div class="notice" style="margin: 2px 0 0;">Your network can reach ObsidianScout.</div>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: flex-end; margin-top: 16px;">
+                    <a id="blocked-continue" href="/dashboard" class="btn">Continue</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/js/blocked.js"></script>
+</body>
+</html>

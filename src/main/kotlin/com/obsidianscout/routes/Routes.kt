@@ -56,6 +56,7 @@ fun Application.configureRoutes() {
             widgetRoutes()
             publicDataRoutes()
             slackRoutes()
+            securityRoutes()
         }
 
         localAiModelFileRoutes()

@@ -1552,6 +1552,7 @@
   "login.passwords_dont_match": "Las contraseñas no coinciden",
   "login.registering": "Creando cuenta...",
   "login.signing_in": "Iniciando sesión...",
+  "login.security_check": "Realizando una comprobación de seguridad rápida...",
   "login.valid_team_number": "Por favor ingresa un número de equipo válido",
   "match.blue_alliance": "Alianza Azul",
   "match.red_alliance": "Alianza Roja",

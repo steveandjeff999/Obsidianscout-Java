@@ -1131,6 +1131,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 if (!com.obsidianscout.auth.LoginRateLimiter.checkAllowed(rateLimitIp, username)) {
                     throw MobileApiException(HttpStatusCode.TooManyRequests, "Too many failed attempts. Please wait 60 seconds.", "RATE_LIMITED")
                 }
+                com.obsidianscout.security.LoginGuard.check(call, username, req.teamNumber, req.program)
 
                 val user = AuthService.login(
                     username = username,
@@ -1140,10 +1141,11 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 )
 
                 if (user == null) {
-                    com.obsidianscout.auth.LoginRateLimiter.recordFailedAttempt(rateLimitIp, username)
+                    com.obsidianscout.security.LoginGuard.onFailure(call, username, req.teamNumber, req.program)
                     throw MobileApiException(HttpStatusCode.Unauthorized, "Invalid credentials", "INVALID_CREDENTIALS")
                 }
                 com.obsidianscout.auth.LoginRateLimiter.clear(rateLimitIp, username)
+                com.obsidianscout.security.LoginGuard.onSuccess(call, user.id, user.username, user.teamNumber, user.program)
 
                 val ipAddress = rateLimitIp
                 val userAgent = call.request.headers["User-Agent"] ?: ""

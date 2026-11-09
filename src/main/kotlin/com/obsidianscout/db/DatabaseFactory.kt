@@ -77,7 +77,11 @@ object DatabaseFactory {
         BackupUploads,
         BackupUploadChunks,
         BackupExports,
-        BackupExportChunks
+        BackupExportChunks,
+        SecurityEventsTable,
+        IpBlocksTable,
+        IpAllowlistTable,
+        UnblockRequestsTable
     )
     private val uuidMigratedTables = listOf(
         "users", "scouting_configs", "pit_scouting_configs",

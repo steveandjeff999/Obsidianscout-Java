@@ -235,6 +235,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         render();
     });
     wireThreadDump();
+    // The intrusion detection section (security-insights.js) starts once the superadmin check has passed.
+    window.dispatchEvent(new CustomEvent("obsidianscout:insights-ready"));
 
     await load();
     setInterval(() => {

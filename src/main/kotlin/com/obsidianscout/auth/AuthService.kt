@@ -1011,6 +1011,13 @@ object AuthService {
         return revokedIds.size
     }
 
+    /** Ids of every session the user currently has. */
+    fun listSessionIds(userId: UUID): List<String> = runCatching {
+        com.obsidianscout.db.readTransaction {
+            UserSessions.select(UserSessions.id).where { UserSessions.userId eq userId }.map { it[UserSessions.id].value.toString() }
+        }
+    }.getOrDefault(emptyList())
+
     fun revokeAllSessions(userId: UUID): Int {
         com.obsidianscout.widgets.WidgetTokenService.revokeForUser(userId)
         val revokedIds = transaction {

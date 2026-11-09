@@ -188,6 +188,26 @@ function announceSessionExpired(path) {
     } catch (e) { /* ignore */ }
 }
 
+export const IP_BLOCKED_EVENT = "obsidianscout:ip-blocked";
+let ipBlockedAnnounced = false;
+
+/**
+ * The server says this network is blocked. Pages move to the blocked page (which explains the block and lets the
+ * visitor ask for it to be lifted). Scouting forms stay put so nothing typed is lost; they get the event instead.
+ */
+function announceIpBlocked(data) {
+    try {
+        if (typeof window === 'undefined') return;
+        window.dispatchEvent(new CustomEvent(IP_BLOCKED_EVENT, { detail: data }));
+        if (ipBlockedAnnounced || onFormPage()) return;
+        ipBlockedAnnounced = true;
+        const here = window.location.pathname + window.location.search;
+        if (!window.location.pathname.startsWith("/blocked")) {
+            window.location.href = "/blocked?next=" + encodeURIComponent(here);
+        }
+    } catch (e) { /* ignore */ }
+}
+
 /** The server answered a read, so the page is current as of now (components/last-updated.js listens). */
 function announceFetched(path) {
     try {
@@ -597,6 +617,11 @@ export async function request(path, options = {}) {
             const message = data && data.error ? data.error : "Request failed";
             const err = new Error(message);
             err.status = response.status;
+            err.data = data;
+            if (response.status === 403 && data && data.code === "ip_blocked") {
+                err.ipBlocked = true;
+                announceIpBlocked(data);
+            }
             // Bad gateway / unavailable / gateway timeout: the request most likely never reached the app.
             if (response.status >= 502 && response.status <= 504) err.network = true;
             throw err;

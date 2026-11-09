@@ -15,18 +15,38 @@ import java.util.concurrent.atomic.AtomicLong
  */
 fun ApplicationCall.clientIp(): String {
     val peer = request.local.remoteAddress
-    if (!isTrustedProxyAddress(peer)) return peer
+    if (!isTrustedProxyAddress(peer)) return canonicalIp(peer)
 
-    request.headers["CF-Connecting-IP"]?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+    request.headers["CF-Connecting-IP"]?.trim()?.takeIf { it.isNotEmpty() }?.let { return canonicalIp(it) }
     val forwarded = request.headers.getAll("X-Forwarded-For")
         ?.flatMap { it.split(",") }
         ?.map { it.trim() }
         ?.filter { it.isNotEmpty() }
     // The right-most entry was appended by the trusted proxy; earlier entries are client-supplied.
-    return forwarded?.lastOrNull() ?: peer
+    return canonicalIp(forwarded?.lastOrNull() ?: peer)
 }
 
-private fun isTrustedProxyAddress(address: String): Boolean {
+/**
+ * One spelling per address, so every per-IP key (blocks, threat scores, rate limits) agrees. IPv6 can be written many
+ * ways ("2001:db8::1", "2001:DB8:0:0:0:0:0:1", "[2001:db8::1]"); all become Java's form, which is also what stored
+ * blocks use. IPv4-mapped IPv6 ("::ffff:203.0.113.7") becomes plain IPv4. IPv4 and non-literals come back as given.
+ */
+fun canonicalIp(address: String): String {
+    val trimmed = address.trim()
+    if (!trimmed.contains(':')) return trimmed
+    val clean = trimmed.removePrefix("[").removeSuffix("]").substringBefore('%')
+    // Literal addresses only: InetAddress.getByName would otherwise resolve a hostname over DNS.
+    if (clean.isEmpty() || clean.length > 45 || !clean.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' || it == '.' || it == ':' }) {
+        return trimmed
+    }
+    return runCatching { java.net.InetAddress.getByName(clean).hostAddress }.getOrDefault(trimmed)
+}
+
+/** Loopback or a Tailscale cluster peer: our own proxies and nodes. Never blocked or scored by the security layer. */
+fun isTrustedProxyAddress(address: String): Boolean {
+    if (address.equals("localhost", ignoreCase = true)) return true
+    // Literal addresses only: InetAddress.getByName would otherwise resolve a hostname over DNS.
+    if (address.isBlank() || !address.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' || it == '.' || it == ':' || it == '%' }) return false
     val inet = runCatching { java.net.InetAddress.getByName(address) }.getOrNull() ?: return false
     if (inet.isLoopbackAddress) return true
     val bytes = inet.address
@@ -120,7 +140,14 @@ object LoginRateLimiter {
     /**
      * Records a failed attempt for the given IP and username. [isLogin] is false for other requests sharing the limit.
      */
-    fun recordFailedAttempt(ip: String, username: String, isLogin: Boolean = true) {
+    fun recordFailedAttempt(
+        ip: String,
+        username: String,
+        isLogin: Boolean = true,
+        unknownUser: Boolean = false,
+        teamNumber: Int? = null,
+        account: String? = null
+    ) {
         val now = System.currentTimeMillis()
 
         if (ip.isNotBlank()) {
@@ -148,7 +175,7 @@ object LoginRateLimiter {
                 keys.forEach { jedis.eval(INCREMENT_SCRIPT, listOf(it), listOf(WINDOW_MS.toString())) }
             }
         }
-        if (isLogin) com.obsidianscout.admin.ServerAnalyticsService.recordAuthFailure(ip, username)
+        if (isLogin) com.obsidianscout.admin.ServerAnalyticsService.recordAuthFailure(ip, username, unknownUser, teamNumber, account)
     }
 
     /**

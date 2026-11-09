@@ -303,6 +303,21 @@ fun Application.module(appConfig: AppConfig) {
         }
     }
 
+    // Intrusion detection: looks at every finished request (scans, 404 floods, attack strings, denials, scraping).
+    intercept(io.ktor.server.application.ApplicationCallPipeline.Monitoring) {
+        var failure: Throwable? = null
+        try {
+            proceed()
+        } catch (cause: Throwable) {
+            failure = cause
+            throw cause
+        } finally {
+            runCatching {
+                com.obsidianscout.security.SecurityMonitor.onRequestFinished(call, finalStatus(call.response.status()?.value, failure))
+            }
+        }
+    }
+
     // Feeds the superadmin load profiler
     intercept(io.ktor.server.application.ApplicationCallPipeline.Monitoring) {
         val profiler = com.obsidianscout.admin.LoadProfiler
@@ -350,6 +365,14 @@ fun Application.module(appConfig: AppConfig) {
                 call.respond(HttpStatusCode.NotModified)
                 finish()
             }
+        }
+    }
+
+    // Blocked IPs are refused before anything else runs (the unblock request endpoints and the blocked page excepted).
+    intercept(io.ktor.server.application.ApplicationCallPipeline.Plugins) {
+        if (com.obsidianscout.security.BlockGate.check(call)) {
+            finish()
+            return@intercept
         }
     }
 
@@ -433,6 +456,7 @@ fun Application.module(appConfig: AppConfig) {
                         "/api/auth/verify-reset-token"
                     ) ||
                     path.startsWith("/api/auth/passkey/authenticate") ||
+                    path.startsWith("/api/security/") ||
                     path.startsWith("/api/auth/slack") ||
                     isClusterNodeAuth ||
                     call.request.headers["X-Mobile-App"] != null
@@ -454,6 +478,11 @@ fun Application.module(appConfig: AppConfig) {
                 }
 
                 if (!valid) {
+                    com.obsidianscout.security.SecurityEvents.emit(
+                        call, com.obsidianscout.security.SecurityEventType.CSRF_FAILURE,
+                        details = "CSRF check failed on $method $path (origin ${origin ?: "none"})"
+                    )
+                    call.attributes.put(com.obsidianscout.security.SecurityMonitor.Recorded, true)
                     call.respond(
                         HttpStatusCode.Forbidden,
                         ErrorResponse("CSRF validation failed")
@@ -483,6 +512,7 @@ fun Application.module(appConfig: AppConfig) {
                 path == "/version" ||
                 path == "/api/version" ||
                 path.startsWith("/api/auth/") ||
+                path.startsWith("/api/security/") ||
                 path.startsWith("/api/session") ||
                 path.startsWith("/api/cluster/") ||
                 path.startsWith("/api/admin/cluster/") ||
@@ -616,6 +646,9 @@ fun Application.module(appConfig: AppConfig) {
         exception<MobileApiException> { call, cause ->
             call.respond(cause.status, MobileErrorResponse(success = false, error = cause.message, errorCode = cause.errorCode))
         }
+        exception<com.obsidianscout.security.SecurityDeniedException> { call, cause ->
+            call.respond(cause.status, cause.body)
+        }
         exception<ApiException> { call, cause ->
             call.application.environment.log.warn("[ApiException] ${cause.status} on ${call.request.local.method.value} ${call.request.path()}: ${cause.message}")
             call.respond(cause.status, ErrorResponse(cause.message))
@@ -746,6 +779,7 @@ fun Application.module(appConfig: AppConfig) {
                 com.obsidianscout.widgets.WidgetPushService.start()
                 com.obsidianscout.auth.SessionCleanupScheduler.start()
                 com.obsidianscout.auth.LoginRateLimiter.startCleanupJob()
+                com.obsidianscout.security.SecurityService.start()
                 com.obsidianscout.auth.BugReportRateLimiter.startCleanupJob()
                 com.obsidianscout.admin.CloudflaredService.initOnStartup()
                 com.obsidianscout.admin.NodeMonitoringService.start()
@@ -870,6 +904,7 @@ internal fun finalStatus(responded: Int?, failure: Throwable?): Int = responded 
     null -> HttpStatusCode.NotFound.value
     is ApiException -> failure.status.value
     is MobileApiException -> failure.status.value
+    is com.obsidianscout.security.SecurityDeniedException -> failure.status.value
     else -> HttpStatusCode.InternalServerError.value
 }
 

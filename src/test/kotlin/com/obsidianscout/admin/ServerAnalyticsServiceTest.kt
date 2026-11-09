@@ -13,7 +13,11 @@ class ServerAnalyticsServiceTest {
     private val now = 1_000_000 * minute
 
     @BeforeTest
-    fun reset() = ServerAnalyticsService.resetForTest()
+    fun reset() {
+        // Failed logins now reach the audit list through the intrusion detection bus.
+        com.obsidianscout.security.SecurityTestSupport.reset(com.obsidianscout.config.SecurityConfig(mode = "observe"))
+        ServerAnalyticsService.resetForTest()
+    }
 
     private fun traffic(
         device: String = "device-1",
@@ -126,14 +130,15 @@ class ServerAnalyticsServiceTest {
     }
 
     @Test
-    fun `failed logins and rate limits are counted and audited, newest first`() {
+    fun `failed logins and rate limits are counted, failed logins audited`() {
         ServerAnalyticsService.recordAuthFailure("10.0.0.1", "someone")
         ServerAnalyticsService.recordRateLimitHit("10.0.0.2", "/api/auth/login")
 
         val security = ServerAnalyticsService.getSecurityInsights()
         assertEquals(1, security.failedLoginsLastHour)
         assertEquals(1, security.rateLimitHitsLastHour)
-        assertEquals(listOf("RATE_LIMIT", "AUTH_FAILURE"), security.recentAuditLogs.map { it.action })
+        // The 429 itself is recorded by the security monitor, which sees the request.
+        assertEquals(listOf("AUTH_FAILURE"), security.recentAuditLogs.map { it.action })
     }
 
     @Test

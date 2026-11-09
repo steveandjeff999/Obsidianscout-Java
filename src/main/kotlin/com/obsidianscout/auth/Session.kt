@@ -115,6 +115,7 @@ suspend fun ApplicationCall.requireSession(): UserSession {
             val cached = com.obsidianscout.cache.RedisCache.readFromRedis<CachedSessionCheck>(sessionCacheKey)
             if (cached != null && cached.authVersion == authVersion) {
                 attributes.put(KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY, cached.keepMeLoggedIn)
+                runCatching { com.obsidianscout.security.SessionWatch.observe(this, cached.session) }
                 return cached.session
             }
         }
@@ -205,6 +206,7 @@ suspend fun ApplicationCall.requireSession(): UserSession {
             throw ApiException(HttpStatusCode.Unauthorized, "Account has been deleted")
         }
         if (sessionRow == null) {
+            runCatching { com.obsidianscout.security.SessionWatch.onMissingSession(this, session) }
             application.environment.log.warn("[requireSession] 401 Session ${session.sessionId} for user ${session.userId} is invalid or expired in DB")
             sessions.clear<UserSession>()
             throw ApiException(HttpStatusCode.Unauthorized, "Session has expired or been revoked")
@@ -270,6 +272,7 @@ suspend fun ApplicationCall.requireSession(): UserSession {
                 com.obsidianscout.cache.RedisCache.writeToRedis(sessionCacheKey, ttl, CachedSessionCheck(effectiveSession, keepMeLoggedIn, authVersion))
             }
         }
+        runCatching { com.obsidianscout.security.SessionWatch.observe(this, effectiveSession) }
         return effectiveSession
     }
     return session
@@ -345,12 +348,30 @@ suspend fun ApplicationCall.hasValidClusterSignature(): Boolean {
         bodySha256 = bodySha256
     )
     // Only the body-hash format is accepted, so a captured signature can't be reused with a changed body.
-    if (!ClusterCryptoUtils.verifyHmac(dataToSign, signature, secret)) return false
+    if (!ClusterCryptoUtils.verifyHmac(dataToSign, signature, secret)) {
+        reportInvalidClusterSignature("Signature does not match")
+        return false
+    }
 
     if (seenClusterSignatures.size > 10_000) {
         seenClusterSignatures.entries.removeIf { now - it.value > CLUSTER_SIGNATURE_WINDOW_MS * 2 }
     }
-    return seenClusterSignatures.putIfAbsent(signature, now) == null
+    // The same call checking its own signature twice isn't a replay.
+    if (attributes.getOrNull(ClusterSignatureAccepted) == signature) return true
+    val fresh = seenClusterSignatures.putIfAbsent(signature, now) == null
+    if (fresh) attributes.put(ClusterSignatureAccepted, signature) else reportInvalidClusterSignature("Replayed signature")
+    return fresh
+}
+
+private val ClusterSignatureAccepted = AttributeKey<String>("ClusterSignatureAccepted")
+
+/** A signed inter-node call that failed verification: from anyone but our own nodes, that's an attack. */
+private fun ApplicationCall.reportInvalidClusterSignature(why: String) {
+    // A cluster node with a stale secret (mid-rotation) isn't an attacker.
+    if (isTrustedProxyAddress(request.local.remoteAddress) && request.headers["X-Forwarded-For"] == null) return
+    runCatching {
+        com.obsidianscout.security.SecurityEvents.emit(this, com.obsidianscout.security.SecurityEventType.CLUSTER_SIG_INVALID, details = why)
+    }
 }
 
 /**
@@ -362,8 +383,18 @@ suspend fun ApplicationCall.requireSuperAdmin(): UserSession {
         throw ApiException(HttpStatusCode.Forbidden, "Superadmin access required")
     }
     if (request.httpMethod != HttpMethod.Get && request.httpMethod != HttpMethod.Head) {
-        com.obsidianscout.admin.ServerAnalyticsService.recordSecurityAudit(
-            "ADMIN_ACTION", session.username, session.role.name, clientIp(), "${request.httpMethod.value} ${request.path()}"
+        com.obsidianscout.security.SecurityEvents.emit(
+            com.obsidianscout.security.SecurityEvent(
+                type = com.obsidianscout.security.SecurityEventType.ADMIN_ACTION,
+                ip = clientIp(),
+                userId = session.userId,
+                username = session.username,
+                teamNumber = session.teamNumber,
+                method = request.httpMethod.value,
+                path = request.path(),
+                role = session.role.name,
+                details = "${request.httpMethod.value} ${request.path()}"
+            )
         )
     }
     return session

@@ -214,6 +214,16 @@ object PushNotificationService {
         body: String,
         url: String,
         tag: String
+    ) = sendSystemNotification(userId, title, body, url, tag, "Assignments")
+
+    /** A system notification to one user: FCM to the app, a socket message to open pages, and Web Push to browsers. */
+    fun sendSystemNotification(
+        userId: UUID,
+        title: String,
+        body: String,
+        url: String,
+        tag: String,
+        groupName: String
     ) {
         scope.launch {
             try {
@@ -222,12 +232,12 @@ object PushNotificationService {
                     targetUserUuids = listOf(userId),
                     title = title,
                     body = body,
-                    groupName = "Assignments",
+                    groupName = groupName,
                     url = url
                 )
                 NotificationWebSocketManager.broadcastChatNotification(
                     targetUserIds = listOf(userId.toString()),
-                    groupName = "Assignments",
+                    groupName = groupName,
                     title = title,
                     body = body,
                     senderUsername = "ObsidianScout System"
@@ -254,7 +264,7 @@ object PushNotificationService {
                         tag = tag,
                         data = PushPayloadData(
                             url = url,
-                            groupName = "Assignments"
+                            groupName = groupName
                         )
                     )
                 )
@@ -270,11 +280,11 @@ object PushNotificationService {
                             }
                         }
                     } catch (e: Exception) {
-                        consoleLog.error("[Push] Failed to send assignment reminder to ${sub.endpoint}: ${e.message}")
+                        consoleLog.error("[Push] Failed to send $groupName notification to ${sub.endpoint}: ${e.message}")
                     }
                 }
             } catch (e: Exception) {
-                consoleLog.error("[Push] Error dispatching assignment reminder: ${e.message}")
+                consoleLog.error("[Push] Error dispatching $groupName notification: ${e.message}")
             }
         }
     }

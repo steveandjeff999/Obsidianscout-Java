@@ -109,6 +109,184 @@
             margin-bottom: 12px;
         }
 
+        .sec-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .sec-head h2 {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sec-mode {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+        }
+
+        .sec-mode label {
+            font-size: 12px;
+            color: var(--muted);
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .sec-check {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: var(--ink);
+        }
+
+        .sec-sub {
+            font-size: 15px;
+            margin: 24px 0 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .sec-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 20px;
+            height: 20px;
+            padding: 0 6px;
+            border-radius: 999px;
+            background: #d92d20;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .sec-pill {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--surface-2);
+            white-space: nowrap;
+        }
+
+        .sec-pill.high { color: #d92d20; border-color: rgba(217, 45, 32, 0.4); }
+        .sec-pill.medium { color: #b54708; border-color: rgba(181, 71, 8, 0.4); }
+        .sec-pill.ok { color: #067647; border-color: rgba(6, 118, 71, 0.4); }
+
+        .sec-actions {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .sec-form {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            margin-top: 8px;
+        }
+
+        .sec-form > div {
+            min-width: 0;
+        }
+
+        .sec-form label {
+            display: block;
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 4px;
+        }
+
+        .sec-form input,
+        .sec-form select {
+            max-width: 100%;
+        }
+
+        .sec-timeline {
+            display: flex;
+            align-items: flex-end;
+            gap: 3px;
+            height: 120px;
+            margin-top: 12px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sec-bar {
+            flex: 1;
+            display: flex;
+            flex-direction: column-reverse;
+            min-width: 4px;
+            height: 100%;
+        }
+
+        .sec-bar span { display: block; width: 100%; }
+        .sec-bar .low { background: #84adff; }
+        .sec-bar .medium { background: #fdb022; }
+        .sec-bar .high { background: #f04438; }
+        .sec-bar .info { background: #98a2b3; }
+
+        .sec-legend {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 6px;
+        }
+
+        .sec-legend i {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+            margin-right: 4px;
+            vertical-align: -1px;
+        }
+
+        .sec-dialog {
+            width: min(480px, calc(100vw - 32px));
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm, 12px);
+            background: var(--surface);
+            color: var(--ink);
+            padding: 20px;
+        }
+
+        .sec-dialog label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            margin: 12px 0 4px;
+        }
+
+        .sec-dialog textarea,
+        .sec-dialog select {
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .sec-wrap {
+            overflow-wrap: anywhere;
+            max-width: 340px;
+        }
+
+        .sec-muted {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
         .si-dump pre {
             margin: 0;
             max-height: 65vh;
@@ -209,8 +387,119 @@
                     <div id="insights-jvm" class="si-stats"></div>
                 </div>
 
+                <div class="card si-section" id="security">
+                    <div class="sec-head">
+                        <div>
+                            <h2 style="margin: 0;"><span class="material-symbols-outlined" aria-hidden="true">shield</span> Intrusion detection</h2>
+                            <p class="notice" id="sec-mode-note" style="margin: 4px 0 0;"></p>
+                        </div>
+                        <div class="sec-mode">
+                            <div>
+                                <label for="sec-mode">Mode</label>
+                                <select id="sec-mode">
+                                    <option value="observe">Observe (log and alert only)</option>
+                                    <option value="enforce">Enforce (block, challenge, protect)</option>
+                                </select>
+                            </div>
+                            <label class="sec-check" style="margin-bottom: 8px;"><input id="sec-autorevoke" type="checkbox" /> Sign out stolen sessions automatically</label>
+                            <button id="sec-save-mode" class="btn secondary" type="button">Save</button>
+                        </div>
+                    </div>
+                    <p id="sec-error" class="notice hidden" style="margin-top: 12px; color: #d92d20;"></p>
+                    <div id="sec-stats" class="si-stats"></div>
+
+                    <h3 class="sec-sub">Events in the last 24 hours</h3>
+                    <div id="sec-timeline" class="sec-timeline" role="img" aria-label="Security events per hour"></div>
+                    <div class="sec-legend">
+                        <span><i style="background:#f04438"></i>High</span>
+                        <span><i style="background:#fdb022"></i>Medium</span>
+                        <span><i style="background:#84adff"></i>Low</span>
+                        <span><i style="background:#98a2b3"></i>Info</span>
+                    </div>
+                    <div id="sec-types" class="si-breakdown"></div>
+
+                    <h3 class="sec-sub"><span class="material-symbols-outlined" aria-hidden="true">pending_actions</span> Unblock requests <span id="sec-pending-badge" class="sec-badge hidden"></span></h3>
+                    <div class="table-scroll">
+                        <table class="table">
+                            <thead><tr><th>Sent</th><th>From</th><th>Message</th><th>Why blocked</th><th>Network</th><th></th></tr></thead>
+                            <tbody id="sec-requests"></tbody>
+                        </table>
+                    </div>
+
+                    <h3 class="sec-sub"><span class="material-symbols-outlined" aria-hidden="true">block</span> Active blocks
+                        <button id="sec-unblock-all" class="btn ghost" type="button" style="margin-left: auto;">Unblock all</button>
+                    </h3>
+                    <p class="notice" style="margin-top: 0;">No block lasts more than an hour. Lifting one lets the address through on every node within a second.</p>
+                    <div class="table-scroll">
+                        <table class="table">
+                            <thead><tr><th>Address</th><th>Reason</th><th>Block #</th><th>Time left</th><th>Hits</th><th>Network</th><th></th></tr></thead>
+                            <tbody id="sec-blocks"></tbody>
+                        </table>
+                    </div>
+                    <form id="sec-block-form" class="sec-form">
+                        <div><label for="sec-block-ip">Block an address or range</label><input id="sec-block-ip" type="text" placeholder="203.0.113.7 or 203.0.113.0/24" maxlength="64" /></div>
+                        <div><label for="sec-block-minutes">Minutes (max 60)</label><input id="sec-block-minutes" type="number" min="1" max="60" value="60" style="width: 90px;" /></div>
+                        <div style="flex: 1; min-width: 160px;"><label for="sec-block-reason">Reason</label><input id="sec-block-reason" type="text" maxlength="200" style="width: 100%;" /></div>
+                        <button class="btn secondary" type="submit">Block</button>
+                    </form>
+
+                    <h3 class="sec-sub"><span class="material-symbols-outlined" aria-hidden="true">gpp_maybe</span> Highest threat scores (this node)</h3>
+                    <div class="table-scroll">
+                        <table class="table">
+                            <thead><tr><th>Address</th><th>Score</th><th>Level</th><th>Last event</th><th></th></tr></thead>
+                            <tbody id="sec-offenders"></tbody>
+                        </table>
+                    </div>
+
+                    <h3 class="sec-sub"><span class="material-symbols-outlined" aria-hidden="true">verified_user</span> Allowlist (never blocked automatically)</h3>
+                    <div class="table-scroll">
+                        <table class="table">
+                            <thead><tr><th>Address or range</th><th>Note</th><th>Added</th><th>Expires</th><th></th></tr></thead>
+                            <tbody id="sec-allowlist"></tbody>
+                        </table>
+                    </div>
+                    <form id="sec-allow-form" class="sec-form">
+                        <div><label for="sec-allow-ip">Address or range</label><input id="sec-allow-ip" type="text" placeholder="198.51.100.0/24" maxlength="64" /></div>
+                        <div style="flex: 1; min-width: 160px;"><label for="sec-allow-note">Note</label><input id="sec-allow-note" type="text" maxlength="200" placeholder="Venue Wi-Fi" style="width: 100%;" /></div>
+                        <div><label for="sec-allow-for">For</label>
+                            <select id="sec-allow-for"><option value="24">24 hours</option><option value="168">7 days</option><option value="">Until removed</option></select>
+                        </div>
+                        <button class="btn secondary" type="submit">Add</button>
+                    </form>
+
+                    <h3 class="sec-sub"><span class="material-symbols-outlined" aria-hidden="true">lock_reset</span> Protected accounts</h3>
+                    <p class="notice" style="margin-top: 0;">These accounts need a passkey or a password reset to sign in, after a password spray or many failed sign-ins.</p>
+                    <div class="table-scroll">
+                        <table class="table">
+                            <thead><tr><th>Username</th><th>Protected until</th><th></th></tr></thead>
+                            <tbody id="sec-protected"></tbody>
+                        </table>
+                    </div>
+
+                    <h3 class="sec-sub"><span class="material-symbols-outlined" aria-hidden="true">manage_search</span> Security log</h3>
+                    <form id="sec-log-form" class="sec-form">
+                        <div><label for="sec-log-ip">IP</label><input id="sec-log-ip" type="text" maxlength="64" style="width: 150px;" /></div>
+                        <div><label for="sec-log-user">User</label><input id="sec-log-user" type="text" maxlength="128" style="width: 150px;" /></div>
+                        <div><label for="sec-log-type">Type</label><select id="sec-log-type"><option value="">Any</option></select></div>
+                        <div><label for="sec-log-severity">Severity</label>
+                            <select id="sec-log-severity"><option value="">Any</option><option>HIGH</option><option>MEDIUM</option><option>LOW</option><option>INFO</option></select>
+                        </div>
+                        <button class="btn secondary" type="submit">Search</button>
+                    </form>
+                    <div class="table-scroll" style="margin-top: 12px;">
+                        <table class="table">
+                            <thead><tr><th>Time</th><th>Type</th><th>IP</th><th>User</th><th>Details</th><th>Node</th></tr></thead>
+                            <tbody id="sec-log"></tbody>
+                        </table>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; gap: 8px; flex-wrap: wrap;">
+                        <span id="sec-log-count" class="notice"></span>
+                        <button id="sec-log-more" class="btn ghost hidden" type="button">Load more</button>
+                    </div>
+                </div>
+
                 <div class="card si-section">
-                    <h2>Security events and superadmin actions</h2>
+                    <h2>Recent security events and superadmin actions (since restart)</h2>
                     <div id="insights-security" class="si-stats"></div>
                     <div class="table-scroll" style="margin-top: 12px;">
                         <table class="table">
@@ -229,6 +518,29 @@
                 </div>
             </div>
 
+            <dialog id="sec-dialog" class="sec-dialog">
+                <form method="dialog" id="sec-dialog-form">
+                    <h3 id="sec-dialog-title" style="margin: 0 0 4px;">Unblock</h3>
+                    <p id="sec-dialog-text" class="notice" style="margin: 0;"></p>
+                    <label for="sec-dialog-note" id="sec-dialog-note-label">Reason</label>
+                    <textarea id="sec-dialog-note" rows="3" maxlength="500"></textarea>
+                    <div id="sec-dialog-lift-options">
+                        <label class="sec-check" style="font-weight: 400;"><input id="sec-dialog-reset" type="checkbox" checked /> Reset the block count, so a next block starts at 5 minutes</label>
+                        <label for="sec-dialog-allow">Allowlist this address</label>
+                        <select id="sec-dialog-allow">
+                            <option value="none">No</option>
+                            <option value="24h">For 24 hours</option>
+                            <option value="7d">For 7 days</option>
+                            <option value="permanent">Until removed</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
+                        <button class="btn ghost" value="cancel" type="submit" formnovalidate>Cancel</button>
+                        <button class="btn" id="sec-dialog-confirm" value="confirm" type="submit">Unblock</button>
+                    </div>
+                </form>
+            </dialog>
+
             <dialog id="insights-dump" class="si-dump">
                 <div class="si-dump-head">
                     <strong id="insights-dump-title">JVM thread dump</strong>
@@ -245,5 +557,6 @@
 
     <script type="module" src="/js/common.js"></script>
     <script type="module" src="/js/server-insights.js"></script>
+    <script type="module" src="/js/security-insights.js"></script>
 </body>
 </html>

@@ -315,6 +315,7 @@ fun Route.bannerRoutes() {
                         }
                     } else {
                         if (session.role != com.obsidianscout.auth.UserRole.SUPERADMIN && targetTeam != session.teamNumber) {
+                            com.obsidianscout.security.SecurityMonitor.crossTeam(call, session, targetTeam, "banner (create)")
                             throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "You can only create banners for your own team")
                         }
                     }
@@ -342,6 +343,7 @@ fun Route.bannerRoutes() {
                         }
                     } else {
                         if (session.role != com.obsidianscout.auth.UserRole.SUPERADMIN && existing.teamNumber != session.teamNumber) {
+                            com.obsidianscout.security.SecurityMonitor.crossTeam(call, session, existing.teamNumber, "banner (modify)")
                             throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "You can only modify banners for your own team")
                         }
                     }
@@ -354,6 +356,7 @@ fun Route.bannerRoutes() {
                             }
                         } else {
                             if (session.role != com.obsidianscout.auth.UserRole.SUPERADMIN && targetTeam != session.teamNumber) {
+                                com.obsidianscout.security.SecurityMonitor.crossTeam(call, session, targetTeam, "banner (retarget)")
                                 throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "You can only target banners to your own team")
                             }
                         }
@@ -382,6 +385,7 @@ fun Route.bannerRoutes() {
                         }
                     } else {
                         if (session.role != com.obsidianscout.auth.UserRole.SUPERADMIN && existing.teamNumber != session.teamNumber) {
+                            com.obsidianscout.security.SecurityMonitor.crossTeam(call, session, existing.teamNumber, "banner (delete)")
                             throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "You can only delete banners for your own team")
                         }
                     }

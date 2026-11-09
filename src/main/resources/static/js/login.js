@@ -21,6 +21,24 @@ function postLoginDestination() {
     return "/dashboard";
 }
 
+/**
+ * Runs a sign-in request, and if the server asks for a security check (HTTP 428 with a proof-of-work challenge),
+ * solves it and sends the request again with the answer.
+ */
+async function withSecurityCheck(send) {
+    try {
+        return await send({});
+    } catch (error) {
+        if (error && error.status === 428 && error.data && error.data.challenge) {
+            Obsidianscout.showToast(t('login.security_check', 'Running a quick security check...'), "info");
+            const { solveChallenge, CHALLENGE_HEADER } = await import("/js/security/pow.js");
+            const answer = await solveChallenge(error.data.challenge);
+            return await send({ [CHALLENGE_HEADER]: answer });
+        }
+        throw error;
+    }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     Obsidianscout.initTheme();
     const loginForm = document.getElementById("login-form");
@@ -94,8 +112,9 @@ document.addEventListener("DOMContentLoaded", () => {
         Obsidianscout.setButtonLoading(loginButton, true, t('login.signing_in', 'Signing in...'));
 
         try {
-            const loginResponse = await Obsidianscout.request("/api/auth/login", {
+            const loginResponse = await withSecurityCheck((headers) => Obsidianscout.request("/api/auth/login", {
                 method: "POST",
+                headers,
                 json: {
                     username,
                     teamNumber,
@@ -103,7 +122,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     password,
                     keepMeLoggedIn
                 }
-            });
+            }));
             await Obsidianscout.resetCachesForUser(loginResponse);
             await handlePostLoginPasskeyCheck();
         } catch (error) {

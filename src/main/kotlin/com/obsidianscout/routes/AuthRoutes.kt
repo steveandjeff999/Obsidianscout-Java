@@ -129,6 +129,7 @@ fun Route.authRoutes() {
                             "Too many failed attempts. Please wait 60 seconds."
                         )
                     }
+                    com.obsidianscout.security.LoginGuard.check(call, request.username, request.teamNumber, request.program)
 
                     val user = AuthService.login(
                         username = request.username,
@@ -137,13 +138,14 @@ fun Route.authRoutes() {
                         program = request.program
                     )
                     if (user == null) {
-                        com.obsidianscout.auth.LoginRateLimiter.recordFailedAttempt(ipAddress, request.username)
+                        com.obsidianscout.security.LoginGuard.onFailure(call, request.username, request.teamNumber, request.program)
                         throw com.obsidianscout.auth.ApiException(
                             HttpStatusCode.Unauthorized,
                             "Invalid credentials"
                         )
                     }
                     com.obsidianscout.auth.LoginRateLimiter.clear(ipAddress, request.username)
+                    com.obsidianscout.security.LoginGuard.onSuccess(call, user.id, user.username, user.teamNumber, user.program)
 
                     val userUuid = UUID.fromString(user.id)
                     val userAgent = call.request.headers["User-Agent"] ?: ""
@@ -402,6 +404,7 @@ fun Route.authRoutes() {
 
                         val userUuid = UUID.fromString(user.id)
                         val ipAddress = call.clientIp()
+                        com.obsidianscout.security.LoginGuard.onPasskeySuccess(call, user.id, user.username, user.teamNumber, user.program)
                         val userAgent = call.request.headers["User-Agent"] ?: ""
                         val deviceId = call.request.headers["X-Device-Id"]
                         val deviceName = call.request.headers["X-Device-Name"]
@@ -698,6 +701,9 @@ fun Route.authRoutes() {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid reset token.")
                     }
                     
+                    // The account as it was before the reset (the reset may rename it), to lift any security protection on it.
+                    val accountBeforeReset = runCatching { com.obsidianscout.auth.AuthService.getUserById(finalUserId) }.getOrNull()
+
                     // Validate and hash before the transaction: hashing suspends on CryptoDispatcher.
                     if (request.newPassword.isBlank()) throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Password cannot be blank")
                     com.obsidianscout.auth.AuthService.validatePassword(request.newPassword)
@@ -730,6 +736,13 @@ fun Route.authRoutes() {
                     }
                     // A reset usually means the old password may be compromised: sign out everywhere.
                     com.obsidianscout.auth.AuthService.revokeAllSessions(UUID.fromString(finalUserId))
+                    // A reset proves the account holder: lift any protection the security layer put on it.
+                    runCatching {
+                        val after = com.obsidianscout.auth.AuthService.getUserById(finalUserId)
+                        listOfNotNull(accountBeforeReset, after).distinctBy { Triple(it.username, it.teamNumber, it.program) }.forEach {
+                            com.obsidianscout.security.AccountProtection.clear(it.username, it.teamNumber, it.program, "password reset", call.clientIp())
+                        }
+                    }
 
                     call.respond(mapOf("message" to "Credentials have been reset successfully."))
                 }

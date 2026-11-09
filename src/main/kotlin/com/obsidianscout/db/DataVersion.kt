@@ -58,7 +58,8 @@ object DataVersion {
         listOf(
             UserSessions, LiveInvalidations, ChatMessages, UserChatLastRead, ChatGroups, PushSubscriptions,
             FcmDeviceTokens, PasswordResetTokens, WidgetTokens, ReportedErrors, PasskeyChallenges,
-            SharedLinkAccessLogs, ClusterNotificationLocks, SlackNotifications, SyncStatuses, BackupUploads, BackupUploadChunks, BackupExports, BackupExportChunks
+            SharedLinkAccessLogs, ClusterNotificationLocks, SlackNotifications, SyncStatuses, BackupUploads, BackupUploadChunks, BackupExports, BackupExportChunks,
+            SecurityEventsTable, IpBlocksTable, IpAllowlistTable, UnblockRequestsTable
         ).map { it.tableName.lowercase() }.toSet()
     }
 
