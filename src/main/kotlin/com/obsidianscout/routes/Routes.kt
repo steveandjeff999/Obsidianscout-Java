@@ -19,7 +19,14 @@ fun Application.configureRoutes() {
 
             get("/version") {
                 val appConfig = AppConfigLoader.load()
-                call.respond(VersionResponse(appConfig.current_version, com.obsidianscout.admin.ClusterManagementService.getLocalExecutionMode()))
+                call.respond(
+                    VersionResponse(
+                        version = appConfig.current_version,
+                        executionMode = com.obsidianscout.admin.ClusterManagementService.getLocalExecutionMode(),
+                        apiLevel = ApiCompat.API_LEVEL,
+                        minAppApiLevel = ApiCompat.MIN_APP_API_LEVEL
+                    )
+                )
             }
             // Scouting photos moved out of entry JSON. The id is random (122 bits) and only appears inside entries the
             // viewer could already read, so the URL works like the base64 it replaced, including on public share links.

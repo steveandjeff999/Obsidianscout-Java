@@ -65,10 +65,23 @@ data class MeResponse(
     val user: UserSession
 )
 
+/**
+ * The app <-> server compatibility contract. [API_LEVEL] goes up by one whenever the mobile API changes in a way an
+ * older app can't handle (a removed or renamed field or route, a changed request shape); additions that old apps
+ * simply ignore don't need a bump. [MIN_APP_API_LEVEL] is the oldest app API level this server still works with.
+ * The app shows a non-blocking warning when either side is out of the other's range.
+ */
+object ApiCompat {
+    const val API_LEVEL = 1
+    const val MIN_APP_API_LEVEL = 1
+}
+
 @Serializable
 data class VersionResponse(
     val version: String,
-    val executionMode: String = "Unknown"
+    val executionMode: String,
+    val apiLevel: Int,
+    val minAppApiLevel: Int
 )
 
 @Serializable
