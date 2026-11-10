@@ -104,7 +104,7 @@ object PasskeyService {
         val uri = try {
             URI(siteUrl)
         } catch (_: Exception) {
-            URI("https://kotlin.obsidianscout.com")
+            URI(AppConfig.DEFAULT_SITE_URL)
         }
         val rpId = uri.host ?: "localhost"
         val scheme = if (uri.scheme.isNullOrBlank()) "https" else uri.scheme

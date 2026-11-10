@@ -127,6 +127,8 @@ object ClusterManagementService {
     private val prettyJson = Json {
         prettyPrint = true
         ignoreUnknownKeys = true
+        // Show and save every setting, including ones left at their defaults (site_url, additionalSans, ...).
+        encodeDefaults = true
     }
 
     private fun getHttpClient(): HttpClient {

@@ -962,7 +962,10 @@
         try {
             const resp = await apiRequest(`/api/admin/cluster/nodes/${encodeURIComponent(targetIp)}/app-config`);
             if (editor) {
-                editor.value = resp.rawJson || JSON.stringify(resp.config, null, 4);
+                // Re-indent consistently (4 spaces, one key per line) whatever the node sent.
+                let text = resp.rawJson || JSON.stringify(resp.config, null, 4);
+                try { text = JSON.stringify(JSON.parse(text), null, 4); } catch (_) { /* not JSON (e.g. an error note): show as-is */ }
+                editor.value = text;
             }
         } catch (e) {
             if (editor) editor.value = `// Failed to load app-config.json from server ${targetIp}\n// Error: ${e.message}`;

@@ -11,19 +11,19 @@ class AppConfigTest {
     @Test
     fun testDefaultSiteUrl() {
         val config = AppConfig()
-        assertEquals("https://kotlin.obsidianscout.com", config.site_url)
-        assertEquals("https://kotlin.obsidianscout.com", config.getEffectiveSiteUrl())
+        assertEquals("https://obsidianscout.com", config.site_url)
+        assertEquals("https://obsidianscout.com", config.getEffectiveSiteUrl())
     }
 
     @Test
     fun testGetEffectiveSiteUrlFormatting() {
         // Without scheme
-        val noScheme = AppConfig(site_url = "kotlin.obsidianscout.com")
-        assertEquals("https://kotlin.obsidianscout.com", noScheme.getEffectiveSiteUrl())
+        val noScheme = AppConfig(site_url = "scout.example.com")
+        assertEquals("https://scout.example.com", noScheme.getEffectiveSiteUrl())
 
         // With trailing slash
-        val trailingSlash = AppConfig(site_url = "https://kotlin.obsidianscout.com/")
-        assertEquals("https://kotlin.obsidianscout.com", trailingSlash.getEffectiveSiteUrl())
+        val trailingSlash = AppConfig(site_url = "https://scout.example.com/")
+        assertEquals("https://scout.example.com", trailingSlash.getEffectiveSiteUrl())
 
         // HTTP scheme
         val httpScheme = AppConfig(site_url = "http://192.168.1.50:8080/")
@@ -31,7 +31,41 @@ class AppConfigTest {
 
         // Blank
         val blank = AppConfig(site_url = "   ")
-        assertEquals("https://kotlin.obsidianscout.com", blank.getEffectiveSiteUrl())
+        assertEquals("https://obsidianscout.com", blank.getEffectiveSiteUrl())
+    }
+
+    @Test
+    fun testLegacySiteUrlIsMovedToNewDefaultOnLoad() {
+        val tempDir = Files.createTempDirectory("app_config_legacy_site_test")
+        try {
+            val configFile = tempDir.resolve("app-config.json")
+            Files.writeString(configFile, """
+                {
+                    "database_type": "sqlite", "site_url": "https://kotlin.obsidianscout.com/", "quorum_fallback": {}, "auto_backup": {}
+                }
+            """.trimIndent())
+
+            val loaded = AppConfigLoader.load(configFile, forceReload = true)
+            assertEquals("https://obsidianscout.com", loaded.site_url)
+            val savedText = Files.readString(configFile)
+            assertTrue(!savedText.contains("kotlin.obsidianscout.com"), "The old address should be gone from the file on disk")
+        } finally {
+            tempDir.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun testCustomSiteUrlIsLeftAlone() {
+        val tempDir = Files.createTempDirectory("app_config_custom_site_test")
+        try {
+            val configFile = tempDir.resolve("app-config.json")
+            Files.writeString(configFile, """
+                { "database_type": "sqlite", "site_url": "https://scout.example.com", "quorum_fallback": {}, "auto_backup": {} }
+            """.trimIndent())
+            assertEquals("https://scout.example.com", AppConfigLoader.load(configFile, forceReload = true).site_url)
+        } finally {
+            tempDir.toFile().deleteRecursively()
+        }
     }
 
     @Test
@@ -96,12 +130,12 @@ class AppConfigTest {
             Files.writeString(configFile, legacyJson)
 
             val loaded = AppConfigLoader.load(configFile, forceReload = true)
-            assertEquals("https://kotlin.obsidianscout.com", loaded.site_url)
+            assertEquals("https://obsidianscout.com", loaded.site_url)
 
             // Verify it was written back to disk
             val savedText = Files.readString(configFile)
             assertTrue(savedText.contains("site_url"), "Config file on disk should now contain site_url after boot")
-            assertTrue(savedText.contains("https://kotlin.obsidianscout.com"), "Config file on disk should have default site_url")
+            assertTrue(savedText.contains("https://obsidianscout.com"), "Config file on disk should have default site_url")
         } finally {
             tempDir.toFile().deleteRecursively()
         }

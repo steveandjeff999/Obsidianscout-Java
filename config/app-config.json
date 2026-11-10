@@ -60,7 +60,7 @@
     "google_sheet_url": "",
     "google_sheet_password": "",
     "cockroach_port": 26257,
-    "site_url": "https://kotlin.obsidianscout.com",
+    "site_url": "https://obsidianscout.com",
     "current_version": "0.7.2.2",
     "gist_update": {
         "enabled": false,

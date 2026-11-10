@@ -24,7 +24,7 @@ data class AppConfig(
     val google_sheet_url: String = "",
     val google_sheet_password: String = "",
     val cockroach_port: Int = 26257,
-    val site_url: String = "https://kotlin.obsidianscout.com",
+    val site_url: String = DEFAULT_SITE_URL,
     val current_version: String = "0.7.2.2", // The version this server is running — update this on each release
     val gist_update: GistUpdateConfig = GistUpdateConfig(),
     val quorum_fallback: QuorumFallbackConfig = QuorumFallbackConfig(),
@@ -36,13 +36,25 @@ data class AppConfig(
 ) {
     fun getEffectiveSiteUrl(): String {
         val trimmed = site_url.trim()
-        val base = if (trimmed.isBlank()) "https://kotlin.obsidianscout.com" else trimmed
+        val base = if (trimmed.isBlank()) DEFAULT_SITE_URL else trimmed
         val withScheme = if (!base.startsWith("http://") && !base.startsWith("https://")) {
             "https://$base"
         } else {
             base
         }
         return withScheme.removeSuffix("/")
+    }
+
+    companion object {
+        const val DEFAULT_SITE_URL = "https://obsidianscout.com"
+
+        /** The old default address, being retired. Configs still pointing at it are moved to [DEFAULT_SITE_URL] on load. */
+        const val LEGACY_SITE_URL = "https://kotlin.obsidianscout.com"
+
+        fun isLegacySiteUrl(url: String): Boolean {
+            val normalized = url.trim().lowercase().removeSuffix("/").removePrefix("https://").removePrefix("http://")
+            return normalized == LEGACY_SITE_URL.removePrefix("https://")
+        }
     }
 }
 
@@ -316,6 +328,12 @@ object AppConfigLoader {
                 needsWrite = true
             }
             if (!text.contains("site_url")) {
+                needsWrite = true
+            }
+            // kotlin.obsidianscout.com was the shipped default and got written into every config; move it to the new address.
+            if (AppConfig.isLegacySiteUrl(config.site_url)) {
+                consoleLog.info("[AppConfigLoader] Moving site_url from ${config.site_url} to ${AppConfig.DEFAULT_SITE_URL}.")
+                config = config.copy(site_url = AppConfig.DEFAULT_SITE_URL)
                 needsWrite = true
             }
             if (!text.contains("quorum_fallback")) {
