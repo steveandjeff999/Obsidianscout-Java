@@ -821,6 +821,7 @@ object FtcIntegrationService {
             cached.body
         } else {
             val text = response.bodyAsText()
+            SharedApiKeyService.noteResponse("FTC", SharedApiKeyService.Source.FIRST, "$user:$key", response.status.value, response.headers[HttpHeaders.RetryAfter])
             if (response.status == HttpStatusCode.NotFound) return null
             if (!response.status.isSuccess()) {
                 httpCache.remove(cacheKey)

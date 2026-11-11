@@ -291,6 +291,8 @@
 
                             </div>
 
+                            <p class="notice mt-6 shared-key-notice" data-shared-source="tba" style="display: none;"><span class="material-symbols-outlined" aria-hidden="true" style="font-size: 16px; vertical-align: -3px;">key</span> <span data-i18n="config.using_shared_key">Using a shared key. Configure your own keys for best results.</span></p>
+
                             <p id="settings-tba-notice" class="notice mt-6" style="display: none;">FTC Scout is a public API that provides event, team, match, and OPR data. No API key required.</p>
 
                             <button id="settings-tba-test" class="btn secondary mt-12" type="button" data-i18n="config.test_connection">Test Connection</button>
@@ -316,6 +318,8 @@
                                 <input id="settings-first-key" type="password" />
 
                             </div>
+
+                            <p class="notice mt-6 shared-key-notice" data-shared-source="first" style="display: none;"><span class="material-symbols-outlined" aria-hidden="true" style="font-size: 16px; vertical-align: -3px;">key</span> <span data-i18n="config.using_shared_key">Using a shared key. Configure your own keys for best results.</span></p>
 
                             <button id="settings-first-test" class="btn secondary mt-12" type="button" data-i18n="config.test_first_api">Test FIRST API</button>
 
@@ -356,6 +360,8 @@
                                 <input id="settings-match13-key" type="password" />
 
                             </div>
+
+                            <p class="notice mt-6 shared-key-notice" data-shared-source="match13" style="display: none;"><span class="material-symbols-outlined" aria-hidden="true" style="font-size: 16px; vertical-align: -3px;">key</span> <span data-i18n="config.using_shared_key">Using a shared key. Configure your own keys for best results.</span></p>
 
                             <button id="settings-match13-test" class="btn secondary mt-12" type="button" data-i18n="config.test_match13">Test Match 13 API</button>
 
@@ -674,6 +680,47 @@
                         </div>
                         <a href="/storage-manager" class="btn" style="text-decoration: none; padding: 10px 20px; font-size: 14px;" data-i18n="settings.open_storage_manager">Open Storage Manager</a>
                     </div>
+                </div>
+
+                <!-- Shared API Keys Card (SuperAdmin only) -->
+                <div id="shared-api-keys-card" class="card soft mt-24" style="display: none; border: 1px solid var(--accent, #3b82f6); background: rgba(59, 130, 246, 0.03); padding: 20px; border-radius: 12px;">
+                    <h2 style="margin: 0; font-size: 18px;" data-i18n="settings.shared_api_keys_title">Shared API Keys</h2>
+                    <p class="notice" style="margin-top: 6px;" data-i18n="settings.shared_api_keys_desc">Used by every team that has no key of its own for a source. A team's own key, or one from its alliance, always comes first. Teams on a shared key see a banner asking them to add their own, and a warning when the shared key hits its rate limit.</p>
+                    <div id="shared-api-keys-status" class="notice" style="display: none; color: var(--warning, #b45309);"></div>
+                    <div class="split mt-12" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
+                        <div>
+                            <h3 style="margin-top: 0;">FRC</h3>
+                            <div class="field">
+                                <label for="shared-frc-tba-key" data-i18n="config.tba_key">TBA key</label>
+                                <input id="shared-frc-tba-key" type="password" autocomplete="off" />
+                            </div>
+                            <div class="field">
+                                <label for="shared-frc-first-user" data-i18n="config.first_username">FIRST username</label>
+                                <input id="shared-frc-first-user" type="text" autocomplete="off" />
+                            </div>
+                            <div class="field">
+                                <label for="shared-frc-first-key" data-i18n="config.first_key">FIRST key</label>
+                                <input id="shared-frc-first-key" type="password" autocomplete="off" />
+                            </div>
+                            <div class="field">
+                                <label for="shared-frc-match13-key" data-i18n="config.match13_key">Match 13 API Key (optional)</label>
+                                <input id="shared-frc-match13-key" type="password" autocomplete="off" />
+                            </div>
+                        </div>
+                        <div>
+                            <h3 style="margin-top: 0;">FTC</h3>
+                            <div class="field">
+                                <label for="shared-ftc-first-user" data-i18n="config.first_username">FIRST username</label>
+                                <input id="shared-ftc-first-user" type="text" autocomplete="off" />
+                            </div>
+                            <div class="field">
+                                <label for="shared-ftc-first-key" data-i18n="config.first_key">FIRST key</label>
+                                <input id="shared-ftc-first-key" type="password" autocomplete="off" />
+                            </div>
+                        </div>
+                    </div>
+                    <p class="notice" style="margin-top: 4px;" data-i18n="settings.shared_api_keys_clear_hint">Clear a field and save to stop sharing that key.</p>
+                    <button id="btn-save-shared-api-keys" class="btn mt-12" type="button" data-i18n="settings.save_shared_api_keys">Save shared keys</button>
                 </div>
 
                 <!-- Cluster Security Card (Site Admin / SuperAdmin only) -->

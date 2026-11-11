@@ -1515,7 +1515,7 @@ object IntegrationService {
         }
     }
 
-    private class ApiResponse(val status: HttpStatusCode, val body: String)
+    private class ApiResponse(val status: HttpStatusCode, val body: String, val retryAfter: String? = null)
 
     /** A source answered, but not usefully (bad credentials, outage, unknown event). */
     private class ApiSourceException(message: String) : Exception(message)
@@ -1548,7 +1548,7 @@ object IntegrationService {
         } else {
             httpCache.remove(cacheKey)
         }
-        return ApiResponse(response.status, body)
+        return ApiResponse(response.status, body, response.headers[HttpHeaders.RetryAfter])
     }
 
     private fun errorDetail(body: String): String =
@@ -1561,6 +1561,7 @@ object IntegrationService {
             header("X-TBA-Auth-Key", key)
             header(HttpHeaders.Accept, "application/json")
         }
+        SharedApiKeyService.noteResponse("FRC", SharedApiKeyService.Source.TBA, key, response.status.value, response.retryAfter)
         if (!response.status.isSuccess()) {
             throw ApiSourceException("TBA HTTP ${response.status.value} for /$path${errorDetail(response.body)}")
         }
@@ -2048,6 +2049,7 @@ object IntegrationService {
                     break
                 }
                 pagesFetched++
+                SharedApiKeyService.noteResponse("FRC", SharedApiKeyService.Source.MATCH13, key, response.status.value, response.headers[HttpHeaders.RetryAfter])
                 if (!response.status.isSuccess()) {
                     // 404 just means Match 13 has no ratings for that season yet.
                     if (response.status != HttpStatusCode.NotFound) {
@@ -2082,6 +2084,7 @@ object IntegrationService {
             log.warn("Match 13 fetch failed: ${error.message}")
             return emptyMap()
         }
+        SharedApiKeyService.noteResponse("FRC", SharedApiKeyService.Source.MATCH13, key, response.status.value, response.headers[HttpHeaders.RetryAfter])
         if (!response.status.isSuccess()) {
             if (response.status == HttpStatusCode.NotFound) {
                 log.info("Match 13 does not carry $cleanEventKey yet; using season ratings")
@@ -2164,6 +2167,7 @@ object IntegrationService {
                     header(HttpHeaders.Authorization, "Bearer $key")
                 }
             }
+            SharedApiKeyService.noteResponse("FRC", SharedApiKeyService.Source.MATCH13, key, response.status.value, response.headers[HttpHeaders.RetryAfter])
             if (response.status == HttpStatusCode.NotFound) return emptyList()
             if (!response.status.isSuccess()) {
                 log.warn("Match 13 match history fetch failed for $cleanEventKey with status ${response.status}")
@@ -2446,6 +2450,7 @@ object IntegrationService {
         } catch (e: Exception) {
             throw ApiSourceException("FIRST API unreachable for $path: ${e.message}")
         }
+        SharedApiKeyService.noteResponse("FRC", SharedApiKeyService.Source.FIRST, "$user:$key", response.status.value, response.retryAfter)
         if (response.status == HttpStatusCode.NotFound) {
             return JsonArray(emptyList())
         }

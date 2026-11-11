@@ -548,10 +548,13 @@ fun Route.configRoutes() {
                             // Both reads share one transaction: this route is polled and each transaction is a round trip.
                             com.obsidianscout.db.readTransaction {
                                 val fresh = SettingsService.getSettings(session.teamNumber, session.program)
-                                AllianceService.getEffectiveSettings(session.teamNumber, session.program).copy(
+                                val effective = AllianceService.getEffectiveSettings(session.teamNumber, session.program)
+                                effective.copy(
                                     theme = fresh.theme,
                                     themes = fresh.themes,
-                                    activeThemeName = fresh.activeThemeName
+                                    activeThemeName = fresh.activeThemeName,
+                                    apiKeys = com.obsidianscout.integrations.SharedApiKeyService
+                                        .hideSharedUsername(session.program, effective.apiKeys)
                                 )
                             }
                         }
@@ -562,7 +565,10 @@ fun Route.configRoutes() {
                         session.role == UserRole.CUSTOM -> settings.toPayload().copy(
                             customPages = SettingsService.customPagesFor(session.teamNumber, session.program, session.userId)
                         )
-                        else -> settings.toPayload()
+                        else -> settings.toPayload().copy(
+                            sharedKeySources = com.obsidianscout.integrations.SharedApiKeyService
+                                .configuredSources(session.program).map { it.id }
+                        )
                     }
                     call.respond(SettingsResponse(payload))
                 }

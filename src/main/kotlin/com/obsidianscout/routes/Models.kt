@@ -337,6 +337,26 @@ data class ApiKeysPayload(
     val match13Key: String = ""
 )
 
+/** One program's shared API keys (secrets masked) and which of them are rate-limited right now. */
+@Serializable
+data class SharedApiKeysProgramPayload(
+    val keys: ApiKeysPayload = ApiKeysPayload(),
+    val rateLimited: List<String> = emptyList()
+)
+
+@Serializable
+data class SharedApiKeysResponse(
+    val frc: SharedApiKeysProgramPayload = SharedApiKeysProgramPayload(),
+    val ftc: SharedApiKeysProgramPayload = SharedApiKeysProgramPayload()
+)
+
+/** A program left out (null) keeps its shared keys. A masked secret ("********") keeps the stored one. */
+@Serializable
+data class SharedApiKeysUpdateRequest(
+    val frc: ApiKeysPayload? = null,
+    val ftc: ApiKeysPayload? = null
+)
+
 @Serializable
 data class ApiSettingsPayload(
     val year: Int = java.time.Year.now().value,
@@ -358,6 +378,8 @@ data class ApiSettingsPayload(
     /** Omitted (null) on save keeps the team's current value. */
     val dataPublicIncludeNotes: Boolean? = null,
     val apiKeys: ApiKeysPayload = ApiKeysPayload(),
+    /** Sources ("tba", "first", "match13") a superadmin set up a shared key for. Ignored on save. */
+    val sharedKeySources: List<String> = emptyList(),
     val scoutPages: List<String> = emptyList(),
     val analyticsPages: List<String> = emptyList(),
     val adminPages: List<String> = emptyList(),

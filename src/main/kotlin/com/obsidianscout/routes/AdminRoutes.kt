@@ -284,6 +284,20 @@ fun Route.adminRoutes() {
                     call.respond(smtp.copy(passwordPlain = if (smtp.passwordPlain.isNotBlank()) "********" else ""))
                 }
 
+                get("/shared-api-keys") {
+                    call.requireSuperAdmin()
+                    call.respond(sharedApiKeysResponse())
+                }
+
+                put("/shared-api-keys") {
+                    call.requireSuperAdmin()
+                    val req = call.receive<SharedApiKeysUpdateRequest>()
+                    val shared = com.obsidianscout.integrations.SharedApiKeyService
+                    req.frc?.let { shared.update("FRC", it.toApiKeys()) }
+                    req.ftc?.let { shared.update("FTC", it.toApiKeys()) }
+                    call.respond(sharedApiKeysResponse())
+                }
+
                 put("/email-settings") {
                     call.requireSuperAdmin()
                     val smtp = call.receive<SmtpSettings>()
@@ -1631,4 +1645,24 @@ fun Route.adminRoutes() {
 private fun scouterReportTeam(session: UserSession, requested: String?): Int {
     val team = requested?.trim()?.takeIf { it.isNotEmpty() }?.toIntOrNull()
     return if (team != null && session.role == UserRole.SUPERADMIN) team else session.teamNumber
+}
+
+
+private fun ApiKeysPayload.toApiKeys() = com.obsidianscout.integrations.ApiKeys(
+    tbaKey = tbaKey.trim(),
+    firstUsername = firstUsername.trim(),
+    firstKey = firstKey.trim(),
+    match13Key = match13Key.trim()
+)
+
+private fun sharedApiKeysResponse(): SharedApiKeysResponse {
+    val shared = com.obsidianscout.integrations.SharedApiKeyService
+    fun forProgram(program: String): SharedApiKeysProgramPayload {
+        val keys = shared.masked(program)
+        return SharedApiKeysProgramPayload(
+            keys = ApiKeysPayload(keys.tbaKey, keys.firstUsername, keys.firstKey, keys.match13Key),
+            rateLimited = shared.rateLimitedSources(program).map { it.id }
+        )
+    }
+    return SharedApiKeysResponse(frc = forProgram("FRC"), ftc = forProgram("FTC"))
 }

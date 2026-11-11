@@ -559,6 +559,27 @@ document.addEventListener("DOMContentLoaded", async () => {
                 setVal("settings-match13-key", loadedSettings.apiKeys.match13Key || "");
             }
 
+            // "Using a shared key" notes: shown under a source the team has no key of its own for, when a
+            // superadmin has set up a shared one.
+            const sharedKeySources = new Set(loadedSettings.sharedKeySources || []);
+            const updateSharedKeyNotices = () => {
+                const ownKey = {
+                    tba: getVal("settings-tba-key").trim() !== "",
+                    first: getVal("settings-first-user").trim() !== "" && getVal("settings-first-key").trim() !== "",
+                    match13: getVal("settings-match13-key").trim() !== ""
+                };
+                document.querySelectorAll(".shared-key-notice").forEach(el => {
+                    const source = el.dataset.sharedSource;
+                    const show = sharedKeySources.has(source) && !ownKey[source] && !(isFtc && source !== "first");
+                    el.style.display = show ? "block" : "none";
+                });
+            };
+            ["settings-tba-key", "settings-first-user", "settings-first-key", "settings-match13-key"].forEach(id => {
+                const input = document.getElementById(id);
+                if (input) input.addEventListener("input", updateSharedKeyNotices);
+            });
+            updateSharedKeyNotices();
+
             // Render permissions checkboxes
             renderPermissionsCheckboxes(
                 loadedSettings.scoutPages || [],
@@ -1124,6 +1145,65 @@ document.addEventListener("DOMContentLoaded", async () => {
             const storageManagerCard = document.getElementById("storage-manager-card");
             if (storageManagerCard) {
                 storageManagerCard.style.display = isUserSuperAdmin ? "block" : "none";
+            }
+
+            // Shared API Keys card (SuperAdmin only)
+            const sharedKeysCard = document.getElementById("shared-api-keys-card");
+            if (sharedKeysCard) {
+                if (isUserSuperAdmin) {
+                    sharedKeysCard.style.display = "block";
+                    const sourceNames = { tba: "The Blue Alliance", first: "FIRST API", match13: "Match 13" };
+                    const fillSharedKeys = (data) => {
+                        const frc = (data && data.frc && data.frc.keys) || {};
+                        const ftc = (data && data.ftc && data.ftc.keys) || {};
+                        setVal("shared-frc-tba-key", frc.tbaKey || "");
+                        setVal("shared-frc-first-user", frc.firstUsername || "");
+                        setVal("shared-frc-first-key", frc.firstKey || "");
+                        setVal("shared-frc-match13-key", frc.match13Key || "");
+                        setVal("shared-ftc-first-user", ftc.firstUsername || "");
+                        setVal("shared-ftc-first-key", ftc.firstKey || "");
+                        const limited = []
+                            .concat(((data && data.frc && data.frc.rateLimited) || []).map(s => "FRC " + (sourceNames[s] || s)))
+                            .concat(((data && data.ftc && data.ftc.rateLimited) || []).map(s => "FTC " + (sourceNames[s] || s)));
+                        const statusEl = document.getElementById("shared-api-keys-status");
+                        if (statusEl) {
+                            statusEl.textContent = limited.length ? "Rate-limited right now: " + limited.join(", ") + "." : "";
+                            statusEl.style.display = limited.length ? "block" : "none";
+                        }
+                    };
+                    Obsidianscout.request("/api/admin/shared-api-keys")
+                        .then(fillSharedKeys)
+                        .catch(err => console.warn("Failed to load shared API keys:", err));
+                    const btnSaveShared = document.getElementById("btn-save-shared-api-keys");
+                    if (btnSaveShared) {
+                        btnSaveShared.addEventListener("click", async () => {
+                            try {
+                                const resp = await Obsidianscout.request("/api/admin/shared-api-keys", {
+                                    method: "PUT",
+                                    json: {
+                                        frc: {
+                                            tbaKey: getVal("shared-frc-tba-key").trim(),
+                                            firstUsername: getVal("shared-frc-first-user").trim(),
+                                            firstKey: getVal("shared-frc-first-key").trim(),
+                                            match13Key: getVal("shared-frc-match13-key").trim()
+                                        },
+                                        ftc: {
+                                            firstUsername: getVal("shared-ftc-first-user").trim(),
+                                            firstKey: getVal("shared-ftc-first-key").trim()
+                                        }
+                                    },
+                                    button: btnSaveShared
+                                });
+                                fillSharedKeys(resp);
+                                Obsidianscout.showToast("Shared API keys saved", "success");
+                            } catch (err) {
+                                Obsidianscout.showToast("Failed to save shared API keys: " + err.message, "error");
+                            }
+                        });
+                    }
+                } else {
+                    sharedKeysCard.style.display = "none";
+                }
             }
 
             // Cluster Security Keys card (Site Admin / SuperAdmin only)

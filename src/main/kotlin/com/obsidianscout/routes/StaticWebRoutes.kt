@@ -195,7 +195,72 @@ internal val PUBLIC_DATA_PAGES = setOf(
     "predictor", "event-predictor", "team", "match-data", "pit-data", "qual-data", "all-data"
 ) + com.obsidianscout.publicdata.PUBLIC_NOTES_PAGES
 
+/** Pages anyone can open without signing in, with their sitemap priority. Everything else needs a login. */
+private val SITEMAP_PAGES = listOf(
+    "/" to "1.0",
+    "/about" to "0.8",
+    "/demo" to "0.8",
+    "/docs" to "0.7",
+    "/tutorials" to "0.7",
+    "/public-data" to "0.7",
+    "/contact" to "0.5",
+    "/login" to "0.3"
+)
+
+/** Pages of a team's public data listed in the sitemap, one set per event. */
+private val SITEMAP_PUBLIC_DATA_PAGES = listOf("analytics", "rankings", "team")
+
+private fun xmlEscape(s: String) = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    .replace("\"", "&quot;").replace("'", "&apos;")
+
+internal fun buildSitemapXml(baseUrl: String, directory: com.obsidianscout.publicdata.PublicDirectoryResponse): String =
+    buildString {
+        append("""<?xml version="1.0" encoding="UTF-8"?>""").append('\n')
+        append("""<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">""").append('\n')
+        fun url(loc: String, priority: String, changefreq: String) {
+            append("  <url><loc>").append(xmlEscape(baseUrl + loc)).append("</loc>")
+            append("<changefreq>").append(changefreq).append("</changefreq>")
+            append("<priority>").append(priority).append("</priority></url>\n")
+        }
+        SITEMAP_PAGES.forEach { (path, priority) -> url(path, priority, "weekly") }
+        directory.teams.forEach { team ->
+            team.events.filter { it.analyticsAvailable }.forEach { event ->
+                SITEMAP_PUBLIC_DATA_PAGES.forEach { page ->
+                    val query = buildList {
+                        add("event=" + java.net.URLEncoder.encode(event.eventKey, Charsets.UTF_8))
+                        if (team.program != "FRC") add("program=" + java.net.URLEncoder.encode(team.program, Charsets.UTF_8))
+                    }.joinToString("&")
+                    url("/public/${team.teamNumber}/$page?$query", "0.4", "daily")
+                }
+            }
+        }
+        append("</urlset>\n")
+    }
+
 fun Route.staticWebRoutes() {
+        get("/sitemap.xml") {
+            val baseUrl = AppConfigLoader.load().getEffectiveSiteUrl()
+            val directory = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { com.obsidianscout.publicdata.PublicDataService.directory() }
+                    .getOrDefault(com.obsidianscout.publicdata.PublicDirectoryResponse(emptyList()))
+            }
+            call.response.headers.append(HttpHeaders.CacheControl, "public, max-age=3600")
+            call.respondText(buildSitemapXml(baseUrl, directory), ContentType.Application.Xml)
+        }
+
+        get("/robots.txt") {
+            val baseUrl = AppConfigLoader.load().getEffectiveSiteUrl()
+            val body = buildString {
+                append("User-agent: *\n")
+                append("Disallow: /api/\n")
+                append("Disallow: /shared/\n")
+                append("\n")
+                append("Sitemap: $baseUrl/sitemap.xml\n")
+            }
+            call.response.headers.append(HttpHeaders.CacheControl, "public, max-age=3600")
+            call.respondText(body, ContentType.Text.Plain)
+        }
+
         get("/shared/{token}") {
             call.respondStaticHtml("shared.html")
         }

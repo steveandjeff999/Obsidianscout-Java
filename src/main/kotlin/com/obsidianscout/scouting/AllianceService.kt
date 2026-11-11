@@ -1367,8 +1367,9 @@ object AllianceService {
             var tbaKey = localSettings.apiKeys.tbaKey
             var firstUsername = localSettings.apiKeys.firstUsername
             var firstKey = localSettings.apiKeys.firstKey
+            var match13Key = localSettings.apiKeys.match13Key
 
-            if (tbaKey.isBlank() || firstUsername.isBlank() || firstKey.isBlank()) {
+            if (tbaKey.isBlank() || firstUsername.isBlank() || firstKey.isBlank() || match13Key.isBlank()) {
                 for (memberTeam in memberTeamNumbers) {
                     if (memberTeam == teamNumber) continue
                     val memberSettings = com.obsidianscout.integrations.SettingsService.getSettings(memberTeam, program)
@@ -1380,6 +1381,9 @@ object AllianceService {
                         memberSettings.apiKeys.firstKey.isNotBlank()) {
                         firstUsername = memberSettings.apiKeys.firstUsername
                         firstKey = memberSettings.apiKeys.firstKey
+                    }
+                    if (match13Key.isBlank() && memberSettings.apiKeys.match13Key.isNotBlank()) {
+                        match13Key = memberSettings.apiKeys.match13Key
                     }
                 }
             }
@@ -1394,10 +1398,11 @@ object AllianceService {
                 apiKeys = localSettings.apiKeys.copy(
                     tbaKey = tbaKey,
                     firstUsername = firstUsername,
-                    firstKey = firstKey
+                    firstKey = firstKey,
+                    match13Key = match13Key
                 )
             )
-        } }
+        }.let { com.obsidianscout.integrations.SharedApiKeyService.applyFallback(it) } }
         if (effectiveSettingsGeneration.get() == generation) {
             effectiveSettingsCache[key] = CachedSettings(computed, snapshot?.let { com.obsidianscout.db.DataVersion.dependencies(tracker, it) })
         }

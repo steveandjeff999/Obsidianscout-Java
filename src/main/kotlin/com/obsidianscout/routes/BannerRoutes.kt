@@ -176,6 +176,56 @@ internal suspend fun apiKeyBanner(
     )
 }
 
+/**
+ * The banner for a team whose effective keys include a superadmin's shared key
+ * ([com.obsidianscout.integrations.SharedApiKeyService]), or null when it uses none. While a shared key the team
+ * relies on is rate-limited, the banner says so instead.
+ */
+internal fun sharedApiKeyBanner(
+    teamNumber: Int,
+    program: String,
+    keys: com.obsidianscout.integrations.ApiKeys,
+    sharedKeys: com.obsidianscout.integrations.ApiKeys = com.obsidianscout.integrations.SharedApiKeyService.current(program),
+    isRateLimited: (com.obsidianscout.integrations.SharedApiKeyService.Source) -> Boolean =
+        { com.obsidianscout.integrations.SharedApiKeyService.isRateLimited(program, it) }
+): BannerDto? {
+    val usingShared = com.obsidianscout.integrations.SharedApiKeyService.sourcesUsingShared(program, keys, sharedKeys)
+    if (usingShared.isEmpty()) return null
+    val limited = usingShared.filter(isRateLimited)
+    val names = { sources: List<com.obsidianscout.integrations.SharedApiKeyService.Source> -> sources.joinToString(", ") { it.label } }
+    val (id, type, message, details) = if (limited.isNotEmpty()) {
+        listOf(
+            "sys-shared-api-key-rate-limited",
+            "warning",
+            "The shared API key reached its rate limit. Please configure your own API keys in Admin Settings for best results.",
+            "Rate-limited: ${names(limited)}. Data from ${if (limited.size == 1) "this source" else "these sources"} may be missing or out of date until the limit resets. " +
+                "Every team without its own key shares this one, so adding your own key avoids the limit."
+        )
+    } else {
+        listOf(
+            "sys-shared-api-key",
+            "info",
+            "Using a shared API key. Configure your own API keys in Admin Settings for best results.",
+            "Shared by this server: ${names(usingShared)}. Every team without its own key shares the same key and its rate limit, " +
+                "so data can be slower to update or briefly unavailable at busy events."
+        )
+    }
+    val now = java.time.Instant.now().toString()
+    return BannerDto(
+        id = id,
+        teamNumber = teamNumber,
+        program = if (program.equals("FTC", ignoreCase = true)) "FTC" else "FRC",
+        message = message,
+        bannerType = type,
+        isDismissible = true,
+        isExpandable = true,
+        expandableMessage = details,
+        isActive = true,
+        createdAt = now,
+        updatedAt = now
+    )
+}
+
 fun Route.bannerRoutes() {
             route("/banners") {
                 get("/login") {
@@ -266,6 +316,7 @@ fun Route.bannerRoutes() {
                         }
 
                         apiKeyBanner(session.teamNumber, session.program, eventKey, settings.apiKeys)?.let { active.add(0, it) }
+                        sharedApiKeyBanner(session.teamNumber, session.program, settings.apiKeys)?.let { active.add(0, it) }
                     } catch (e: Exception) {
                         if (orchestrator.isQuorumLossException(e)) {
                             orchestrator.isQuorumLost = true

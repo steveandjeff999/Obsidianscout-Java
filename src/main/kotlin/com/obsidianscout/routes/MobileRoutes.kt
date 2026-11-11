@@ -1052,7 +1052,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
         val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(teamNumber, program)
         return config.copy(
             tbaKey = if (settings.apiKeys.tbaKey.isNotBlank()) "********" else "",
-            firstUsername = settings.apiKeys.firstUsername,
+            firstUsername = com.obsidianscout.integrations.SharedApiKeyService.hideSharedUsername(program, settings.apiKeys).firstUsername,
             firstKey = if (settings.apiKeys.firstKey.isNotBlank()) "********" else "",
             eventCode = settings.eventCode
         )
@@ -1063,7 +1063,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
         val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(teamNumber, program)
         return config.copy(
             tbaKey = if (settings.apiKeys.tbaKey.isNotBlank()) "********" else "",
-            firstUsername = settings.apiKeys.firstUsername,
+            firstUsername = com.obsidianscout.integrations.SharedApiKeyService.hideSharedUsername(program, settings.apiKeys).firstUsername,
             firstKey = if (settings.apiKeys.firstKey.isNotBlank()) "********" else "",
             eventCode = settings.eventCode
         )
@@ -1074,7 +1074,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
         val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(teamNumber, program)
         return config.copy(
             tbaKey = if (settings.apiKeys.tbaKey.isNotBlank()) "********" else "",
-            firstUsername = settings.apiKeys.firstUsername,
+            firstUsername = com.obsidianscout.integrations.SharedApiKeyService.hideSharedUsername(program, settings.apiKeys).firstUsername,
             firstKey = if (settings.apiKeys.firstKey.isNotBlank()) "********" else "",
             eventCode = settings.eventCode
         )
@@ -1089,7 +1089,10 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     eventCode = parsed.eventCode ?: currentSettings.eventCode,
                     apiKeys = currentSettings.apiKeys.copy(
                         tbaKey = if (parsed.tbaKey == "********") currentSettings.apiKeys.tbaKey else (parsed.tbaKey ?: currentSettings.apiKeys.tbaKey),
-                        firstUsername = parsed.firstUsername ?: currentSettings.apiKeys.firstUsername,
+                        // A blank username next to a masked key is how a shared FIRST credential is sent out
+                        // (SharedApiKeyService.hideSharedUsername): keep the team's own username then.
+                        firstUsername = if (parsed.firstUsername.isNullOrBlank() && parsed.firstKey == "********") currentSettings.apiKeys.firstUsername
+                            else (parsed.firstUsername ?: currentSettings.apiKeys.firstUsername),
                         firstKey = if (parsed.firstKey == "********") currentSettings.apiKeys.firstKey else (parsed.firstKey ?: currentSettings.apiKeys.firstKey)
                     )
                 )
