@@ -94,7 +94,12 @@ object VerifiedCrawlers {
     /** Thrown by a lookup when DNS gave no answer (timeout, server failure): nothing can be concluded. */
     class LookupUnavailable(message: String, cause: Throwable? = null) : Exception(message, cause)
 
-    private fun dnsQuery(name: String, types: Array<String>): Map<String, List<String>> {
+    /**
+     * The records of one [type] for [name]. One type per query on purpose: asking JNDI for several types at once
+     * sends a single ANY query, and many nameservers (Microsoft's among them, so every search.msn.com host) answer
+     * ANY with nothing (RFC 8482), which made every real Bingbot look fake.
+     */
+    private fun dnsQuery(name: String, type: String): List<String> {
         val env = Hashtable<String, String>().apply {
             put(Context.INITIAL_CONTEXT_FACTORY, "com.sun.jndi.dns.DnsContextFactory")
             put("com.sun.jndi.dns.timeout.initial", "1000")
@@ -102,15 +107,12 @@ object VerifiedCrawlers {
         }
         val ctx = try { InitialDirContext(env) } catch (e: Exception) { throw LookupUnavailable("DNS unavailable", e) }
         try {
-            val attrs = ctx.getAttributes(name, types)
-            return types.associateWith { type ->
-                val attr = attrs.get(type) ?: return@associateWith emptyList()
-                (0 until attr.size()).map { attr.get(it).toString() }
-            }
+            val attr = ctx.getAttributes(name, arrayOf(type)).get(type) ?: return emptyList()
+            return (0 until attr.size()).map { attr.get(it).toString() }
         } catch (e: NameNotFoundException) {
-            return emptyMap() // NXDOMAIN: a definite "no such name".
+            return emptyList() // NXDOMAIN: a definite "no such name".
         } catch (e: Exception) {
-            throw LookupUnavailable("DNS lookup for $name failed: ${e.message}", e)
+            throw LookupUnavailable("DNS $type lookup for $name failed: ${e.message}", e)
         } finally {
             runCatching { ctx.close() }
         }
@@ -131,10 +133,15 @@ object VerifiedCrawlers {
 
     private val systemReverse: (String) -> String? = { ip ->
         val arpa = arpaName(ip) ?: throw LookupUnavailable("Not an address: $ip")
-        dnsQuery(arpa, arrayOf("PTR"))["PTR"]?.firstOrNull()
+        dnsQuery(arpa, "PTR").firstOrNull()
     }
     private val systemForward: (String) -> List<String> = { host ->
-        dnsQuery(host, arrayOf("A", "AAAA")).values.flatten()
+        // A and AAAA asked separately (see dnsQuery). One failing doesn't matter if the other answered; an empty
+        // answer only counts as "no such address" when both types got a definite reply.
+        val results = listOf("A", "AAAA").map { type -> runCatching { dnsQuery(host, type) } }
+        val found = results.mapNotNull { it.getOrNull() }.flatten()
+        if (found.isEmpty()) results.firstNotNullOfOrNull { it.exceptionOrNull() }?.let { throw it }
+        found
     }
 
     /** Reverse lookup: the PTR name of [ip], or null when it has none. Throws [LookupUnavailable] when DNS can't answer. Tests replace it. */
