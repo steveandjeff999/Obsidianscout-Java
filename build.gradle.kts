@@ -696,6 +696,13 @@ tasks.register<JavaExec>("updateReflections") {
     mainClass.set("com.obsidianscout.utils.UpdateReflectionsKt")
 }
 
+// A native image only finds serializers for classes listed in reflect-config.json, so a new @Serializable class
+// that isn't listed fails at runtime ("Serializer for class ... is not found"). Refresh the list before every
+// native build instead of relying on someone remembering to run updateReflections.
+tasks.matching { it.name == "nativeCompile" }.configureEach {
+    dependsOn("updateReflections")
+}
+
 val javaToolchains = project.extensions.getByType<JavaToolchainService>()
 
 graalvmNative {

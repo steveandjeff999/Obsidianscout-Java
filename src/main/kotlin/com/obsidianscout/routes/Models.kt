@@ -72,7 +72,11 @@ data class MeResponse(
  * The app shows a non-blocking warning when either side is out of the other's range.
  */
 object ApiCompat {
-    const val API_LEVEL = 1
+    /**
+     * 2: superadmin shared API keys (`GET`/`PUT /api/admin/shared-api-keys`). The app only shows its editor from
+     * this level on.
+     */
+    const val API_LEVEL = 2
     const val MIN_APP_API_LEVEL = 1
 }
 
