@@ -150,6 +150,26 @@
 
                         </div>
 
+                        <div class="field" id="mode-3d-field" style="display: flex; align-items: center; gap: 8px; grid-column: span 2;">
+                            <input type="checkbox" id="graph-3d-toggle" style="width: auto; margin-top: 0;" />
+                            <label for="graph-3d-toggle" style="margin-bottom: 0; cursor: pointer;">3D Viewport (X / Y / Z)</label>
+                        </div>
+                        <div class="field hidden" id="axis-3d-fields" style="grid-column: span 2;">
+                            <div class="form-grid">
+                                <div class="field">
+                                    <label for="graph-metric-x">X Axis Metric</label>
+                                    <select id="graph-metric-x"></select>
+                                </div>
+                                <div class="field">
+                                    <label for="graph-metric-y">Y Axis Metric</label>
+                                    <select id="graph-metric-y"></select>
+                                </div>
+                                <div class="field">
+                                    <label for="graph-metric-z">Z Axis Metric</label>
+                                    <select id="graph-metric-z"></select>
+                                </div>
+                            </div>
+                        </div>
                         <div class="field" id="metric-field">
 
                             <label for="graph-metric" data-i18n="graphs.metric">Metric</label>
@@ -243,7 +263,9 @@
                         <label class="graph-type-item">
 
                             <input class="graph-type-checkbox" type="checkbox" value="histogram" /> Histogram
-
+                        </label>
+                        <label class="graph-type-item hidden" id="graph-type-density-item">
+                            <input class="graph-type-checkbox" type="checkbox" value="density" /> 3D Density
                         </label>
 
                     </div>
@@ -297,6 +319,7 @@
     <script type="module" src="/js/common.js"></script>
 
     <script defer src="/vendor/plotly-2.32.0.min.js"></script>
+    <script defer src="/js/obsidian_3d_graph.js"></script>
 
     <script defer src="/js/graphs.js"></script>
 

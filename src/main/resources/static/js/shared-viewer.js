@@ -646,6 +646,10 @@ async function renderGraphView(target, config, snapshot, live) {
         metrics: availableMetrics,
         metricMap: new Map(availableMetrics.map(m => [m.id, m])),
         metricId: config.metricId || (snapshot && snapshot.metricId) || 'score_total',
+        is3D: Boolean(config.is3D ?? (snapshot && snapshot.is3D) ?? false),
+        metricXId: config.metricXId || (snapshot && snapshot.metricXId) || 'score_auto',
+        metricYId: config.metricYId || (snapshot && snapshot.metricYId) || 'score_teleop',
+        metricZId: config.metricZId || (snapshot && snapshot.metricZId) || 'score_total',
         datasource: config.datasource || (snapshot && snapshot.datasource) || 'scouted',
         dataView: config.dataView || (snapshot && snapshot.dataView) || 'averages',
         sort: config.sort || (snapshot && snapshot.sort) || 'value_desc',
@@ -739,7 +743,33 @@ async function renderGraphView(target, config, snapshot, live) {
                             </div>
                         ` : ''}
 
-                        <div class="field" id="metric-field">
+                        <div class="field" id="mode-3d-field" style="display:flex;align-items:center;gap:8px;grid-column:span 2;">
+                            <input type="checkbox" id="graph-3d-toggle" ${state.is3D ? 'checked' : ''} style="width:auto;margin-top:0;" />
+                            <label for="graph-3d-toggle" style="margin-bottom:0;cursor:pointer;">3D Viewport (X / Y / Z)</label>
+                        </div>
+                        <div class="field ${state.is3D ? '' : 'hidden'}" id="axis-3d-fields" style="grid-column:span 2;">
+                            <div class="form-grid">
+                                <div class="field">
+                                    <label for="graph-metric-x">X Axis Metric</label>
+                                    <select id="graph-metric-x">
+                                        ${availableMetrics.filter(m => m.kind !== 'category').map(m => `<option value="${m.id}" ${m.id === state.metricXId ? 'selected' : ''}>${m.label}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <div class="field">
+                                    <label for="graph-metric-y">Y Axis Metric</label>
+                                    <select id="graph-metric-y">
+                                        ${availableMetrics.filter(m => m.kind !== 'category').map(m => `<option value="${m.id}" ${m.id === state.metricYId ? 'selected' : ''}>${m.label}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <div class="field">
+                                    <label for="graph-metric-z">Z Axis Metric</label>
+                                    <select id="graph-metric-z">
+                                        ${availableMetrics.filter(m => m.kind !== 'category').map(m => `<option value="${m.id}" ${m.id === state.metricZId ? 'selected' : ''}>${m.label}</option>`).join('')}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="field ${state.is3D ? 'hidden' : ''}" id="metric-field">
                             <label for="graph-metric" data-i18n="graphs.metric">${t('graphs.metric', 'Metric')}</label>
                             <select id="graph-metric">
                                 ${availableMetrics.map(m => `<option value="${m.id}" ${m.id === state.metricId ? 'selected' : ''}>${m.label}</option>`).join('')}
@@ -1227,6 +1257,81 @@ async function renderGraphView(target, config, snapshot, live) {
 
         const metric = state.metricMap.get(state.metricId) || state.metrics[0];
         const metricLabel = metric ? metric.label : "Total Points";
+
+        if (state.is3D && window.Obsidian3DGraph) {
+            const mx = state.metricMap.get(state.metricXId) || metric || { id: 'score_auto', label: 'Auto points', kind: 'score', scope: 'auto' };
+            const my = state.metricMap.get(state.metricYId) || metric || { id: 'score_teleop', label: 'Teleop points', kind: 'score', scope: 'teleop' };
+            const mz = state.metricMap.get(state.metricZId) || metric || { id: 'score_total', label: 'Total points', kind: 'score', scope: 'total' };
+            let series3D = [];
+            if (state.datasource && state.datasource !== 'scouted') {
+                if (state.datasource === 'epa' || state.datasource === 'opr') {
+                    output.appendChild(createNotice("3D X/Y/Z axes require multiple distinct metrics. Switch Data Source to Scouted Data, Match 13 xP, or All Sources."));
+                    if (loading) loading.classList.add("hidden");
+                    return;
+                }
+                const pts = selectedTeams.map(tNum => {
+                    const tm = state.eventTeamsMap.get(Number(tNum));
+                    const tEntries = entries.filter(e => Number(e.targetTeamNumber || e.teamNumber) === Number(tNum) && (state.includePrescout || !e.isPrescout));
+                    const valFor = (m) => {
+                        if (state.datasource === 'exp') {
+                            let sum = 0, cnt = 0;
+                            (statsHistory.match13History || []).forEach(mo => {
+                                const td = extractTeamExpData(mo, tNum);
+                                if (td) { sum += getTeamExpMetricValue(td, m.id); cnt++; }
+                            });
+                            return cnt > 0 ? sum / cnt : (m.id === 'score_total' ? Number(tm?.exp ?? tm?.match13Exp ?? 0) : 0);
+                        }
+                        if (!tEntries.length) return m.scope === 'total' ? Number(tm?.averagePoints ?? 0) : 0;
+                        let sum = 0, cnt = 0;
+                        tEntries.forEach(e => {
+                            const v = metricValue(e, m, state);
+                            if (v !== null && Number.isFinite(v)) { sum += v; cnt++; }
+                        });
+                        return cnt > 0 ? sum / cnt : 0;
+                    };
+                    return { x: valFor(mx), y: valFor(my), z: valFor(mz), label: `${tNum}` };
+                });
+                series3D = [{ name: state.datasource.toUpperCase(), points: pts }];
+            } else {
+                const fEntries = entries.filter(e => state.selectedTeams.has(Number(e.targetTeamNumber || e.teamNumber)) && (state.includePrescout || !e.isPrescout));
+                const byTeam = new Map();
+                fEntries.forEach(e => {
+                    const t = Number(e.targetTeamNumber || e.teamNumber);
+                    if (!t) return;
+                    const vx = metricValue(e, mx, state);
+                    const vy = metricValue(e, my, state);
+                    const vz = metricValue(e, mz, state);
+                    if (vx === null || vy === null || vz === null) return;
+                    if (!byTeam.has(t)) byTeam.set(t, []);
+                    byTeam.get(t).push({ x: vx, y: vy, z: vz, matchLabel: e.matchNumber != null ? `M${e.matchNumber}` : '' });
+                });
+                const tList = Array.from(byTeam.keys()).sort((a, b) => a - b);
+                if (state.dataView === 'matches') {
+                    series3D = tList.map(t => ({ name: `Team ${t}`, points: byTeam.get(t).map(p => ({ ...p, label: `${t}` })) }));
+                } else {
+                    series3D = [{ name: 'Teams', points: tList.map(t => {
+                        const list = byTeam.get(t);
+                        const n = list.length || 1;
+                        return { x: list.reduce((a, p) => a + p.x, 0) / n, y: list.reduce((a, p) => a + p.y, 0) / n, z: list.reduce((a, p) => a + p.z, 0) / n, label: `${t}` };
+                    }) }];
+                }
+            }
+            selectedGraphTypes.forEach(graphType => {
+                if ((graphType === 'line' || graphType === 'area') && state.dataView === 'averages') {
+                    output.appendChild(createGraphCard(`3D ${graphType}`, null, `${graphType} requires Match-by-match view.`));
+                    return;
+                }
+                const chart = createPlotlyContainer(460);
+                chart.style.height = "460px";
+                const card = createGraphCard(`3D ${graphType} (${mx.label} \u00D7 ${my.label} \u00D7 ${mz.label})`, chart);
+                output.appendChild(card);
+                const cfg3D = { graphType, series: series3D, xLabel: mx.label, yLabel: my.label, zLabel: mz.label };
+                chart.dataset.obsidian3dConfig = JSON.stringify(cfg3D);
+                window.Obsidian3DGraph.render(chart, cfg3D);
+            });
+            if (loading) loading.classList.add("hidden");
+            return;
+        }
 
         // Non-Scouted / External Datasource Rendering
         if (state.datasource && state.datasource !== "scouted") {
@@ -1883,6 +1988,22 @@ async function renderGraphView(target, config, snapshot, live) {
     toggleFieldsForDatasource();
     updateGraphTypeAvailability();
     generateGraphs();
+
+    const toggle3D = document.getElementById("graph-3d-toggle");
+    const axis3DFields = document.getElementById("axis-3d-fields");
+    const metricField = document.getElementById("metric-field");
+    if (toggle3D) {
+        toggle3D.addEventListener("change", () => {
+            state.is3D = toggle3D.checked;
+            if (axis3DFields) axis3DFields.classList.toggle("hidden", !state.is3D);
+            if (metricField) metricField.classList.toggle("hidden", state.is3D);
+            generateGraphs();
+        });
+    }
+    [["graph-metric-x", "metricXId"], ["graph-metric-y", "metricYId"], ["graph-metric-z", "metricZId"]].forEach(([id, key]) => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener("change", () => { state[key] = el.value; generateGraphs(); });
+    });
 
     window._currentSharedRerender = generateGraphs;
 }

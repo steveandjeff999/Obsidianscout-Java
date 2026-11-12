@@ -73,7 +73,8 @@ const GRAPH_TYPES = [
     { id: "area", label: "Area", group: "basic" },
     { id: "box", label: "Box", group: "distribution" },
     { id: "violin", label: "Violin", group: "distribution" },
-    { id: "histogram", label: "Histogram", group: "distribution" }
+    { id: "histogram", label: "Histogram", group: "distribution" },
+    { id: "density", label: "3D Density", group: "distribution" }
 ];
 
 async function initGraphsPage({ config, entries, events, settings }) {
@@ -85,6 +86,10 @@ async function initGraphsPage({ config, entries, events, settings }) {
         eventKey: "",
         selectedTeams: new Set(),
         metricId: "score_total",
+        is3D: false,
+        metricXId: "score_auto",
+        metricYId: "score_teleop",
+        metricZId: "score_total",
         dataView: "averages",
         sort: "value_desc",
         selectedGraphTypes: new Set(["bar"]),
@@ -107,6 +112,26 @@ async function initGraphsPage({ config, entries, events, settings }) {
     initGraphTypeControls(state);
     wireGraphOptions(state);
     updateSelectionSummary(state);
+
+    if (typeof MutationObserver !== "undefined" && document.body && !document.body.dataset.obsidian3dThemeObserver) {
+        document.body.dataset.obsidian3dThemeObserver = "true";
+        const observer = new MutationObserver(() => {
+            if (!window.Obsidian3DGraph) return;
+            document.querySelectorAll("[data-obsidian3d-config]").forEach((el) => {
+                try {
+                    window.Obsidian3DGraph.render(el, JSON.parse(el.dataset.obsidian3dConfig));
+                } catch (_) {}
+            });
+            const fsEl = document.getElementById("graph-fullscreen-chart");
+            const fsModal = document.getElementById("graph-fullscreen-modal");
+            if (fsEl && fsModal && !fsModal.classList.contains("hidden") && fsEl.dataset.obsidian3dConfig) {
+                try {
+                    window.Obsidian3DGraph.render(fsEl, JSON.parse(fsEl.dataset.obsidian3dConfig));
+                } catch (_) {}
+            }
+        });
+        observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    }
 
     Obsidianscout.liveRefresh(["scouting", "schedule", "rankings"], () => refreshGraphData(state), {
         minIntervalMs: 10000,
@@ -136,17 +161,20 @@ function initMetricOptions(state) {
     let metrics = [];
     if (state.datasource === "exp") {
         metrics = [
-            { id: "score_total", label: t('alliance-selection.total_exp', "Total EXP"), kind: "score", scope: "total" },
-            { id: "score_auto", label: t('alliance-selection.auto_exp', "Auto EXP"), kind: "score", scope: "auto" },
-            { id: "score_teleop", label: t('alliance-selection.teleop_exp', "Teleop EXP"), kind: "score", scope: "teleop" },
-            { id: "score_endgame", label: t('alliance-selection.endgame_exp', "Endgame EXP"), kind: "score", scope: "endgame" }
+            { id: "score_total", label: t('alliance-selection.total_exp', "Total xP"), kind: "score", scope: "total" },
+            { id: "score_auto", label: t('alliance-selection.auto_exp', "Auto xP"), kind: "score", scope: "auto" },
+            { id: "score_teleop", label: t('alliance-selection.teleop_exp', "Teleop xP"), kind: "score", scope: "teleop" },
+            { id: "score_endgame", label: t('alliance-selection.endgame_exp', "Endgame xP"), kind: "score", scope: "endgame" }
         ];
     } else if (state.datasource === "all") {
         metrics = [
             { id: "score_total", label: t('graphs.total_points', "Total points"), kind: "score", scope: "total" },
             { id: "score_auto", label: t('graphs.auto_points', "Auto points"), kind: "score", scope: "auto" },
             { id: "score_teleop", label: t('graphs.teleop_points', "Teleop points"), kind: "score", scope: "teleop" },
-            { id: "score_endgame", label: t('graphs.endgame_points', "Endgame points"), kind: "score", scope: "endgame" }
+            { id: "score_endgame", label: t('graphs.endgame_points', "Endgame points"), kind: "score", scope: "endgame" },
+            { id: "ext_epa", label: "Statbotics EPA", kind: "external", scope: "epa" },
+            { id: "ext_exp", label: "Match 13 xP", kind: "external", scope: "exp" },
+            { id: "ext_opr", label: "TBA OPR", kind: "external", scope: "opr" }
         ];
     } else {
         metrics = buildMetricOptions(state.config || {});
@@ -164,6 +192,37 @@ function initMetricOptions(state) {
         state.metricId = metrics.length ? metrics[0].id : "score_total";
     }
     metricSelect.value = state.metricId;
+    const numericMetrics = metrics.filter((m) => m.kind !== "category");
+    const axisSpecs = [
+        { elId: "graph-metric-x", stateKey: "metricXId", fallbackIdx: 1 },
+        { elId: "graph-metric-y", stateKey: "metricYId", fallbackIdx: 2 },
+        { elId: "graph-metric-z", stateKey: "metricZId", fallbackIdx: 0 }
+    ];
+    axisSpecs.forEach(({ elId, stateKey, fallbackIdx }) => {
+        const sel = document.getElementById(elId);
+        if (!sel) return;
+        sel.innerHTML = "";
+        numericMetrics.forEach((metric) => {
+            const opt = document.createElement("option");
+            opt.value = metric.id;
+            opt.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function')
+                ? Obsidianscout.localize(metric.label)
+                : metric.label;
+            sel.appendChild(opt);
+        });
+        if (!state[stateKey] || !numericMetrics.some((m) => m.id === state[stateKey])) {
+            const pick = numericMetrics[Math.min(fallbackIdx, Math.max(0, numericMetrics.length - 1))];
+            state[stateKey] = pick ? pick.id : "score_total";
+        }
+        sel.value = state[stateKey];
+        if (!sel.dataset.hasListener) {
+            sel.addEventListener("change", () => {
+                state[stateKey] = sel.value;
+            });
+            sel.dataset.hasListener = "true";
+        }
+    });
+
     if (!metricSelect.dataset.hasListener) {
         metricSelect.addEventListener("change", () => {
             state.metricId = metricSelect.value;
@@ -205,6 +264,26 @@ function initEventFilter(state) {
         await loadTeamsForEvent(state);
         updateTeamList(state);
         updateSelectionSummary(state);
+
+    if (typeof MutationObserver !== "undefined" && document.body && !document.body.dataset.obsidian3dThemeObserver) {
+        document.body.dataset.obsidian3dThemeObserver = "true";
+        const observer = new MutationObserver(() => {
+            if (!window.Obsidian3DGraph) return;
+            document.querySelectorAll("[data-obsidian3d-config]").forEach((el) => {
+                try {
+                    window.Obsidian3DGraph.render(el, JSON.parse(el.dataset.obsidian3dConfig));
+                } catch (_) {}
+            });
+            const fsEl = document.getElementById("graph-fullscreen-chart");
+            const fsModal = document.getElementById("graph-fullscreen-modal");
+            if (fsEl && fsModal && !fsModal.classList.contains("hidden") && fsEl.dataset.obsidian3dConfig) {
+                try {
+                    window.Obsidian3DGraph.render(fsEl, JSON.parse(fsEl.dataset.obsidian3dConfig));
+                } catch (_) {}
+            }
+        });
+        observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    }
         if (status) {
             status.textContent = state.eventKey ? `Filtered to ${eventFilter.selectedOptions[0].text}` : "Showing all events";
         }
@@ -340,6 +419,26 @@ function initTeamSelection(state) {
             visibleTeams.forEach((team) => state.selectedTeams.add(team));
             updateTeamList(state);
             updateSelectionSummary(state);
+
+    if (typeof MutationObserver !== "undefined" && document.body && !document.body.dataset.obsidian3dThemeObserver) {
+        document.body.dataset.obsidian3dThemeObserver = "true";
+        const observer = new MutationObserver(() => {
+            if (!window.Obsidian3DGraph) return;
+            document.querySelectorAll("[data-obsidian3d-config]").forEach((el) => {
+                try {
+                    window.Obsidian3DGraph.render(el, JSON.parse(el.dataset.obsidian3dConfig));
+                } catch (_) {}
+            });
+            const fsEl = document.getElementById("graph-fullscreen-chart");
+            const fsModal = document.getElementById("graph-fullscreen-modal");
+            if (fsEl && fsModal && !fsModal.classList.contains("hidden") && fsEl.dataset.obsidian3dConfig) {
+                try {
+                    window.Obsidian3DGraph.render(fsEl, JSON.parse(fsEl.dataset.obsidian3dConfig));
+                } catch (_) {}
+            }
+        });
+        observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    }
         });
     }
 
@@ -348,6 +447,26 @@ function initTeamSelection(state) {
             state.selectedTeams.clear();
             updateTeamList(state);
             updateSelectionSummary(state);
+
+    if (typeof MutationObserver !== "undefined" && document.body && !document.body.dataset.obsidian3dThemeObserver) {
+        document.body.dataset.obsidian3dThemeObserver = "true";
+        const observer = new MutationObserver(() => {
+            if (!window.Obsidian3DGraph) return;
+            document.querySelectorAll("[data-obsidian3d-config]").forEach((el) => {
+                try {
+                    window.Obsidian3DGraph.render(el, JSON.parse(el.dataset.obsidian3dConfig));
+                } catch (_) {}
+            });
+            const fsEl = document.getElementById("graph-fullscreen-chart");
+            const fsModal = document.getElementById("graph-fullscreen-modal");
+            if (fsEl && fsModal && !fsModal.classList.contains("hidden") && fsEl.dataset.obsidian3dConfig) {
+                try {
+                    window.Obsidian3DGraph.render(fsEl, JSON.parse(fsEl.dataset.obsidian3dConfig));
+                } catch (_) {}
+            }
+        });
+        observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    }
         });
     }
 
@@ -365,6 +484,26 @@ function initTeamSelection(state) {
             top.forEach((team) => state.selectedTeams.add(team));
             updateTeamList(state);
             updateSelectionSummary(state);
+
+    if (typeof MutationObserver !== "undefined" && document.body && !document.body.dataset.obsidian3dThemeObserver) {
+        document.body.dataset.obsidian3dThemeObserver = "true";
+        const observer = new MutationObserver(() => {
+            if (!window.Obsidian3DGraph) return;
+            document.querySelectorAll("[data-obsidian3d-config]").forEach((el) => {
+                try {
+                    window.Obsidian3DGraph.render(el, JSON.parse(el.dataset.obsidian3dConfig));
+                } catch (_) {}
+            });
+            const fsEl = document.getElementById("graph-fullscreen-chart");
+            const fsModal = document.getElementById("graph-fullscreen-modal");
+            if (fsEl && fsModal && !fsModal.classList.contains("hidden") && fsEl.dataset.obsidian3dConfig) {
+                try {
+                    window.Obsidian3DGraph.render(fsEl, JSON.parse(fsEl.dataset.obsidian3dConfig));
+                } catch (_) {}
+            }
+        });
+        observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    }
         });
     }
 
@@ -375,6 +514,26 @@ function initTeamSelection(state) {
             teams.forEach((team) => state.selectedTeams.add(team));
             updateTeamList(state);
             updateSelectionSummary(state);
+
+    if (typeof MutationObserver !== "undefined" && document.body && !document.body.dataset.obsidian3dThemeObserver) {
+        document.body.dataset.obsidian3dThemeObserver = "true";
+        const observer = new MutationObserver(() => {
+            if (!window.Obsidian3DGraph) return;
+            document.querySelectorAll("[data-obsidian3d-config]").forEach((el) => {
+                try {
+                    window.Obsidian3DGraph.render(el, JSON.parse(el.dataset.obsidian3dConfig));
+                } catch (_) {}
+            });
+            const fsEl = document.getElementById("graph-fullscreen-chart");
+            const fsModal = document.getElementById("graph-fullscreen-modal");
+            if (fsEl && fsModal && !fsModal.classList.contains("hidden") && fsEl.dataset.obsidian3dConfig) {
+                try {
+                    window.Obsidian3DGraph.render(fsEl, JSON.parse(fsEl.dataset.obsidian3dConfig));
+                } catch (_) {}
+            }
+        });
+        observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    }
         });
     }
 }
@@ -445,6 +604,30 @@ function wireGraphOptions(state) {
     const sortSelect = document.getElementById("graph-sort");
     const generateButton = document.getElementById("graph-generate");
     const includePrescoutCheckbox = document.getElementById("include-prescout-checkbox");
+    const toggle3D = document.getElementById("graph-3d-toggle");
+    const axis3DFields = document.getElementById("axis-3d-fields");
+    const metricField = document.getElementById("metric-field");
+    const densityItem = document.getElementById("graph-type-density-item");
+
+    const sync3DUI = () => {
+        if (axis3DFields) axis3DFields.classList.toggle("hidden", !state.is3D);
+        if (metricField) metricField.classList.toggle("hidden", state.is3D);
+        if (densityItem) densityItem.classList.toggle("hidden", !state.is3D);
+        if (!state.is3D && state.selectedGraphTypes.has("density")) {
+            state.selectedGraphTypes.delete("density");
+            const cb = densityItem?.querySelector("input");
+            if (cb) cb.checked = false;
+        }
+        updateGraphTypeAvailability(state);
+    };
+    if (toggle3D) {
+        toggle3D.checked = !!state.is3D;
+        toggle3D.addEventListener("change", () => {
+            state.is3D = toggle3D.checked;
+            sync3DUI();
+        });
+        sync3DUI();
+    }
 
     if (dataView) {
         dataView.addEventListener("change", () => {
@@ -462,6 +645,26 @@ function wireGraphOptions(state) {
             state.includePrescout = includePrescoutCheckbox.checked;
             updateTeamList(state);
             updateSelectionSummary(state);
+
+    if (typeof MutationObserver !== "undefined" && document.body && !document.body.dataset.obsidian3dThemeObserver) {
+        document.body.dataset.obsidian3dThemeObserver = "true";
+        const observer = new MutationObserver(() => {
+            if (!window.Obsidian3DGraph) return;
+            document.querySelectorAll("[data-obsidian3d-config]").forEach((el) => {
+                try {
+                    window.Obsidian3DGraph.render(el, JSON.parse(el.dataset.obsidian3dConfig));
+                } catch (_) {}
+            });
+            const fsEl = document.getElementById("graph-fullscreen-chart");
+            const fsModal = document.getElementById("graph-fullscreen-modal");
+            if (fsEl && fsModal && !fsModal.classList.contains("hidden") && fsEl.dataset.obsidian3dConfig) {
+                try {
+                    window.Obsidian3DGraph.render(fsEl, JSON.parse(fsEl.dataset.obsidian3dConfig));
+                } catch (_) {}
+            }
+        });
+        observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    }
         });
     }
     if (generateButton) {
@@ -488,6 +691,10 @@ function wireGraphOptions(state) {
                         targetEventKey: state.eventKey || null,
                         queryConfig: {
                             eventKey: state.eventKey,
+                            is3D: !!state.is3D,
+                            metricXId: state.metricXId,
+                            metricYId: state.metricYId,
+                            metricZId: state.metricZId,
                             selectedTeams: teamsArray,
                             metricId: state.metricId,
                             metricName: metricName,
@@ -500,6 +707,10 @@ function wireGraphOptions(state) {
                         },
                         snapshotData: {
                             eventKey: state.eventKey,
+                            is3D: !!state.is3D,
+                            metricXId: state.metricXId,
+                            metricYId: state.metricYId,
+                            metricZId: state.metricZId,
                             selectedTeams: teamsArray,
                             metricId: state.metricId,
                             metricName: metricName,
@@ -558,6 +769,26 @@ function updateTeamList(state) {
         empty.textContent = t('graphs.no_teams_found', "No teams found for this event yet.");
         list.appendChild(empty);
         updateSelectionSummary(state);
+
+    if (typeof MutationObserver !== "undefined" && document.body && !document.body.dataset.obsidian3dThemeObserver) {
+        document.body.dataset.obsidian3dThemeObserver = "true";
+        const observer = new MutationObserver(() => {
+            if (!window.Obsidian3DGraph) return;
+            document.querySelectorAll("[data-obsidian3d-config]").forEach((el) => {
+                try {
+                    window.Obsidian3DGraph.render(el, JSON.parse(el.dataset.obsidian3dConfig));
+                } catch (_) {}
+            });
+            const fsEl = document.getElementById("graph-fullscreen-chart");
+            const fsModal = document.getElementById("graph-fullscreen-modal");
+            if (fsEl && fsModal && !fsModal.classList.contains("hidden") && fsEl.dataset.obsidian3dConfig) {
+                try {
+                    window.Obsidian3DGraph.render(fsEl, JSON.parse(fsEl.dataset.obsidian3dConfig));
+                } catch (_) {}
+            }
+        });
+        observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    }
         return;
     }
 
@@ -576,6 +807,26 @@ function updateTeamList(state) {
                 state.selectedTeams.delete(teamNumber);
             }
             updateSelectionSummary(state);
+
+    if (typeof MutationObserver !== "undefined" && document.body && !document.body.dataset.obsidian3dThemeObserver) {
+        document.body.dataset.obsidian3dThemeObserver = "true";
+        const observer = new MutationObserver(() => {
+            if (!window.Obsidian3DGraph) return;
+            document.querySelectorAll("[data-obsidian3d-config]").forEach((el) => {
+                try {
+                    window.Obsidian3DGraph.render(el, JSON.parse(el.dataset.obsidian3dConfig));
+                } catch (_) {}
+            });
+            const fsEl = document.getElementById("graph-fullscreen-chart");
+            const fsModal = document.getElementById("graph-fullscreen-modal");
+            if (fsEl && fsModal && !fsModal.classList.contains("hidden") && fsEl.dataset.obsidian3dConfig) {
+                try {
+                    window.Obsidian3DGraph.render(fsEl, JSON.parse(fsEl.dataset.obsidian3dConfig));
+                } catch (_) {}
+            }
+        });
+        observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    }
         });
 
         const meta = document.createElement("div");
@@ -602,6 +853,26 @@ function updateTeamList(state) {
     });
 
     updateSelectionSummary(state);
+
+    if (typeof MutationObserver !== "undefined" && document.body && !document.body.dataset.obsidian3dThemeObserver) {
+        document.body.dataset.obsidian3dThemeObserver = "true";
+        const observer = new MutationObserver(() => {
+            if (!window.Obsidian3DGraph) return;
+            document.querySelectorAll("[data-obsidian3d-config]").forEach((el) => {
+                try {
+                    window.Obsidian3DGraph.render(el, JSON.parse(el.dataset.obsidian3dConfig));
+                } catch (_) {}
+            });
+            const fsEl = document.getElementById("graph-fullscreen-chart");
+            const fsModal = document.getElementById("graph-fullscreen-modal");
+            if (fsEl && fsModal && !fsModal.classList.contains("hidden") && fsEl.dataset.obsidian3dConfig) {
+                try {
+                    window.Obsidian3DGraph.render(fsEl, JSON.parse(fsEl.dataset.obsidian3dConfig));
+                } catch (_) {}
+            }
+        });
+        observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    }
     filterTeamList(document.getElementById("team-search-input")?.value || "");
 }
 
@@ -677,6 +948,26 @@ function updateSelectionSummary(state) {
                 state.selectedTeams.delete(teamNumber);
                 updateTeamList(state);
                 updateSelectionSummary(state);
+
+    if (typeof MutationObserver !== "undefined" && document.body && !document.body.dataset.obsidian3dThemeObserver) {
+        document.body.dataset.obsidian3dThemeObserver = "true";
+        const observer = new MutationObserver(() => {
+            if (!window.Obsidian3DGraph) return;
+            document.querySelectorAll("[data-obsidian3d-config]").forEach((el) => {
+                try {
+                    window.Obsidian3DGraph.render(el, JSON.parse(el.dataset.obsidian3dConfig));
+                } catch (_) {}
+            });
+            const fsEl = document.getElementById("graph-fullscreen-chart");
+            const fsModal = document.getElementById("graph-fullscreen-modal");
+            if (fsEl && fsModal && !fsModal.classList.contains("hidden") && fsEl.dataset.obsidian3dConfig) {
+                try {
+                    window.Obsidian3DGraph.render(fsEl, JSON.parse(fsEl.dataset.obsidian3dConfig));
+                } catch (_) {}
+            }
+        });
+        observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    }
             });
             pill.appendChild(remove);
             pills.appendChild(pill);
@@ -806,6 +1097,9 @@ function openGraphFullscreen(titleText, sourceChart) {
             modal.classList.add("hidden");
             document.body.classList.remove("modal-open");
             const chartContainer = document.getElementById("graph-fullscreen-chart");
+            if (chartContainer && window.Obsidian3DGraph) {
+                window.Obsidian3DGraph.destroy(chartContainer);
+            }
             if (chartContainer && window.Plotly) {
                 window.Plotly.purge(chartContainer);
             }
@@ -844,6 +1138,14 @@ function openGraphFullscreen(titleText, sourceChart) {
 
     // Allow browser to render layout geometry before measuring and rendering Plotly
     requestAnimationFrame(() => {
+        if (window.Obsidian3DGraph && actualChart.dataset && actualChart.dataset.obsidian3dConfig) {
+            const cfg = JSON.parse(actualChart.dataset.obsidian3dConfig);
+            chartContainer.style.height = "100%";
+            chartContainer.style.minHeight = "480px";
+            chartContainer.dataset.obsidian3dConfig = JSON.stringify(cfg);
+            window.Obsidian3DGraph.render(chartContainer, cfg);
+            return;
+        }
         if (window.Plotly && actualChart.data && actualChart.layout) {
             const fullLayout = JSON.parse(JSON.stringify(actualChart.layout));
             delete fullLayout.height;
@@ -984,7 +1286,22 @@ async function generateGraphs(state) {
             const card = createGraphCard(cardTitle, chart);
             output.appendChild(card);
 
-            renderNonScoutedGraph(graphType, chart, selectedTeams, state);
+            if (state.is3D && window.Obsidian3DGraph) {
+                if (state.datasource === "epa" || state.datasource === "opr") {
+                    chart.appendChild(buildNotice("3D X/Y/Z axes require multiple distinct metrics. Switch Data Source to Scouted Data, Match 13 xP, or All Sources."));
+                    return;
+                }
+                chart.style.height = "460px";
+                const mx = state.metricMap?.get(state.metricXId) || metric;
+                const my = state.metricMap?.get(state.metricYId) || metric;
+                const mz = state.metricMap?.get(state.metricZId) || metric;
+                const forceMatches = (graphType === "box" || graphType === "violin");
+                const series3D = build3DSeriesNonScouted(selectedTeams, mx, my, mz, state, forceMatches);
+                const usePerTeam = (graphType === "box" || graphType === "violin");
+            renderObsidian3DCard(chart, graphType, usePerTeam ? series3DPerTeam : series3DAvgOrMatch, mx, my, mz);
+            } else {
+                renderNonScoutedGraph(graphType, chart, selectedTeams, state);
+            }
         });
 
         if (loading) {
@@ -1033,6 +1350,31 @@ async function generateGraphs(state) {
             </div>
         `;
         output.appendChild(warnBanner);
+    }
+
+    if (state.is3D && window.Obsidian3DGraph) {
+        const mx = state.metricMap?.get(state.metricXId) || metric;
+        const my = state.metricMap?.get(state.metricYId) || metric;
+        const mz = state.metricMap?.get(state.metricZId) || metric;
+        const loc = (m) => (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(m.label) : m.label;
+        const series3DAvgOrMatch = build3DSeriesScouted(filteredEntries, mx, my, mz, state, false);
+        const series3DPerTeam = build3DSeriesScouted(filteredEntries, mx, my, mz, state, true);
+        selectedGraphTypes.forEach((graphType) => {
+            if ((graphType === "line" || graphType === "area") && state.dataView === "averages") {
+                const typeLabel = graphType === "area" ? "Area" : "Line";
+                const card = createGraphCard(`3D ${typeLabel}`, null, t(`graphs.${graphType}_not_supported_averages`, `${typeLabel} graphs are not supported for Team averages. Switch to Match-by-match view to use ${typeLabel} graphs.`));
+                output.appendChild(card);
+                return;
+            }
+            const chart = createPlotlyContainer(460);
+            chart.style.height = "460px";
+            const card = createGraphCard(`3D ${graphType} (${loc(mx)} \u00D7 ${loc(my)} \u00D7 ${loc(mz)})`, chart);
+            output.appendChild(card);
+            const usePerTeam = (graphType === "box" || graphType === "violin");
+            renderObsidian3DCard(chart, graphType, usePerTeam ? series3DPerTeam : series3DAvgOrMatch, mx, my, mz);
+        });
+        if (loading) loading.classList.add("hidden");
+        return;
     }
 
     selectedGraphTypes.forEach((graphType) => {
@@ -1115,7 +1457,7 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
     const effectiveUseOpr = state.settings?.useTbaOpr;
 
     // --- MATCH-BY-MATCH RENDERING ---
-    if (state.dataView === "matches") {
+    if (state.dataView === "matches" || forcePerTeamMatches) {
         if (state.datasource === "exp") {
             const rawMatch13History = state.statsHistory?.match13History || [];
             if (!rawMatch13History.length) {
@@ -1463,7 +1805,7 @@ function renderGraphType(graphType, container, entries, metric, state) {
             renderPlotlyBar(container, series, { orientation: "h" });
             return;
         }
-        if (state.dataView === "matches") {
+        if (state.dataView === "matches" || forcePerTeamMatches) {
             const series = buildTeamSeries(entries, metric, state);
             renderPlotlyMultiBar(container, series);
             return;
@@ -2259,4 +2601,140 @@ function buildNotice(message) {
     notice.className = "notice";
     notice.textContent = message;
     return notice;
+}
+
+function renderObsidian3DCard(container, graphType, series, mx, my, mz) {
+    if (!window.Obsidian3DGraph) return;
+    const loc = (m) => (window.Obsidianscout && typeof Obsidianscout.localize === 'function')
+        ? Obsidianscout.localize(m.label)
+        : (m && m.label ? m.label : "Metric");
+    const cfg = {
+        graphType,
+        series,
+        xLabel: loc(mx),
+        yLabel: loc(my),
+        zLabel: loc(mz)
+    };
+    container.dataset.obsidian3dConfig = JSON.stringify(cfg);
+    window.Obsidian3DGraph.render(container, cfg);
+}
+
+function build3DSeriesScouted(entries, mx, my, mz, state, forcePerTeamMatches = false) {
+    const byTeam = new Map();
+    entries.forEach((entry) => {
+        const team = Number(entry.targetTeamNumber || 0);
+        if (!team) return;
+        const vx = metricValue(entry, mx, state);
+        const vy = metricValue(entry, my, state);
+        const vz = metricValue(entry, mz, state);
+        if (vx === null || vy === null || vz === null) return;
+        if (!Number.isFinite(vx) || !Number.isFinite(vy) || !Number.isFinite(vz)) return;
+        if (!byTeam.has(team)) byTeam.set(team, []);
+        byTeam.get(team).push({
+            x: vx,
+            y: vy,
+            z: vz,
+            matchLabel: entry.matchNumber != null ? `M${entry.matchNumber}` : (entry.matchKey || ""),
+            sortWeight: getMatchSortWeightFromEntry(entry)
+        });
+    });
+
+    const teams = Array.from(byTeam.keys()).sort((a, b) => a - b);
+    if (state.dataView === "matches" || forcePerTeamMatches) {
+        return teams.map((team) => {
+            const pts = byTeam.get(team).slice().sort((a, b) => a.sortWeight - b.sortWeight);
+            return {
+                name: `Team ${team}`,
+                points: pts.map((p) => ({ x: p.x, y: p.y, z: p.z, label: `${team}`, matchLabel: p.matchLabel }))
+            };
+        });
+    }
+
+    const avgPoints = teams.map((team) => {
+        const list = byTeam.get(team);
+        const n = list.length || 1;
+        return {
+            x: list.reduce((a, p) => a + p.x, 0) / n,
+            y: list.reduce((a, p) => a + p.y, 0) / n,
+            z: list.reduce((a, p) => a + p.z, 0) / n,
+            label: `${team}`
+        };
+    });
+    return [{ name: "Teams", points: avgPoints }];
+}
+
+function build3DSeriesNonScouted(selectedTeams, mx, my, mz, state, forcePerTeamMatches = false) {
+    if (state.datasource === "exp" && (state.dataView === "matches" || (forcePerTeamMatches && (state.statsHistory?.match13History || []).length > 0))) {
+        if (state.datasource === "all" && forcePerTeamMatches) {
+        const filtered = getFilteredEntriesForTeams(state);
+        const byTeam = build3DSeriesScouted(filtered, mx, my, mz, state, true);
+        if (byTeam.length > 0) return byTeam;
+    }
+    const rawHistory = state.statsHistory?.match13History || [];
+        return selectedTeams.map((teamNumber) => {
+            const pts = [];
+            rawHistory.forEach((matchObj) => {
+                const td = extractTeamExpData(matchObj, teamNumber);
+                if (!td) return;
+                const matchKey = matchObj.key || matchObj.matchKey || matchObj.match_key || matchObj.match || "";
+                const label = formatMatchKeyToLabel(matchKey);
+                pts.push({
+                    x: getTeamExpMetricValue(td, mx.id),
+                    y: getTeamExpMetricValue(td, my.id),
+                    z: getTeamExpMetricValue(td, mz.id),
+                    label: `${teamNumber}`,
+                    matchLabel: label,
+                    sortWeight: getMatchSortWeightFromLabel(label)
+                });
+            });
+            pts.sort((a, b) => a.sortWeight - b.sortWeight);
+            return { name: `Team ${teamNumber}`, points: pts };
+        }).filter((s) => s.points.length > 0);
+    }
+
+    if (state.datasource === "all" && forcePerTeamMatches) {
+        const filtered = getFilteredEntriesForTeams(state);
+        const byTeam = build3DSeriesScouted(filtered, mx, my, mz, state, true);
+        if (byTeam.length > 0) return byTeam;
+    }
+    const rawHistory = state.statsHistory?.match13History || [];
+    const filteredEntries = state.datasource === "all" ? getFilteredEntriesForTeams(state) : [];
+
+    const points = selectedTeams.map((teamNumber) => {
+        const team = state.eventTeamsMap ? state.eventTeamsMap.get(teamNumber) : null;
+        const teamEntries = filteredEntries.filter(e => Number(e.targetTeamNumber) === Number(teamNumber));
+
+        const avgExpMetric = (metricId) => {
+            let sum = 0, cnt = 0;
+            rawHistory.forEach((matchObj) => {
+                const td = extractTeamExpData(matchObj, teamNumber);
+                if (!td) return;
+                sum += getTeamExpMetricValue(td, metricId);
+                cnt++;
+            });
+            if (cnt > 0) return sum / cnt;
+            if (metricId === "score_total") return Number(team?.exp ?? team?.match13Exp ?? 0);
+            return 0;
+        };
+
+        const avgScoutedMetric = (m) => {
+            if (!teamEntries.length) return m.scope === "total" ? Number(team?.averagePoints ?? 0) : 0;
+            let sum = 0, cnt = 0;
+            teamEntries.forEach((e) => {
+                const v = metricValue(e, m, state);
+                if (v !== null && Number.isFinite(v)) { sum += v; cnt++; }
+            });
+            return cnt > 0 ? sum / cnt : 0;
+        };
+
+        const valFor = (m) => {
+            if (state.datasource === "exp") return avgExpMetric(m.id);
+            if (m.id === "ext_epa") return Number(team?.epa ?? 0);
+            if (m.id === "ext_exp") return Number(team?.exp ?? team?.match13Exp ?? 0);
+            if (m.id === "ext_opr") return Number(team?.opr ?? 0);
+            return avgScoutedMetric(m);
+        };
+        return { x: valFor(mx), y: valFor(my), z: valFor(mz), label: `${teamNumber}` };
+    });
+    return [{ name: getDatasourceLabel(state.datasource, state), points }];
 }
