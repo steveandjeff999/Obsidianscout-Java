@@ -20,6 +20,10 @@ config/*.jks
 CHANGE_REPORT.md
 SECURITY_FIXES.md
 docs/INTRUSION_DETECTION_PLAN.md
+docs/dev/INTRUSION_DETECTION_PLAN.md
 
 # Local SeaweedFS runtime data and binary
 .seaweedfs/
+
+# Local install for scripts/capture-doc-screenshots.js
+scripts/.doc-shots/

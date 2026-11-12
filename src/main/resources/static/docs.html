@@ -150,6 +150,28 @@
             border-top: 1px solid var(--border);
             margin: 32px 0;
         }
+        .markdown-body img {
+            display: block;
+            max-width: 100%;
+            height: auto;
+            margin: 12px 0 24px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+        }
+        /* Feature-tour screenshots are all 1440x900: reserve their space so lazy loading doesn't shift #anchor jumps. */
+        .markdown-body img[src^="/assets/images/docs/"] {
+            width: 100%;
+            aspect-ratio: 1440 / 900;
+        }
+        .markdown-body a {
+            color: var(--accent);
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
+        .markdown-body h1, .markdown-body h2, .markdown-body h3 {
+            scroll-margin-top: 80px;
+        }
         
         /* Alert banners in Markdown rendering (resembling GitHub alerts) */
         .markdown-body blockquote p:first-child {
@@ -446,7 +468,54 @@
 
             const menuContainer = document.getElementById("docs-menu");
             const viewport = document.getElementById("docs-viewport");
-            let activeFilename = null;
+            // ?doc=FILE.md opens that article first (used for deep links to e.g. the Feature Tour).
+            const requestedDoc = new URLSearchParams(window.location.search).get("doc");
+            let activeFilename = requestedDoc && /^[\w.-]+\.md$/.test(requestedDoc) ? requestedDoc : null;
+
+            // GitHub-style heading slugs so in-page "#section" links work (marked v15 adds no heading ids).
+            const slugify = (text) => text.trim().toLowerCase().replace(/[^\w\- ]+/g, "").replace(/ /g, "-");
+
+            function enhanceArticle() {
+                const used = new Map();
+                viewport.querySelectorAll("h1, h2, h3, h4").forEach(h => {
+                    const base = slugify(h.textContent);
+                    const n = used.get(base) || 0;
+                    used.set(base, n + 1);
+                    h.id = n ? `${base}-${n}` : base;
+                });
+                viewport.querySelectorAll("img").forEach(img => {
+                    img.loading = "lazy";
+                    img.decoding = "async";
+                });
+                if (window.location.hash) {
+                    const target = document.getElementById(decodeURIComponent(window.location.hash.slice(1)));
+                    if (target) target.scrollIntoView();
+                }
+            }
+
+            // Links to other docs (e.g. "PUBLIC_DATA.md") open in this viewer instead of 404ing.
+            viewport.addEventListener("click", (e) => {
+                const a = e.target.closest("a[href]");
+                if (!a) return;
+                const href = a.getAttribute("href");
+                const m = href.match(/^([\w.-]+\.md)(#.*)?$/);
+                if (!m) return;
+                e.preventDefault();
+                const btn = menuContainer.querySelector(`.docs-menu-item[data-filename="${m[1]}"]`);
+                activeFilename = m[1];
+                history.pushState(null, "", `/docs?doc=${encodeURIComponent(m[1])}${m[2] || ""}`);
+                loadArticle(m[1], btn, getLang());
+            });
+
+            // Back/forward between docs reloads the article the URL now names.
+            window.addEventListener("popstate", () => {
+                const doc = new URLSearchParams(window.location.search).get("doc");
+                const filename = doc && /^[\w.-]+\.md$/.test(doc) ? doc : menuContainer.querySelector(".docs-menu-item")?.dataset.filename;
+                if (!filename || filename === activeFilename) return;
+                activeFilename = filename;
+                const btn = menuContainer.querySelector(`.docs-menu-item[data-filename="${filename}"]`);
+                loadArticle(filename, btn, getLang());
+            });
 
             const getLang = () => localStorage.getItem('obsidianscout:lang') || 'en';
 
@@ -464,12 +533,16 @@
                             return;
                         }
                         menuContainer.innerHTML = "";
+                        if (!files.some(f => f.filename === activeFilename)) activeFilename = null;
                         files.forEach((file, index) => {
                             const btn = document.createElement("button");
                             btn.className = "docs-menu-item";
                             btn.textContent = file.title;
                             btn.dataset.filename = file.filename;
                             btn.addEventListener("click", () => {
+                                if (activeFilename !== file.filename) {
+                                    history.pushState(null, "", `/docs?doc=${encodeURIComponent(file.filename)}`);
+                                }
                                 activeFilename = file.filename;
                                 loadArticle(file.filename, btn, lang);
                             });
@@ -506,6 +579,7 @@
                         } else {
                             viewport.innerHTML = `<pre>${data.content}</pre>`;
                         }
+                        enhanceArticle();
                     })
                     .catch(err => {
                         viewport.innerHTML = `<h2 style="color: var(--danger);">${translate('docs.error_loading', 'Error loading documentation')}</h2><p>${err.message}</p>`;

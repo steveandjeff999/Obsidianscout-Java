@@ -1,4 +1,6 @@
-# Blob storage (SeaweedFS)
+# Blob Storage (SeaweedFS)
+
+> **For server operators.** Team users don't need to do anything: photos and files just work. This page is about running the server.
 
 Profile pictures, Event Info attachments and scouting photos are kept in a SeaweedFS object store instead of as
 base64 inside database rows. Nothing needs to be installed by hand: on startup every server downloads the pinned
@@ -116,8 +118,9 @@ gives the commands (see "Firewall check" above).
 
 ## Known limits
 
-* Backups and snapshots still contain references, not bytes. Restoring one on the same cluster works; restoring it
-  elsewhere, or after garbage collection removed an object, loses those images.
+* `.obsidiandb` backups carry the images themselves (`blob/BackupImages.kt`), up to the backup's image size limit;
+  images past the limit stay as links. Links, CSV archives and snapshots hold references, not bytes: restoring them on
+  the same cluster works, but restoring elsewhere, or after garbage collection removed an object, loses those images.
 * A file written to local disk on one node during a SeaweedFS outage can only be read on that node until it is moved
   (at most one maintenance pass after SeaweedFS is back).
 * SeaweedFS ports have no authentication; like CockroachDB in insecure mode they rely on binding to the Tailscale IP.

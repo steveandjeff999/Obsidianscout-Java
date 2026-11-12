@@ -4,6 +4,8 @@ ObsidianScout, küçük yapay zekâ dil modellerini (Llama 3.2 ve Gemma 4) **tam
 
 Asistan tüm kullanıcılar için **varsayılan olarak kapalıdır**.
 
+> **Deneyseldir, yarışmada kullanım için değildir.** Yerel Yapay Zekâ Asistanı temel bir özellik olarak değil, eğlenceli bir deney olarak başladı. Cihazda çalışan küçük modeller soruları yanlış anlayabilir veya hata yapabilir; çalıştırmak da pil ve depolama açısından ağırdır. Etkinliklerde ona güvenmemenizi öneririz: scouting ve seçim kararları için normal veri, analiz ve strateji sayfalarını kullanın.
+
 ## Ne yapar
 
 - **Scouting Asistanı sayfası** (`/assistant`): "Otonomda ilk 5 takım", "254 ve 1678'i karşılaştır", "35. maçı önizle" veya "Kimi seçmeliyiz?" gibi sorular sorun. Tablolar ve grafikler doğrudan verilerinizden hesaplanır. Yazılı yanıtı model üretir ve yanıttaki, verilerinizde bulunamayan her sayının altı çizilir; böylece kontrol edebilirsiniz.
@@ -13,6 +15,8 @@ Asistan tüm kullanıcılar için **varsayılan olarak kapalıdır**.
 - **Notu düzenle**: Nitel scouting sırasında "Notu düzenle" düğmesi notun daha temiz bir sürümünü önerir (yazım, kısaltmalar). Kullanıp kullanmamaya siz karar verirsiniz.
 
 Asistan yalnızca hesabınızın zaten görebildiği verileri görür ve hiçbir şeyi değiştiremez.
+
+![Scouting asistanı](/assets/images/docs/assistant.webp)
 
 ## Açma
 

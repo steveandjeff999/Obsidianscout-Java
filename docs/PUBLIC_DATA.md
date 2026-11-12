@@ -4,8 +4,8 @@ Teams can share their scouting data with anyone. Visitors don't need an account,
 
 ## Turning it on
 
-1. Open **Admin Settings** (web) or **Settings** (app) as a team admin.
-2. Check **Make data publicly available** and confirm.
+1. Open **Admin Settings → Permissions** (web) or **Settings** (app) as a team admin.
+2. Under **General Permissions**, check **Make data publicly available** and confirm.
 3. Optional: check **Include notes and comments** to show free-text answers (textarea fields and any field named like a note or comment). They are hidden by default. Turning this on also adds **Qual Rankings** to your public pages.
 4. Save.
 
@@ -16,6 +16,8 @@ To hide the data again, uncheck the box and save. The data disappears on the nex
 The **Public Data** page (`/public-data`) lists every sharing team, by team or by event, with how many match, pit and qualitative entries each event has. From there, visitors can open these pages read-only:
 
 Graphs, Analytics, Compare Teams, Custom Analytics, Rankings, Projected Rankings, Match Predictor, Event Predictor, Match Data, Pit Data, Qual Data, All Data and team pages.
+
+![Public Data page](/assets/images/docs/public-data.webp)
 
 The pages use the team's own scouting configs, so fields, scoring and graphs look the same as they do for the team.
 

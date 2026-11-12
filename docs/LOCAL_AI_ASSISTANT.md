@@ -4,6 +4,8 @@ ObsidianScout can run small AI language models (Llama 3.2 and Gemma 4) **entirel
 
 The assistant is **off by default** for every user.
 
+> **Experimental, not for competition use.** The Local AI Assistant started as a fun experiment, not a core feature. Small on-device models can misread questions or get things wrong, and running them is heavy on battery and storage. We recommend not relying on it at events: use the regular data, analytics and strategy pages for scouting and picking decisions.
+
 ## What it does
 
 - **Scouting Assistant page** (`/assistant`): ask questions such as "Top 5 teams by auto", "Compare 254 and 1678", "Preview match 35" or "Who should we pick?". Tables and charts are computed directly from your scouting data. The written answer comes from the model, and any number in it that could not be found in your data is underlined so you can double-check it.
@@ -13,6 +15,8 @@ The assistant is **off by default** for every user.
 - **Tidy note**: while qualitative scouting, a "Tidy note" button suggests a cleaned-up version of a note (spelling, shorthand). You choose whether to use it.
 
 The assistant can only see data your account can already see. It can't change anything.
+
+![Scouting Assistant](/assets/images/docs/assistant.webp)
 
 ## Turning it on
 

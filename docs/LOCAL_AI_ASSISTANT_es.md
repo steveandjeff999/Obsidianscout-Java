@@ -4,6 +4,8 @@ ObsidianScout puede ejecutar pequeños modelos de lenguaje (Llama 3.2 y Gemma 4)
 
 El asistente está **desactivado por defecto** para todos los usuarios.
 
+> **Experimental, no para usar en competencia.** El Asistente de IA local empezó como un experimento divertido, no como una función principal. Los modelos pequeños que se ejecutan en el dispositivo pueden malinterpretar preguntas o equivocarse, y ejecutarlos consume mucha batería y almacenamiento. Recomendamos no depender de él en los eventos: usa las páginas habituales de datos, análisis y estrategia para tomar decisiones de scouting y de selección.
+
 ## Qué hace
 
 - **Página del Asistente de scouting** (`/assistant`): haz preguntas como "Top 5 equipos en autónomo", "Compara 254 y 1678", "Vista previa del partido 35" o "¿A quién deberíamos elegir?". Las tablas y gráficas se calculan directamente a partir de tus datos. La respuesta escrita la genera el modelo, y cualquier número que no se encuentre en tus datos aparece subrayado para que lo verifiques.
@@ -13,6 +15,8 @@ El asistente está **desactivado por defecto** para todos los usuarios.
 - **Ordenar nota**: durante el scouting cualitativo, el botón "Ordenar nota" sugiere una versión más limpia de la nota (ortografía, abreviaturas). Tú decides si usarla.
 
 El asistente solo puede ver los datos a los que tu cuenta ya tiene acceso. No puede modificar nada.
+
+![Asistente de scouting](/assets/images/docs/assistant.webp)
 
 ## Activarlo
 

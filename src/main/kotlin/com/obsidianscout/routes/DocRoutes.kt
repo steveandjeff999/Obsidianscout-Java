@@ -102,6 +102,9 @@ import com.obsidianscout.db.ScoutingAlliances
 import com.obsidianscout.db.ChatService
 import com.obsidianscout.db.ChatMessages
 
+/** Docs listed first in the docs menu (and opened by default), ahead of the alphabetical rest. */
+private val PINNED_DOCS = listOf("FEATURE_TOUR.md", "GETTING_STARTED.md")
+
 private fun findDocsDir(): java.io.File {
     val paths = listOf("docs", "Obsidianscout/docs", "../docs")
     for (p in paths) {
@@ -124,7 +127,7 @@ fun Route.docRoutes() {
                     }
                     val baseFiles = docsDir.listFiles { _, name -> 
                         name.endsWith(".md") && !name.contains("_es.md") && !name.contains("_tr.md") && !name.contains("_he.md")
-                    }?.sortedBy { it.name } ?: emptyList()
+                    }?.sortedWith(compareBy({ PINNED_DOCS.indexOf(it.name).let { i -> if (i < 0) Int.MAX_VALUE else i } }, { it.name })) ?: emptyList()
                     
                     val files = baseFiles.map { baseFile ->
                         val baseName = baseFile.nameWithoutExtension

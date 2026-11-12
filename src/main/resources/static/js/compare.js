@@ -26,6 +26,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     const team2Select = document.getElementById("team-2-select");
     const team3Select = document.getElementById("team-3-select");
     const resultsContainer = document.getElementById("compare-results-container");
+    // Declared before the init below, which runs a comparison straight away for ?team1=&team2= links.
+    let comparisonShown = false;
+    // Only the latest comparison request may render, so a slow older one can't overwrite a newer selection.
+    let comparisonSeq = 0;
 
     try {
         const settingsResponse = await Obsidianscout.request("/api/settings");
@@ -138,12 +142,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    let comparisonShown = false;
     Obsidianscout.liveRefresh(["scouting", "rankings"], async () => {
         if (comparisonShown) await runComparison();
     }, { minIntervalMs: 10000, eventKey: () => state.currentEventKey });
 
     async function runComparison() {
+        const seq = ++comparisonSeq;
         const t1 = team1Select?.value ? parseInt(team1Select.value, 10) : null;
         const t2 = team2Select?.value ? parseInt(team2Select.value, 10) : null;
         const t3 = team3Select?.value ? parseInt(team3Select.value, 10) : null;
@@ -174,9 +178,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         try {
             const eventQuery = state.currentEventKey ? `&eventKey=${encodeURIComponent(state.currentEventKey)}` : "";
             const response = await Obsidianscout.request(`/api/analytics/compare?teams=${teams.join(",")}${eventQuery}${useMatch13 ? "&source=match13" : ""}`);
+            if (seq !== comparisonSeq) return;
 
             renderComparisonResults(teams, response || {});
         } catch (e) {
+            if (seq !== comparisonSeq) return;
             if (quiet) throw e;
             resultsContainer.innerHTML = `<div class="card error">Error comparing teams: ${Obsidianscout.escapeHtml(e.message)}</div>`;
         }
