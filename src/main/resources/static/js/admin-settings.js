@@ -441,6 +441,13 @@ document.addEventListener("DOMContentLoaded", async () => {
             setVal("settings-year", loadedSettings.year);
             setVal("settings-event-code", loadedSettings.eventCode || "");
             setVal("settings-alternate-event-code", loadedSettings.alternateEventCode || "");
+            if (window.ObsidianEventPicker) {
+                window.ObsidianEventPicker.attach({
+                    yearInput: document.getElementById("settings-year"),
+                    codeInput: document.getElementById("settings-event-code"),
+                    altInput: document.getElementById("settings-alternate-event-code")
+                });
+            }
             setVal("settings-timezone", loadedSettings.timezone || "UTC");
             setVal("settings-statbotics-url", loadedSettings.statboticsBaseUrl || "https://api.statbotics.io");
             setVal("settings-match13-url", loadedSettings.match13BaseUrl || "https://actions.match13.com");
@@ -1761,6 +1768,14 @@ document.addEventListener("DOMContentLoaded", async () => {
             saveButton.title = live
                 ? "Changes save automatically. Saving a version records it in Schema History and checks existing scouting data."
                 : "";
+        }
+        const actionBar = document.getElementById("config-action-bar");
+        if (actionBar && window.ObsidianscoutActionBar) {
+            const live = status === "live";
+            if (live !== (actionBar.dataset.actionBarAuto === "true")) {
+                window.ObsidianscoutActionBar.setAuto(actionBar, live,
+                    live ? t('action_bar.live_version', "Changes sync automatically - Save version records a snapshot") : undefined);
+            }
         }
     }
 

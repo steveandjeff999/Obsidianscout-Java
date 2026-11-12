@@ -20,6 +20,9 @@ export function showToast(message, tone = "info") {
     toast.className = `toast ${tone}`;
     toast.textContent = message;
     root.appendChild(toast);
+    try {
+        document.dispatchEvent(new CustomEvent("obsidianscout:toast", { detail: { message, tone } }));
+    } catch (e) {}
     setTimeout(() => {
         toast.remove();
     }, 2800);

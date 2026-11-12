@@ -230,6 +230,46 @@ object FtcIntegrationService {
         return eventsArray.size
     }
 
+    /**
+     * Every FTC event of [year] for the settings event picker, from FTC Scout (public, no key). FTC Scout and the
+     * FIRST FTC API share event codes, so entries never carry an alternate code. Asks for locations first and
+     * falls back to the bare list if FTC Scout rejects that query.
+     */
+    internal suspend fun fetchEventCatalog(year: Int): List<EventCatalogEntry> {
+        val variables = buildJsonObject {
+            put("season", year)
+            put("limit", EVENT_SEARCH_LIMIT)
+        }
+        val data = try {
+            ftcScoutQuery(
+                "query(\$season: Int!, \$limit: Int!) { eventsSearch(season: \$season, limit: \$limit) { code name start end location { city state country } } }",
+                variables
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.debug("FTC Scout event list with locations failed, retrying without: ${e.message}")
+            ftcScoutQuery(
+                "query(\$season: Int!, \$limit: Int!) { eventsSearch(season: \$season, limit: \$limit) { code name start end } }",
+                variables
+            )
+        }
+        val events = data["eventsSearch"] as? JsonArray ?: throw FtcSyncException("FTC Scout returned no event list for $year")
+        fun JsonObject.text(key: String) = (this[key] as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf { it.isNotBlank() }
+        return events.mapNotNull { item ->
+            val obj = item as? JsonObject ?: return@mapNotNull null
+            val code = obj.text("code") ?: return@mapNotNull null
+            val location = obj["location"] as? JsonObject
+            EventCatalogEntry(
+                code = code.uppercase(),
+                name = obj.text("name") ?: code,
+                startDate = obj.text("start")?.take(10),
+                endDate = obj.text("end")?.take(10),
+                location = listOfNotNull(location?.text("city"), location?.text("state"), location?.text("country")).joinToString(", ")
+            )
+        }.distinctBy { it.code }.sortedWith(compareBy<EventCatalogEntry>({ it.startDate ?: "9999" }, { it.name.lowercase() }))
+    }
+
     // ---- Event data -------------------------------------------------------------------------------------
 
     suspend fun syncEventData(settings: ApiSettings): SyncCounts {

@@ -422,3 +422,108 @@ input:checked + .slider:before {
     text-shadow: 0 0 12px rgba(245, 158, 11, 0.45);
 }
 
+
+/* "Don't know your event code?" picker (settings API tab) */
+.event-picker {
+    grid-column: 1 / -1;
+}
+
+.event-picker-box {
+    position: relative;
+}
+
+.event-picker-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.event-picker-controls .event-picker-year {
+    width: auto;
+    flex: 0 0 auto;
+    min-width: 92px;
+}
+
+.event-picker-controls .event-picker-search {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.event-picker-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 30;
+    margin: 4px 0 0;
+    padding: 4px;
+    list-style: none;
+    max-height: 340px;
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow);
+}
+
+.event-picker-list li[role="option"] {
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+
+.event-picker-list li[role="option"]:hover,
+.event-picker-list li[aria-selected="true"] {
+    background: var(--surface-3);
+}
+
+.event-picker-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.event-picker-name {
+    font-weight: 600;
+    color: var(--ink);
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.event-picker-codes {
+    display: flex;
+    gap: 6px;
+    flex: 0 0 auto;
+}
+
+.event-picker-codes code {
+    font-size: 12px;
+    padding: 1px 6px;
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    border: 1px solid var(--border-subtle);
+    color: var(--ink);
+}
+
+.event-picker-codes .event-picker-alt {
+    color: var(--accent);
+}
+
+.event-picker-meta {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 2px;
+}
+
+.event-picker-list .event-picker-empty {
+    padding: 8px 10px;
+    font-size: 13px;
+    color: var(--muted);
+}
+
+@media (max-width: 520px) {
+    .event-picker-row {
+        flex-direction: column;
+        gap: 2px;
+    }
+}

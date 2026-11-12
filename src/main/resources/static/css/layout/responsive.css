@@ -138,6 +138,21 @@
         overflow-x: hidden !important;
     }
 
+    /* `hidden` makes the shell a scroll container, which stops sticky elements (the Save action bar)
+       from sticking to the viewport. `clip` trims sideways overflow the same way without that. */
+    @supports (overflow-x: clip) {
+        .app-shell,
+        body.nav-layout-topbar .app-shell,
+        body.nav-layout-sidebar-right .app-shell,
+        body.nav-layout-topbar-left .app-shell,
+        body.nav-layout-topbar-right .app-shell,
+        body.nav-layout-topbar-bottom .app-shell,
+        body.nav-layout-compact-left .app-shell,
+        body.nav-layout-compact-right .app-shell {
+            overflow-x: clip !important;
+        }
+    }
+
     /* Mobile Drawer (Sidebar) */
     .sidebar,
     body.nav-layout-topbar .sidebar,

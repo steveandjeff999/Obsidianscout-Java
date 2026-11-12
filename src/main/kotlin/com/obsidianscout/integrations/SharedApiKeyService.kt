@@ -139,6 +139,7 @@ object SharedApiKeyService {
         }
         com.obsidianscout.scouting.AllianceService.clearEffectiveSettingsCache()
         SettingsService.clearSyncedEventsCache()
+        EventCatalogService.onSharedKeysChanged(prog)
         return merged
     }
 

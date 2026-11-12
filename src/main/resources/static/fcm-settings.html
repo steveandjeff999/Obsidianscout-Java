@@ -98,7 +98,7 @@
                     </div>
                 </div>
 
-                <form id="fcm-form" style="display: flex; flex-direction: column; gap: 20px;">
+                <form id="fcm-form" data-action-scope style="display: flex; flex-direction: column; gap: 20px;">
                     <!-- Enable Toggle -->
                     <div class="card soft" style="background: var(--surface-2); padding: 16px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between;">
                         <div>
@@ -189,13 +189,16 @@
                     </div>
 
                     <!-- Action Buttons -->
-                    <div style="display: flex; gap: 12px; justify-content: flex-end; flex-wrap: wrap;">
+                    <div class="action-bar" data-action-bar style="margin-top: 4px;">
+                        <span class="action-bar-status" data-action-bar-status></span>
+                        <div class="action-bar-buttons">
                         <button type="button" id="btn-test-fcm" class="btn secondary" style="display: inline-flex; align-items: center; gap: 6px;">
                             <span><span class="material-symbols-outlined">notifications</span></span> <span data-i18n="fcm.btn_test">Send Test Notification</span>
                         </button>
-                        <button type="submit" id="btn-save-fcm" class="btn primary" style="display: inline-flex; align-items: center; gap: 6px;">
+                        <button type="submit" id="btn-save-fcm" class="btn primary" data-action-bar-save style="display: inline-flex; align-items: center; gap: 6px;">
                             <span><span class="material-symbols-outlined">save</span></span> <span data-i18n="fcm.btn_save">Save to Database</span>
                         </button>
+                        </div>
                     </div>
                 </form>
 

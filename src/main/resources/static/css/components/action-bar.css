@@ -1,0 +1,166 @@
+/* ==========================================================================
+   Sticky Action Bar
+   Floats Save (and related) buttons at the bottom of the viewport while the
+   form/section it belongs to is on screen, with a live "unsaved changes"
+   status so nobody assumes the page auto-saves.
+   Markup:
+     <section data-action-scope>
+       ...form fields...
+       <div class="action-bar" data-action-bar>
+         <span class="action-bar-status" data-action-bar-status></span>
+         <div class="action-bar-buttons">
+           <button data-action-bar-save class="btn">Save</button>
+         </div>
+       </div>
+     </section>
+   ========================================================================== */
+
+.action-bar {
+    position: sticky;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    margin-top: 24px;
+    padding: 10px 12px 10px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12), 0 1px 3px rgba(15, 23, 42, 0.08);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.action-bar-buttons {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.action-bar-buttons .btn {
+    margin: 0;
+}
+
+.action-bar-group {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.action-bar-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 32px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+}
+
+.action-bar-status .material-symbols-outlined {
+    font-size: 18px;
+}
+
+.action-bar-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+}
+
+/* Unsaved changes: amber edge + dot, save button called out */
+.action-bar[data-state="dirty"] {
+    border-color: var(--warning);
+    box-shadow: 0 8px 24px rgba(245, 158, 11, 0.18), 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.action-bar[data-state="dirty"] .action-bar-status {
+    color: var(--ink);
+}
+
+.action-bar[data-state="dirty"] .action-bar-dot {
+    background: var(--warning);
+    animation: action-bar-pulse 1.6s ease-in-out infinite;
+}
+
+.action-bar[data-state="dirty"] [data-action-bar-save] {
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.35);
+}
+
+.action-bar[data-state="saving"] .action-bar-dot {
+    background: var(--accent);
+}
+
+.action-bar[data-state="saved"] .action-bar-status {
+    color: var(--success);
+}
+
+.action-bar[data-state="saved"] .action-bar-dot,
+.action-bar[data-state="live"] .action-bar-dot {
+    background: var(--success);
+}
+
+.action-bar[data-state="error"] {
+    border-color: var(--danger);
+}
+
+.action-bar[data-state="error"] .action-bar-status {
+    color: var(--danger);
+}
+
+.action-bar[data-state="error"] .action-bar-dot {
+    background: var(--danger);
+}
+
+@keyframes action-bar-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .action-bar[data-state="dirty"] .action-bar-dot {
+        animation: none;
+    }
+}
+
+/* Bottom-docked navigation: lift the bar above it */
+body.nav-layout-topbar-bottom .action-bar {
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+}
+
+@media (max-width: 600px) {
+    .action-bar {
+        padding: 10px 12px;
+        bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .action-bar-status {
+        width: 100%;
+        min-height: 0;
+    }
+
+    .action-bar-buttons {
+        width: 100%;
+        margin-left: 0;
+    }
+
+    .action-bar-buttons [data-action-bar-save] {
+        flex: 1 1 auto;
+    }
+}
+
+/* Modal footers stay pinned to the bottom of a scrolling modal */
+.modal-container .modal-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    padding: 14px 0 4px;
+    background: var(--surface);
+    border-top: 1px solid var(--border-subtle);
+}

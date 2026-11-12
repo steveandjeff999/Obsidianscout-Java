@@ -165,8 +165,10 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
         exclude("secrets.json*", "*.jks", "*.bak")
     }
 
-    from(file("../docs")) {
+    // docs/ lives inside this project; "../docs" pointed outside the repo, and Gradle silently copies nothing for a missing dir.
+    from(file("docs")) {
         into("docs")
+        exclude("dev/**")
     }
 
     from(file("scripts/update.sh")) { into(".") }
@@ -774,8 +776,9 @@ val nativeBundleTasks = nativeArchs.map { arch ->
             exclude("secrets.json*", "*.jks", "*.bak")
         }
 
-        from(file("../docs")) {
+        from(file("docs")) {
             into("docs")
+            exclude("dev/**")
         }
 
         from(file("src/main/resources/static")) {

@@ -567,7 +567,7 @@
                         Saving writes these settings to <code style="background: var(--surface-2); padding: 2px 6px; border-radius: 4px;">app-config.json</code> on every node and restarts Redis on each one with them. The app keeps running; the cache is skipped for a few seconds while Redis comes back.
                     </p>
 
-                    <form id="cfgForm" onsubmit="saveConfig(event)">
+                    <form id="cfgForm" data-action-scope onsubmit="saveConfig(event)">
                         <div class="cfg-grid">
                             <div class="cfg-field">
                                 <label class="cfg-check"><input type="checkbox" id="cfgEnabled" /> Redis enabled</label>
@@ -608,9 +608,12 @@
                                 <input type="number" id="cfgMaxMb" min="16" step="1" />
                             </div>
                         </div>
-                        <div class="action-btn-group" style="margin-top: 24px;">
-                            <button type="submit" class="btn primary" id="cfgSaveBtn">Save to All Nodes</button>
-                            <button type="button" class="btn secondary" onclick="loadConfig(true)">Reload Settings</button>
+                        <div class="action-bar" data-action-bar id="cfgActionBar">
+                            <span class="action-bar-status" data-action-bar-status></span>
+                            <div class="action-bar-buttons">
+                                <button type="button" class="btn secondary" onclick="loadConfig(true)">Reload Settings</button>
+                                <button type="submit" class="btn primary" id="cfgSaveBtn" data-action-bar-save>Save to All Nodes</button>
+                            </div>
                         </div>
                     </form>
 
@@ -1028,10 +1031,16 @@
                     results.appendChild(li);
                 }
                 cfgDirty = false;
+                if (window.ObsidianscoutActionBar) {
+                    const bar = document.getElementById('cfgActionBar');
+                    if (failedCount === 0) window.ObsidianscoutActionBar.markSaved(bar);
+                    else window.ObsidianscoutActionBar.markFailed(bar, 'Saved to ' + savedCount + ' node(s), failed on ' + failedCount);
+                }
                 setTimeout(() => { loadConfig(true); fetchStatus(); }, 3000);
             } catch (err) {
                 msg.style.color = 'var(--danger, #ef4444)';
                 msg.textContent = 'Failed to save: ' + err.message;
+                if (window.ObsidianscoutActionBar) window.ObsidianscoutActionBar.markFailed(document.getElementById('cfgActionBar'));
             } finally {
                 btn.disabled = false;
             }

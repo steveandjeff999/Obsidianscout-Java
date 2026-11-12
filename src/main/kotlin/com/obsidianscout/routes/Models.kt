@@ -973,6 +973,17 @@ data class TestApiResponse(
 )
 
 @Serializable
+data class EventCatalogResponse(
+    val program: String,
+    val year: Int,
+    /** False when the server has no way to list events (FRC with no TBA or FIRST key anywhere). */
+    val available: Boolean,
+    /** ISO time of the fetch the list came from; null when unavailable. */
+    val fetchedAt: String? = null,
+    val events: List<com.obsidianscout.integrations.EventCatalogEntry> = emptyList()
+)
+
+@Serializable
 data class ConfigUpdateResponse(
     val config: com.obsidianscout.config.ScoutingConfig,
     val hasFieldChanges: Boolean = false,

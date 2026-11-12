@@ -58,7 +58,7 @@
                         <!-- Alliance Details Card -->
                         <div class="card">
                             <h2 data-i18n="alliance-edit.alliance_details">Alliance Details</h2>
-                            <form id="form-alliance-details" class="grid gap-16 mt-12">
+                            <form id="form-alliance-details" class="grid gap-16 mt-12" data-action-scope>
                                 <div class="field">
                                     <label for="alliance-name" data-i18n="alliance-edit.alliance_name">Alliance Name</label>
                                     <input id="alliance-name" type="text" data-i18n-placeholder="alliance-edit.placeholder_eg_einstein_alliance" placeholder="e.g. Einstein Alliance" required />
@@ -86,8 +86,11 @@
                                         <span class="slider round"></span>
                                     </label>
                                 </div>
-                                <div class="row">
-                                    <button type="submit" id="btn-save-details" class="btn" data-i18n="alliance-edit.save_details">Save Details</button>
+                                <div class="action-bar" data-action-bar>
+                                    <span class="action-bar-status" data-action-bar-status></span>
+                                    <div class="action-bar-buttons">
+                                        <button type="submit" id="btn-save-details" class="btn" data-action-bar-save data-i18n="alliance-edit.save_details">Save Details</button>
+                                    </div>
                                 </div>
                             </form>
                         </div>
@@ -119,7 +122,7 @@
                     </div>
 
                     <!-- Shared Configurations Card -->
-                    <div class="card">
+                    <div class="card" data-action-scope>
                         <div class="row justify-between align-center">
                             <h2 data-i18n="alliance-edit.shared_scouting_configurations">Shared Scouting Configurations</h2>
                         </div>
@@ -175,14 +178,17 @@
                         </div>
 
                         <!-- Actions -->
-                        <div class="row gap-12 wrap mt-24">
-                            <button id="config-save" class="btn" type="button" data-i18n="settings.save">Save config</button>
-                            <button id="config-export" class="btn ghost" type="button" data-i18n="settings.export">Export</button>
-                            <label class="btn ghost btn-file">
-                                Import File
-                                <input id="config-import" class="input-hidden" type="file" accept="application/json" />
-                            </label>
-                            <button id="config-import-local" class="btn ghost" type="button" data-i18n="alliance-edit.import_team_config">Import Team Config</button>
+                        <div class="action-bar" data-action-bar id="config-action-bar">
+                            <span class="action-bar-status" data-action-bar-status></span>
+                            <div class="action-bar-buttons">
+                                <button id="config-export" class="btn ghost" type="button" data-i18n="settings.export">Export</button>
+                                <label class="btn ghost btn-file">
+                                    Import File
+                                    <input id="config-import" class="input-hidden" type="file" accept="application/json" />
+                                </label>
+                                <button id="config-import-local" class="btn ghost" type="button" data-i18n="alliance-edit.import_team_config">Import Team Config</button>
+                                <button id="config-save" class="btn" type="button" data-action-bar-save data-i18n="settings.save">Save config</button>
+                            </div>
                         </div>
                     </div>
                 </div>

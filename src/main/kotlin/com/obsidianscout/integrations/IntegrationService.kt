@@ -129,6 +129,22 @@ internal fun canonicalStoredEventKey(year: Int, eventKey: String?): String {
     }
 }
 
+/**
+ * TBA's event list with FIRST's added: a FIRST event is the same as a TBA one when its code is that event's code
+ * or FIRST code. TBA's entries win; FIRST only fills a location TBA left blank.
+ */
+internal fun mergeEventCatalog(tba: List<EventCatalogEntry>, first: List<EventCatalogEntry>): List<EventCatalogEntry> {
+    fun firstCodeOf(e: EventCatalogEntry) = e.altCode.ifBlank { e.code }.uppercase()
+    val firstByCode = first.associateBy { firstCodeOf(it) }
+    val merged = tba.distinctBy { it.code }.map { event ->
+        val match = firstByCode[firstCodeOf(event)] ?: firstByCode[event.code.uppercase()]
+        if (event.location.isBlank() && match != null) event.copy(location = match.location) else event
+    }
+    val known = merged.flatMap { listOf(it.code.uppercase(), firstCodeOf(it)) }.toSet()
+    val extra = first.filter { firstCodeOf(it) !in known && it.code.uppercase() !in known }.distinctBy { it.code }
+    return (merged + extra).sortedWith(compareBy<EventCatalogEntry>({ it.startDate ?: "9999" }, { it.name.lowercase() }))
+}
+
 internal fun firstEventCodeFor(year: Int, eventCode: String?, eventKey: String?): String {
     val rawCode = eventCode.orEmpty().trim().ifBlank {
         val normalizedKey = eventKey.orEmpty().trim()
@@ -2315,6 +2331,66 @@ object IntegrationService {
                 dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), item)
             )
         }
+    }
+
+    /**
+     * Every FRC event of [settings]'s year for the settings event picker, or null when no TBA or FIRST key is set.
+     * TBA's list leads; each entry carries FIRST's own code as [EventCatalogEntry.altCode] when FIRST lists the
+     * event under a different one (championship divisions, some offseasons). FIRST events TBA doesn't have are
+     * added after. Throws only when every configured source fails.
+     */
+    internal suspend fun fetchEventCatalog(settings: ApiSettings): List<EventCatalogEntry>? = coroutineScope {
+        val year = settings.year
+        val tba = if (hasTbaCredentials(settings)) async {
+            trySource("TBA events") {
+                val array = tbaGet(settings, "events/$year") as? JsonArray
+                    ?: throw ApiSourceException("TBA returned no event list for $year")
+                array.mapNotNull { item ->
+                    val obj = item as? JsonObject ?: return@mapNotNull null
+                    val code = (obj.readString("event_code") ?: obj.readString("key")?.drop(4))
+                        ?.trim()?.lowercase()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                    val firstCode = (obj.readString("first_event_code")?.trim()?.takeIf { it.isNotBlank() }
+                        ?: firstEventCodeFor(year, code, null)).uppercase()
+                    EventCatalogEntry(
+                        code = code,
+                        altCode = if (firstCode.equals(code, ignoreCase = true)) "" else firstCode,
+                        name = obj.readString("name") ?: code,
+                        startDate = obj.readString("start_date")?.take(10),
+                        endDate = obj.readString("end_date")?.take(10),
+                        location = listOfNotNull(obj.readString("city"), obj.readString("state_prov"), obj.readString("country"))
+                            .filter { it.isNotBlank() }.joinToString(", "),
+                        week = obj.readInt("week")?.plus(1),
+                        type = obj.readString("event_type_string").orEmpty()
+                    )
+                }
+            }
+        } else null
+        val first = if (hasFirstCredentials(settings)) async {
+            trySource("FIRST events") {
+                fetchFirstJson(settings, year, "events").findArray(listOf("Events", "events")).mapNotNull { item ->
+                    val obj = item as? JsonObject ?: return@mapNotNull null
+                    val firstCode = (obj.readString("code") ?: obj.readString("eventCode"))
+                        ?.trim()?.uppercase()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                    val code = canonicalTbaEventCode(firstCode)
+                    EventCatalogEntry(
+                        code = code,
+                        altCode = if (firstCode.equals(code, ignoreCase = true)) "" else firstCode,
+                        name = obj.readString("name") ?: firstCode,
+                        startDate = (obj.readString("dateStart") ?: obj.readString("startDate"))?.take(10),
+                        endDate = (obj.readString("dateEnd") ?: obj.readString("endDate"))?.take(10),
+                        location = listOfNotNull(obj.readString("city"), obj.readString("stateprov"), obj.readString("country"))
+                            .filter { it.isNotBlank() }.joinToString(", "),
+                        week = obj.readInt("weekNumber")?.takeIf { it > 0 },
+                        type = obj.readString("type").orEmpty()
+                    )
+                }
+            }
+        } else null
+        if (tba == null && first == null) return@coroutineScope null
+        val tbaResult = tba?.await()
+        val firstResult = first?.await()
+        combineSources("Event catalog", listOfNotNull(tbaResult, firstResult), mutableListOf())
+        mergeEventCatalog(tbaResult?.records.orEmpty(), firstResult?.records.orEmpty())
     }
 
     private suspend fun fetchFirstTeams(settings: ApiSettings, eventKey: String): List<TeamSyncRecord> {

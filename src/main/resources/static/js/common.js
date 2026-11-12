@@ -116,6 +116,8 @@ import {
     loadAndRenderBanners
 } from './components/banners.js';
 
+import { initActionBars } from './components/action-bar.js';
+
 import {
     injectConnectionWidget,
     updateConnectionStatus,
@@ -921,6 +923,11 @@ export function initMaterialIcons(root = document) {
 
 async function onDOMContentLoaded() {
     initMaterialIcons();
+    try {
+        initActionBars();
+    } catch (e) {
+        console.warn("[ActionBar] init failed:", e);
+    }
     // Migrate legacy HTTP caches from localStorage to IndexedDB to free 5MB quota
     try {
         migrateLocalStorageToIdb();

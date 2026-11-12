@@ -626,6 +626,25 @@ fun Route.configRoutes() {
                     val updated = SettingsService.dismissSetupWizard(session.teamNumber, session.program)
                     call.respond(SettingsResponse(updated.toPayload()))
                 }
+                // Every event of a season for the "Don't know your event code?" picker.
+                get("/event-catalog") {
+                    val session = call.requireAdminOrPage("admin-settings")
+                    val year = call.request.queryParameters["year"]?.trim()?.toIntOrNull()?.takeIf { it in 1992..2100 }
+                        ?: java.time.Year.now().value
+                    val teamKeys = runCatching {
+                        AllianceService.getEffectiveSettings(session.teamNumber, session.program).apiKeys
+                    }.getOrNull()
+                    val catalog = com.obsidianscout.integrations.EventCatalogService.get(session.program, year, teamKeys)
+                    call.respond(
+                        EventCatalogResponse(
+                            program = session.program,
+                            year = year,
+                            available = catalog != null,
+                            fetchedAt = catalog?.fetchedAt?.let { Instant.ofEpochMilli(it).toString() },
+                            events = catalog?.events.orEmpty()
+                        )
+                    )
+                }
                 post("/test-api") {
                     val session = call.requireAdminOrPage("admin-settings")
                     val request = call.receive<TestApiRequest>()

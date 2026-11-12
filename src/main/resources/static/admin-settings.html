@@ -91,7 +91,7 @@
                     <button class="tab" data-tab="integrations" id="tab-integrations" type="button" data-i18n="slack.tab">Integrations</button>
                 </div>
 
-                <div data-panel="config">
+                <div data-panel="config" data-action-scope>
 
                     <div class="tab-row mt-6 mb-18">
 
@@ -187,24 +187,32 @@
 
                     </div>
 
-                    <div class="row gap-12 wrap mt-24 align-center" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+                    <div class="action-bar" data-action-bar id="config-action-bar">
 
-                        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-                            <button id="config-save" class="btn" type="button" data-i18n="settings.save">Save config</button>
+                        <span class="action-bar-status" data-action-bar-status></span>
 
-                            <a id="btn-config-migration" href="/config-migration" class="btn ghost" style="text-decoration: none;" title="Migrate existing scouting records to new form schema">Data Migration</a>
-
-                            <a id="btn-schema-history" href="/schema-history" class="btn ghost" style="text-decoration: none;" title="View past schema revisions and history">Schema History</a>
-
+                        <div class="action-bar-buttons">
                             <button id="config-export" class="btn ghost" type="button" data-i18n="settings.export">Export</button>
 
                             <label class="btn ghost btn-file">
                                 Import
                                 <input id="config-import" class="input-hidden" type="file" accept="application/json" />
                             </label>
+
+                            <button id="config-save" class="btn" type="button" data-action-bar-save data-i18n="settings.save">Save config</button>
                         </div>
 
-                        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    </div>
+
+                    <div class="row gap-12 wrap mt-16 align-center justify-between">
+
+                        <div class="action-bar-group">
+                            <a id="btn-config-migration" href="/config-migration" class="btn ghost" style="text-decoration: none;" title="Migrate existing scouting records to new form schema">Data Migration</a>
+
+                            <a id="btn-schema-history" href="/schema-history" class="btn ghost" style="text-decoration: none;" title="View past schema revisions and history">Schema History</a>
+                        </div>
+
+                        <div class="action-bar-group">
                             <select id="preset-selector" class="input" style="width: auto; min-width: 170px; padding: 6px 12px; font-size: 13px;">
                                 <option value="">-- Select Default Preset --</option>
                             </select>
@@ -215,7 +223,7 @@
 
                 </div>
 
-                <div data-panel="api" class="hidden">
+                <div data-panel="api" data-action-scope class="hidden">
 
                     <p class="notice" data-i18n="config.set_season_event_code_and_api_">Set season, event code, and API keys. When both TBA and FIRST keys are set, sync merges teams and matches (e.g. QM 4 and Qualification 4 dedupe to one row).</p>
 
@@ -238,6 +246,23 @@
                             <input id="settings-event-code" type="text" data-i18n-placeholder="config.placeholder_ex_okok" placeholder="ex: okok" />
 
                             <p class="notice mt-6" data-i18n="config.event_key_is_year_code_eg_2026">Event key is year + code (e.g. 2026 + okok → 2026okok).</p>
+
+                        </div>
+
+                        <div class="field event-picker" id="event-picker" data-action-bar-ignore>
+
+                            <label for="event-picker-search"><span class="material-symbols-outlined" aria-hidden="true" style="font-size: 16px; vertical-align: -3px;">travel_explore</span> <span data-i18n="config.event_picker_label">Don't know your event code?</span></label>
+
+                            <div class="event-picker-box">
+                            <div class="event-picker-controls">
+                                <select id="event-picker-year" class="input event-picker-year" aria-label="Event year"></select>
+                                <input id="event-picker-search" class="event-picker-search" type="search" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="event-picker-list" aria-autocomplete="list" data-i18n-placeholder="config.event_picker_placeholder" placeholder="Search events by name, code, or city" />
+                            </div>
+
+                                <ul id="event-picker-list" class="event-picker-list hidden" role="listbox"></ul>
+                            </div>
+
+                            <p id="event-picker-status" class="notice mt-6" aria-live="polite"></p>
 
                         </div>
 
@@ -435,15 +460,16 @@
 
                     </div>
 
-                    <div class="mt-18">
-
-                        <button id="settings-save" class="btn" type="button" data-i18n="settings.save_api">Save API settings</button>
-
+                    <div class="action-bar" data-action-bar>
+                        <span class="action-bar-status" data-action-bar-status></span>
+                        <div class="action-bar-buttons">
+                            <button id="settings-save" class="btn" type="button" data-action-bar-save data-i18n="settings.save_api">Save API settings</button>
+                        </div>
                     </div>
 
                 </div>
 
-                <div data-panel="email" class="hidden">
+                <div data-panel="email" data-action-scope class="hidden">
 
                     <p class="notice" data-i18n="config.configure_global_smtp_settings">Configure global SMTP settings to allow sending password reset emails.</p>
 
@@ -507,10 +533,11 @@
 
                     </div>
 
-                    <div class="row gap-12 wrap mt-18">
-
-                        <button id="settings-email-save" class="btn" type="button" data-i18n="config.save_email_settings">Save email settings</button>
-
+                    <div class="action-bar" data-action-bar>
+                        <span class="action-bar-status" data-action-bar-status></span>
+                        <div class="action-bar-buttons">
+                            <button id="settings-email-save" class="btn" type="button" data-action-bar-save data-i18n="config.save_email_settings">Save email settings</button>
+                        </div>
                     </div>
 
                     <div class="card soft mt-24">
@@ -533,7 +560,7 @@
 
                 </div>
 
-                <div data-panel="cloudflared" class="hidden">
+                <div data-panel="cloudflared" data-action-scope class="hidden">
 
                     <p class="notice" data-i18n="config.cloudflared_notice">Configure Cloudflare Tunnel (cloudflared) to securely expose your ObsidianScout instance to the web without port forwarding.</p>
 
@@ -578,8 +605,11 @@
 
                     </div>
 
-                    <div class="row gap-12 wrap mt-20">
-                        <button id="settings-cloudflared-save" class="btn" type="button" data-i18n="config.save_cloudflared_settings">Save Cloudflare Tunnel settings</button>
+                    <div class="action-bar" data-action-bar>
+                        <span class="action-bar-status" data-action-bar-status></span>
+                        <div class="action-bar-buttons">
+                            <button id="settings-cloudflared-save" class="btn" type="button" data-action-bar-save data-i18n="config.save_cloudflared_settings">Save Cloudflare Tunnel settings</button>
+                        </div>
                     </div>
 
                 </div>
@@ -589,7 +619,7 @@
                     <div id="slack-integration-root" class="card soft mt-20"></div>
                 </div>
 
-                <div data-panel="permissions" class="hidden">
+                <div data-panel="permissions" data-action-scope class="hidden">
 
                     <p class="notice" data-i18n="config.configure_role_page_access">Configure which pages each user role (Scout and Analytics) can access and see in the sidebar.</p>
 
@@ -659,10 +689,11 @@
 
                     </div>
 
-                    <div class="mt-18">
-
-                        <button id="permissions-save" class="btn" type="button" data-i18n="settings.save_permissions">Save permissions</button>
-
+                    <div class="action-bar" data-action-bar>
+                        <span class="action-bar-status" data-action-bar-status></span>
+                        <div class="action-bar-buttons">
+                            <button id="permissions-save" class="btn" type="button" data-action-bar-save data-i18n="settings.save_permissions">Save permissions</button>
+                        </div>
                     </div>
 
                 </div>
@@ -683,7 +714,7 @@
                 </div>
 
                 <!-- Shared API Keys Card (SuperAdmin only) -->
-                <div id="shared-api-keys-card" class="card soft mt-24" style="display: none; border: 1px solid var(--accent, #3b82f6); background: rgba(59, 130, 246, 0.03); padding: 20px; border-radius: 12px;">
+                <div id="shared-api-keys-card" data-action-scope class="card soft mt-24" style="display: none; border: 1px solid var(--accent, #3b82f6); background: rgba(59, 130, 246, 0.03); padding: 20px; border-radius: 12px;">
                     <h2 style="margin: 0; font-size: 18px;" data-i18n="settings.shared_api_keys_title">Shared API Keys</h2>
                     <p class="notice" style="margin-top: 6px;" data-i18n="settings.shared_api_keys_desc">Used by every team that has no key of its own for a source. A team's own key, or one from its alliance, always comes first. Teams on a shared key see a banner asking them to add their own, and a warning when the shared key hits its rate limit.</p>
                     <div id="shared-api-keys-status" class="notice" style="display: none; color: var(--warning, #b45309);"></div>
@@ -720,7 +751,12 @@
                         </div>
                     </div>
                     <p class="notice" style="margin-top: 4px;" data-i18n="settings.shared_api_keys_clear_hint">Clear a field and save to stop sharing that key.</p>
-                    <button id="btn-save-shared-api-keys" class="btn mt-12" type="button" data-i18n="settings.save_shared_api_keys">Save shared keys</button>
+                    <div class="action-bar" data-action-bar>
+                        <span class="action-bar-status" data-action-bar-status></span>
+                        <div class="action-bar-buttons">
+                            <button id="btn-save-shared-api-keys" class="btn" type="button" data-action-bar-save data-i18n="settings.save_shared_api_keys">Save shared keys</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Cluster Security Card (Site Admin / SuperAdmin only) -->
@@ -768,6 +804,7 @@
     <script defer src="/js/utilities/config-duplicates.js"></script>
     <script defer src="/js/services/config-collab.js"></script>
 <script defer src="/js/admin-slack.js"></script>
+<script defer src="/js/event-picker.js"></script>
 <script defer src="/js/admin-settings.js"></script>
 
 </body>

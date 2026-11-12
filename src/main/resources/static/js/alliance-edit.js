@@ -719,6 +719,13 @@
             saveButton.textContent = status === "live" ? "Save now" : "Save config";
             saveButton.title = status === "live" ? "Changes save automatically." : "";
         }
+        const actionBar = document.getElementById("config-action-bar");
+        if (actionBar && window.ObsidianscoutActionBar) {
+            const live = status === "live";
+            if (live !== (actionBar.dataset.actionBarAuto === "true")) {
+                window.ObsidianscoutActionBar.setAuto(actionBar, live);
+            }
+        }
     }
 
     /** Sends edits typed into the raw JSON editor, merged with anything others changed meanwhile. */

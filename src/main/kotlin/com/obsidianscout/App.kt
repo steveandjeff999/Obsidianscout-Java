@@ -774,6 +774,7 @@ fun Application.module(appConfig: AppConfig) {
                 com.obsidianscout.auth.ClusterSecretService.startBackgroundSync(appConfig)
 
                 SyncScheduler.start()
+                com.obsidianscout.integrations.EventCatalogService.start()
                 com.obsidianscout.scouting.DeduplicationScheduler.start()
                 com.obsidianscout.scouting.ScoutingReminderScheduler.start()
                 com.obsidianscout.widgets.WidgetPushService.start()
@@ -827,6 +828,7 @@ fun Application.module(appConfig: AppConfig) {
         com.obsidianscout.admin.NodeMonitoringService.stop()
         com.obsidianscout.auth.ClusterSecretService.stopBackgroundSync()
         SyncScheduler.stop()
+        com.obsidianscout.integrations.EventCatalogService.stop()
         GistUpdateService.stop()
         com.obsidianscout.scouting.DeduplicationScheduler.stop()
         com.obsidianscout.scouting.ScoutingReminderScheduler.stop()

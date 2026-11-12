@@ -31,6 +31,7 @@
 @import url('./components/gamepad-settings.css');
 @import url('./components/local-ai.css');
 @import url('./components/match-predictions.css');
+@import url('./components/action-bar.css');
 
 /* 4. Page-Specific Styles */
 @import url('./pages/dashboard.css');
