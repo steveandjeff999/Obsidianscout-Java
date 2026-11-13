@@ -540,6 +540,7 @@ function initTeamSelection(state) {
 
 function updateGraphTypeAvailability(state) {
     const isAverages = state.dataView === "averages" || (state.datasource === "epa" || state.datasource === "opr");
+    const disableLineArea = isAverages && !state.is3D;
     const countBadge = document.getElementById("graph-type-selected-count");
 
     ["line", "area"].forEach((type) => {
@@ -547,7 +548,7 @@ function updateGraphTypeAvailability(state) {
         const item = checkbox?.closest(".graph-type-item");
 
         if (checkbox && item) {
-            if (isAverages) {
+            if (disableLineArea) {
                 checkbox.disabled = true;
                 item.classList.add("disabled");
                 item.title = t(`graphs.${type}_requires_matches`, `${type === "area" ? "Area" : "Line"} graphs require multiple data points across matches and are only available in Match-by-match view.`);
@@ -587,7 +588,7 @@ function initGraphTypeControls(state) {
             const isAverages = state.dataView === "averages" || (state.datasource === "epa" || state.datasource === "opr");
             const allTypes = GRAPH_TYPES
                 .map((g) => g.id)
-                .filter((id) => !isAverages || (id !== "line" && id !== "area"));
+                .filter((id) => state.is3D || !isAverages || (id !== "line" && id !== "area"));
             setGraphTypes(state, allTypes, countBadge);
         });
     }
@@ -1265,6 +1266,26 @@ async function generateGraphs(state) {
         }
 
         selectedGraphTypes.forEach((graphType) => {
+            if (state.is3D && window.Obsidian3DGraph) {
+                if (state.datasource === "epa" || state.datasource === "opr") {
+                    const card = createGraphCard(`3D ${graphType}`, null, "3D X/Y/Z axes require multiple distinct metrics. Switch Data Source to Scouted Data, Match 13 xP, or All Sources.");
+                    output.appendChild(card);
+                    return;
+                }
+                const chart = createPlotlyContainer(460);
+                chart.style.height = "460px";
+                const mx = state.metricMap?.get(state.metricXId) || metric;
+                const my = state.metricMap?.get(state.metricYId) || metric;
+                const mz = state.metricMap?.get(state.metricZId) || metric;
+                const loc = (m) => (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(m.label) : m.label;
+                const card = createGraphCard(`3D ${graphType} (${loc(mx)} \u00D7 ${loc(my)} \u00D7 ${loc(mz)})`, chart);
+                output.appendChild(card);
+                const usePerTeam = (state.dataView === "matches" || graphType === "box" || graphType === "violin" || graphType === "histogram" || graphType === "density");
+                const series3D = build3DSeriesNonScouted(selectedTeams, mx, my, mz, state, usePerTeam);
+                renderObsidian3DCard(chart, graphType, series3D, mx, my, mz);
+                return;
+            }
+
             if ((graphType === "line" || graphType === "area") && state.dataView === "averages") {
                 const typeLabel = graphType === "area" ? "Area" : "Line";
                 const card = createGraphCard(`${getDatasourceLabel(state.datasource, state)} - ${typeLabel}`, null, t(`graphs.${graphType}_not_supported_averages`, `${typeLabel} graphs are not supported for team averages as they require multiple data points across matches. Switch to Match-by-match view to use ${typeLabel} graphs.`));
@@ -1285,23 +1306,7 @@ async function generateGraphs(state) {
                 : `${getDatasourceLabel(state.datasource, state)} - ${graphType} (${viewTitle})`;
             const card = createGraphCard(cardTitle, chart);
             output.appendChild(card);
-
-            if (state.is3D && window.Obsidian3DGraph) {
-                if (state.datasource === "epa" || state.datasource === "opr") {
-                    chart.appendChild(buildNotice("3D X/Y/Z axes require multiple distinct metrics. Switch Data Source to Scouted Data, Match 13 xP, or All Sources."));
-                    return;
-                }
-                chart.style.height = "460px";
-                const mx = state.metricMap?.get(state.metricXId) || metric;
-                const my = state.metricMap?.get(state.metricYId) || metric;
-                const mz = state.metricMap?.get(state.metricZId) || metric;
-                const forceMatches = (graphType === "box" || graphType === "violin");
-                const series3D = build3DSeriesNonScouted(selectedTeams, mx, my, mz, state, forceMatches);
-                const usePerTeam = (graphType === "box" || graphType === "violin");
-            renderObsidian3DCard(chart, graphType, usePerTeam ? series3DPerTeam : series3DAvgOrMatch, mx, my, mz);
-            } else {
-                renderNonScoutedGraph(graphType, chart, selectedTeams, state);
-            }
+            renderNonScoutedGraph(graphType, chart, selectedTeams, state);
         });
 
         if (loading) {
@@ -1360,17 +1365,11 @@ async function generateGraphs(state) {
         const series3DAvgOrMatch = build3DSeriesScouted(filteredEntries, mx, my, mz, state, false);
         const series3DPerTeam = build3DSeriesScouted(filteredEntries, mx, my, mz, state, true);
         selectedGraphTypes.forEach((graphType) => {
-            if ((graphType === "line" || graphType === "area") && state.dataView === "averages") {
-                const typeLabel = graphType === "area" ? "Area" : "Line";
-                const card = createGraphCard(`3D ${typeLabel}`, null, t(`graphs.${graphType}_not_supported_averages`, `${typeLabel} graphs are not supported for Team averages. Switch to Match-by-match view to use ${typeLabel} graphs.`));
-                output.appendChild(card);
-                return;
-            }
             const chart = createPlotlyContainer(460);
             chart.style.height = "460px";
             const card = createGraphCard(`3D ${graphType} (${loc(mx)} \u00D7 ${loc(my)} \u00D7 ${loc(mz)})`, chart);
             output.appendChild(card);
-            const usePerTeam = (graphType === "box" || graphType === "violin");
+            const usePerTeam = (state.dataView === "matches" || graphType === "box" || graphType === "violin" || graphType === "histogram" || graphType === "density");
             renderObsidian3DCard(chart, graphType, usePerTeam ? series3DPerTeam : series3DAvgOrMatch, mx, my, mz);
         });
         if (loading) loading.classList.add("hidden");
@@ -2619,14 +2618,48 @@ function renderObsidian3DCard(container, graphType, series, mx, my, mz) {
     window.Obsidian3DGraph.render(container, cfg);
 }
 
+function resolveTeamExternalMetric3D(teamNumber, metric, state) {
+    const team = state.eventTeamsMap ? state.eventTeamsMap.get(Number(teamNumber)) : null;
+    if (!metric || !metric.id) return 0;
+    if (metric.id === "ext_epa") return Number(team?.epa ?? 0);
+    if (metric.id === "ext_exp") {
+        const rawHistory = state.statsHistory?.match13History || [];
+        let sum = 0, cnt = 0;
+        rawHistory.forEach((matchObj) => {
+            const td = extractTeamExpData(matchObj, teamNumber);
+            if (!td) return;
+            sum += getTeamExpMetricValue(td, "score_total");
+            cnt++;
+        });
+        if (cnt > 0) return sum / cnt;
+        return Number(team?.exp ?? team?.match13Exp ?? 0);
+    }
+    if (metric.id === "ext_opr") return Number(team?.opr ?? 0);
+    return 0;
+}
+
+function resolveEntryOrTeamMetric3D(entry, teamNumber, metric, state) {
+    if (metric && typeof metric.id === "string" && metric.id.startsWith("ext_")) {
+        return resolveTeamExternalMetric3D(teamNumber, metric, state);
+    }
+    return metricValue(entry, metric, state);
+}
+
+function compare3DTeamsBySort(aTeam, aZ, bTeam, bZ, sortMode) {
+    if (sortMode === "value_desc") return (bZ - aZ) || (aTeam - bTeam);
+    if (sortMode === "value_asc") return (aZ - bZ) || (aTeam - bTeam);
+    if (sortMode === "team_desc") return bTeam - aTeam;
+    return aTeam - bTeam;
+}
+
 function build3DSeriesScouted(entries, mx, my, mz, state, forcePerTeamMatches = false) {
     const byTeam = new Map();
     entries.forEach((entry) => {
         const team = Number(entry.targetTeamNumber || 0);
         if (!team) return;
-        const vx = metricValue(entry, mx, state);
-        const vy = metricValue(entry, my, state);
-        const vz = metricValue(entry, mz, state);
+        const vx = resolveEntryOrTeamMetric3D(entry, team, mx, state);
+        const vy = resolveEntryOrTeamMetric3D(entry, team, my, state);
+        const vz = resolveEntryOrTeamMetric3D(entry, team, mz, state);
         if (vx === null || vy === null || vz === null) return;
         if (!Number.isFinite(vx) || !Number.isFinite(vy) || !Number.isFinite(vz)) return;
         if (!byTeam.has(team)) byTeam.set(team, []);
@@ -2639,38 +2672,36 @@ function build3DSeriesScouted(entries, mx, my, mz, state, forcePerTeamMatches = 
         });
     });
 
-    const teams = Array.from(byTeam.keys()).sort((a, b) => a - b);
-    if (state.dataView === "matches" || forcePerTeamMatches) {
-        return teams.map((team) => {
-            const pts = byTeam.get(team).slice().sort((a, b) => a.sortWeight - b.sortWeight);
-            return {
-                name: `Team ${team}`,
-                points: pts.map((p) => ({ x: p.x, y: p.y, z: p.z, label: `${team}`, matchLabel: p.matchLabel }))
-            };
-        });
-    }
-
-    const avgPoints = teams.map((team) => {
-        const list = byTeam.get(team);
+    const teamSummaries = Array.from(byTeam.keys()).map((team) => {
+        const list = byTeam.get(team).slice().sort((a, b) => a.sortWeight - b.sortWeight);
         const n = list.length || 1;
         return {
-            x: list.reduce((a, p) => a + p.x, 0) / n,
-            y: list.reduce((a, p) => a + p.y, 0) / n,
-            z: list.reduce((a, p) => a + p.z, 0) / n,
-            label: `${team}`
+            team,
+            list,
+            x: mx?.kind === "count" ? list.length : (list.reduce((a, p) => a + p.x, 0) / n),
+            y: my?.kind === "count" ? list.length : (list.reduce((a, p) => a + p.y, 0) / n),
+            z: mz?.kind === "count" ? list.length : (list.reduce((a, p) => a + p.z, 0) / n)
         };
     });
-    return [{ name: "Teams", points: avgPoints }];
+
+    teamSummaries.sort((a, b) => compare3DTeamsBySort(a.team, a.z, b.team, b.z, state.sort));
+
+    if (state.dataView === "matches" || forcePerTeamMatches) {
+        return teamSummaries.map((item) => ({
+            name: `Team ${item.team}`,
+            points: item.list.map((p) => ({ x: p.x, y: p.y, z: p.z, label: `${item.team}`, matchLabel: p.matchLabel }))
+        }));
+    }
+
+    return teamSummaries.map((item) => ({
+        name: `Team ${item.team}`,
+        points: [{ x: item.x, y: item.y, z: item.z, label: `${item.team}` }]
+    }));
 }
 
 function build3DSeriesNonScouted(selectedTeams, mx, my, mz, state, forcePerTeamMatches = false) {
-    if (state.datasource === "exp" && (state.dataView === "matches" || (forcePerTeamMatches && (state.statsHistory?.match13History || []).length > 0))) {
-        if (state.datasource === "all" && forcePerTeamMatches) {
-        const filtered = getFilteredEntriesForTeams(state);
-        const byTeam = build3DSeriesScouted(filtered, mx, my, mz, state, true);
-        if (byTeam.length > 0) return byTeam;
-    }
     const rawHistory = state.statsHistory?.match13History || [];
+    if (state.datasource === "exp" && (state.dataView === "matches" || (forcePerTeamMatches && rawHistory.length > 0))) {
         return selectedTeams.map((teamNumber) => {
             const pts = [];
             rawHistory.forEach((matchObj) => {
@@ -2692,16 +2723,15 @@ function build3DSeriesNonScouted(selectedTeams, mx, my, mz, state, forcePerTeamM
         }).filter((s) => s.points.length > 0);
     }
 
-    if (state.datasource === "all" && forcePerTeamMatches) {
+    if (state.datasource === "all" && (state.dataView === "matches" || forcePerTeamMatches)) {
         const filtered = getFilteredEntriesForTeams(state);
         const byTeam = build3DSeriesScouted(filtered, mx, my, mz, state, true);
         if (byTeam.length > 0) return byTeam;
     }
-    const rawHistory = state.statsHistory?.match13History || [];
-    const filteredEntries = state.datasource === "all" ? getFilteredEntriesForTeams(state) : [];
 
-    const points = selectedTeams.map((teamNumber) => {
-        const team = state.eventTeamsMap ? state.eventTeamsMap.get(teamNumber) : null;
+    const filteredEntries = state.datasource === "all" ? getFilteredEntriesForTeams(state) : [];
+    const teamRows = selectedTeams.map((teamNumber) => {
+        const team = state.eventTeamsMap ? state.eventTeamsMap.get(Number(teamNumber)) : null;
         const teamEntries = filteredEntries.filter(e => Number(e.targetTeamNumber) === Number(teamNumber));
 
         const avgExpMetric = (metricId) => {
@@ -2718,7 +2748,8 @@ function build3DSeriesNonScouted(selectedTeams, mx, my, mz, state, forcePerTeamM
         };
 
         const avgScoutedMetric = (m) => {
-            if (!teamEntries.length) return m.scope === "total" ? Number(team?.averagePoints ?? 0) : 0;
+            if (m?.kind === "count") return teamEntries.length;
+            if (!teamEntries.length) return m?.scope === "total" ? Number(team?.averagePoints ?? 0) : 0;
             let sum = 0, cnt = 0;
             teamEntries.forEach((e) => {
                 const v = metricValue(e, m, state);
@@ -2729,12 +2760,15 @@ function build3DSeriesNonScouted(selectedTeams, mx, my, mz, state, forcePerTeamM
 
         const valFor = (m) => {
             if (state.datasource === "exp") return avgExpMetric(m.id);
-            if (m.id === "ext_epa") return Number(team?.epa ?? 0);
-            if (m.id === "ext_exp") return Number(team?.exp ?? team?.match13Exp ?? 0);
-            if (m.id === "ext_opr") return Number(team?.opr ?? 0);
+            if (m?.id?.startsWith("ext_")) return resolveTeamExternalMetric3D(teamNumber, m, state);
             return avgScoutedMetric(m);
         };
-        return { x: valFor(mx), y: valFor(my), z: valFor(mz), label: `${teamNumber}` };
+        return { team: Number(teamNumber), x: valFor(mx), y: valFor(my), z: valFor(mz) };
     });
-    return [{ name: getDatasourceLabel(state.datasource, state), points }];
+
+    teamRows.sort((a, b) => compare3DTeamsBySort(a.team, a.z, b.team, b.z, state.sort));
+    return teamRows.map((item) => ({
+        name: `Team ${item.team}`,
+        points: [{ x: item.x, y: item.y, z: item.z, label: `${item.team}` }]
+    }));
 }

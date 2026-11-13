@@ -95,7 +95,97 @@
         }, customTheme || {});
     }
 
-    function computeBounds(points, graphType, histogramBins, densityGrid) {
+    function expandSingleSeriesByTeam(rawSeries, palette) {
+        if (!Array.isArray(rawSeries) || !rawSeries.length) return [];
+        const basePalette = Array.isArray(palette) && palette.length ? palette : DEFAULT_PALETTE;
+        if (rawSeries.length === 1) {
+            const s = rawSeries[0];
+            const pts = (s.points || []).filter(p => p && Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z));
+            if (pts.length > 1) {
+                const labels = pts.map(p => String(p.label || "").trim()).filter(Boolean);
+                const distinctLabels = new Set(labels);
+                if (distinctLabels.size > 1) {
+                    const grouped = new Map();
+                    pts.forEach(p => {
+                        const rawLbl = String(p.label || "").trim() || String(s.name || "Team");
+                        if (!grouped.has(rawLbl)) grouped.set(rawLbl, []);
+                        grouped.get(rawLbl).push(p);
+                    });
+                    const out = [];
+                    let idx = 0;
+                    for (const [lbl, list] of grouped.entries()) {
+                        const displayName = lbl.toLowerCase().startsWith("team ") ? lbl : `Team ${lbl}`;
+                        out.push({
+                            name: displayName,
+                            color: (list[0] && list[0].color) || basePalette[idx % basePalette.length],
+                            points: list
+                        });
+                        idx++;
+                    }
+                    return out;
+                }
+            }
+        }
+        return rawSeries.map((s, idx) => ({
+            ...s,
+            color: s.color || basePalette[idx % basePalette.length],
+            points: (s.points || []).filter(p => p && Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z))
+        }));
+    }
+
+    function deoverlapPositions(items, b, maxRingRadius = 0.11) {
+        if (!items || items.length <= 1) return items;
+        const spanX = (b.maxX - b.minX) || 1;
+        const spanY = (b.maxY - b.minY) || 1;
+        const threshold = 0.05;
+
+        const withNorm = items.map(item => ({
+            item,
+            nx: ((item.x - b.minX) / spanX) * 2 - 1,
+            ny: ((item.y - b.minY) / spanY) * 2 - 1
+        }));
+
+        const clusters = [];
+        for (const entry of withNorm) {
+            let matched = null;
+            for (const c of clusters) {
+                if (Math.hypot(entry.nx - c.cx, entry.ny - c.cy) < threshold) {
+                    matched = c;
+                    break;
+                }
+            }
+            if (matched) {
+                matched.entries.push(entry);
+            } else {
+                clusters.push({ cx: entry.nx, cy: entry.ny, entries: [entry] });
+            }
+        }
+
+        for (const c of clusters) {
+            const k = c.entries.length;
+            if (k <= 1) {
+                const e = c.entries[0];
+                e.item.plotX = e.item.x;
+                e.item.plotY = e.item.y;
+                continue;
+            }
+            const baseRadius = clamp(0.045 * Math.sqrt(k), 0.055, maxRingRadius);
+            c.entries.forEach((e, idx) => {
+                const ring = Math.floor(idx / 8);
+                const posInRing = idx % 8;
+                const countInRing = Math.min(8, k - ring * 8);
+                const angle = (posInRing / countInRing) * Math.PI * 2 + 0.35 + ring * 0.4;
+                const r = baseRadius * (1 + ring * 0.65);
+                const nx = clamp(c.cx + Math.cos(angle) * r, -0.94, 0.94);
+                const ny = clamp(c.cy + Math.sin(angle) * r, -0.94, 0.94);
+                e.item.plotX = b.minX + ((nx + 1) * 0.5) * spanX;
+                e.item.plotY = b.minY + ((ny + 1) * 0.5) * spanY;
+            });
+        }
+        return items;
+    }
+
+    function computeBounds(points, graphType, histogramBins, densityGrid, seriesGroups, violinKdes) {
         let minX = Infinity, maxX = -Infinity;
         let minY = Infinity, maxY = -Infinity;
         let minZ = Infinity, maxZ = -Infinity;
@@ -113,31 +203,72 @@
             return { minX: 0, maxX: 1, minY: 0, maxY: 1, minZ: 0, maxZ: 1 };
         }
 
+        // For box & violin, position bounds around per-group centroids when >= 2 groups
+        // so team distributions spread across the full (X, Y) floor instead of clustering
+        // around raw single-match extremes.
+        if ((graphType === "box" || graphType === "violin") && Array.isArray(seriesGroups) && seriesGroups.length >= 2) {
+            let gMinX = Infinity, gMaxX = -Infinity, gMinY = Infinity, gMaxY = -Infinity;
+            let validGroups = 0;
+            for (const s of seriesGroups) {
+                const pts = (s.points || []).filter(p => Number.isFinite(p.x) && Number.isFinite(p.y));
+                if (!pts.length) continue;
+                const cx = pts.reduce((a, p) => a + p.x, 0) / pts.length;
+                const cy = pts.reduce((a, p) => a + p.y, 0) / pts.length;
+                if (cx < gMinX) gMinX = cx;
+                if (cx > gMaxX) gMaxX = cx;
+                if (cy < gMinY) gMinY = cy;
+                if (cy > gMaxY) gMaxY = cy;
+                validGroups++;
+            }
+            if (validGroups >= 2) {
+                minX = gMinX;
+                maxX = gMaxX;
+                minY = gMinY;
+                maxY = gMaxY;
+            }
+        }
+
         if (graphType === "histogram" && histogramBins && histogramBins.length) {
             minZ = 0;
-            maxZ = Math.max(1, ...histogramBins.map(b => b.count));
+            const useAvgZ = histogramBins.every(b => b.count <= 1) && histogramBins.some(b => b.avgZ > 0);
+            maxZ = Math.max(1, ...histogramBins.map(b => (useAvgZ ? b.avgZ : b.count)));
         } else if (graphType === "density" && densityGrid && densityGrid.maxVal > 0) {
             minZ = 0;
             maxZ = densityGrid.maxVal;
         } else if (graphType === "bar" || graphType === "area") {
             if (minZ > 0) minZ = 0;
             if (maxZ < 0) maxZ = 0;
+        } else if (graphType === "violin" && Array.isArray(violinKdes) && violinKdes.length) {
+            for (const kde of violinKdes) {
+                for (const sample of kde) {
+                    if (sample.z < minZ) minZ = sample.z;
+                    if (sample.z > maxZ) maxZ = sample.z;
+                }
+            }
+            if (minZ > 0 && points.length <= 24) minZ = 0;
+        } else if (graphType === "box") {
+            if (minZ > 0 && points.length <= 24 && (!seriesGroups || seriesGroups.every(s => (s.points || []).length <= 1))) {
+                minZ = 0;
+            }
         }
 
-        const pad = (min, max) => {
+        const pad = (min, max, extraFrac = 0.08) => {
             const span = max - min;
             if (span < 1e-9) {
-                const delta = Math.abs(min) * 0.15 || 1;
+                const delta = Math.abs(min) * 0.18 || 1;
                 return [min - delta, max + delta];
             }
-            return [min - span * 0.06, max + span * 0.06];
+            return [min - span * extraFrac, max + span * extraFrac];
         };
 
-        const [x0, x1] = pad(minX, maxX);
-        const [y0, y1] = pad(minY, maxY);
+        const xyPad = (graphType === "box" || graphType === "violin") ? 0.14 : 0.07;
+        const [x0, x1] = pad(minX, maxX, xyPad);
+        const [y0, y1] = pad(minY, maxY, xyPad);
         const [z0, z1] = (graphType === "bar" || graphType === "histogram" || graphType === "density")
-            ? [minZ, maxZ + Math.max((maxZ - minZ) * 0.08, 1e-6)]
-            : pad(minZ, maxZ);
+            ? [minZ, maxZ + Math.max((maxZ - minZ) * 0.09, 1e-6)]
+            : (graphType === "area" && minZ === 0)
+                ? [0, maxZ + Math.max((maxZ - minZ) * 0.08, 1e-6)]
+                : pad(minZ, maxZ, 0.08);
 
         return { minX: x0, maxX: x1, minY: y0, maxY: y1, minZ: z0, maxZ: z1 };
     }
@@ -201,12 +332,33 @@
         };
     }
 
-    function compute1DKDE(values, samples = 24) {
+    function compute1DKDE(values, samples = 24, globalZSpan = 0) {
         if (values.length === 0) return [];
         const min = Math.min(...values);
         const max = Math.max(...values);
         const span = max - min;
-        if (span < 1e-9) return [{ z: min, d: 1 }];
+        if (span < 1e-9) {
+            const center = values[0];
+            const halfSpan = globalZSpan > 1e-9
+                ? Math.max(globalZSpan * 0.12, 0.5)
+                : Math.max(Math.abs(center) * 0.16, 1.0);
+            const lo = center >= 0 ? Math.max(0, center - halfSpan) : center - halfSpan;
+            const hi = center + halfSpan;
+            const sigma = Math.max(halfSpan * 0.42, 1e-6);
+            const out = [];
+            let maxD = 0;
+            for (let i = 0; i <= samples; i++) {
+                const z = lo + ((hi - lo) * i) / samples;
+                const u = (z - center) / sigma;
+                const d = Math.exp(-0.5 * u * u);
+                if (d > maxD) maxD = d;
+                out.push({ z, d });
+            }
+            if (maxD > 0) {
+                for (const item of out) item.d /= maxD;
+            }
+            return out;
+        }
         const mean = values.reduce((a, b) => a + b, 0) / values.length;
         const std = Math.sqrt(values.reduce((acc, v) => acc + (v - mean) ** 2, 0) / values.length) || (span * 0.25);
         const bw = Math.max(1.06 * std * Math.pow(values.length, -0.2), span * 0.06);
@@ -229,14 +381,27 @@
         return out;
     }
 
-    function computeBivariateHistogram(points, binCount = 7) {
+    function computeBivariateHistogram(points, requestedBins = 0) {
         if (!points.length) return [];
+        const binCount = requestedBins > 0
+            ? requestedBins
+            : clamp(Math.round(Math.sqrt(points.length) * 1.6), 4, 8);
         let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
         for (const p of points) {
             if (p.x < minX) minX = p.x;
             if (p.x > maxX) maxX = p.x;
             if (p.y < minY) minY = p.y;
             if (p.y > maxY) maxY = p.y;
+        }
+        if (maxX - minX < 1e-9) {
+            const d = Math.abs(minX) * 0.15 || 1;
+            minX -= d;
+            maxX += d;
+        }
+        if (maxY - minY < 1e-9) {
+            const d = Math.abs(minY) * 0.15 || 1;
+            minY -= d;
+            maxY += d;
         }
         const spanX = maxX - minX || 1;
         const spanY = maxY - minY || 1;
@@ -253,11 +418,15 @@
                     dx: spanX / binCount,
                     dy: spanY / binCount,
                     count: 0,
+                    sumZ: 0,
+                    avgZ: 0,
                     teams: new Set()
                 });
             }
             const cell = grid.get(key);
             cell.count += 1;
+            cell.sumZ += (Number.isFinite(p.z) ? p.z : 0);
+            cell.avgZ = cell.sumZ / cell.count;
             if (p.label) cell.teams.add(p.label);
         }
         return Array.from(grid.values());
@@ -266,16 +435,31 @@
     function compute2DKDEGrid(points, gridSize = 14) {
         if (!points.length) return { rows: [], maxVal: 0 };
         let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        let minZ = Infinity, maxZ = -Infinity;
         for (const p of points) {
             if (p.x < minX) minX = p.x;
             if (p.x > maxX) maxX = p.x;
             if (p.y < minY) minY = p.y;
             if (p.y > maxY) maxY = p.y;
+            if (p.z < minZ) minZ = p.z;
+            if (p.z > maxZ) maxZ = p.z;
+        }
+        if (maxX - minX < 1e-9) {
+            const d = Math.abs(minX) * 0.15 || 1;
+            minX -= d;
+            maxX += d;
+        }
+        if (maxY - minY < 1e-9) {
+            const d = Math.abs(minY) * 0.15 || 1;
+            minY -= d;
+            maxY += d;
         }
         const spanX = maxX - minX || 1;
         const spanY = maxY - minY || 1;
-        const hx = Math.max(spanX * 0.16, 1e-5);
-        const hy = Math.max(spanY * 0.16, 1e-5);
+        const spanZ = maxZ - minZ;
+        const hx = Math.max(spanX * 0.18, 1e-4);
+        const hy = Math.max(spanY * 0.18, 1e-4);
+        const isTeamSummary = points.every(p => !p.matchLabel) && spanZ > 1e-9;
 
         const rows = [];
         let maxVal = 0;
@@ -288,7 +472,8 @@
                 for (const p of points) {
                     const ux = (gx - p.x) / hx;
                     const uy = (gy - p.y) / hy;
-                    d += Math.exp(-0.5 * (ux * ux + uy * uy));
+                    const w = isTeamSummary ? (0.35 + 0.65 * ((p.z - minZ) / spanZ)) : 1;
+                    d += w * Math.exp(-0.5 * (ux * ux + uy * uy));
                 }
                 if (d > maxVal) maxVal = d;
                 row.push({ x: gx, y: gy, z: d });
@@ -602,13 +787,11 @@
             ctx.fillStyle = this.theme.bg;
             ctx.fillRect(0, 0, w, h);
 
-            const series = Array.isArray(this.config.series) ? this.config.series : [];
+            const rawSeries = Array.isArray(this.config.series) ? this.config.series : [];
+            const series = expandSingleSeriesByTeam(rawSeries, this.theme.palette);
             const graphType = String(this.config.graphType || "scatter").toLowerCase();
             const xLabel = this.config.xLabel || "X";
             const yLabel = this.config.yLabel || "Y";
-            const zLabel = (graphType === "histogram" || graphType === "density")
-                ? (this.config.zLabelOverride || (graphType === "histogram" ? "Count" : "Density"))
-                : (this.config.zLabel || "Z");
 
             const allPoints = [];
             series.forEach((s, sIdx) => {
@@ -629,9 +812,55 @@
                 return;
             }
 
-            const histogramBins = graphType === "histogram" ? computeBivariateHistogram(allPoints, 7) : null;
+            const histogramBins = graphType === "histogram" ? computeBivariateHistogram(allPoints, 0) : null;
+            const histUseAvgZ = Boolean(
+                histogramBins &&
+                histogramBins.length &&
+                histogramBins.every(b => b.count <= 1) &&
+                histogramBins.some(b => b.avgZ > 0)
+            );
+            const zLabel = (graphType === "histogram")
+                ? (histUseAvgZ ? (`Avg ${this.config.zLabel || "Value"}`) : (this.config.zLabelOverride || "Count"))
+                : (graphType === "density")
+                    ? (this.config.zLabelOverride || "Density")
+                    : (this.config.zLabel || "Z");
+
             const densityGrid = graphType === "density" ? compute2DKDEGrid(allPoints, 14) : null;
-            const bounds = computeBounds(allPoints, graphType, histogramBins, densityGrid);
+
+            let precomputedViolins = null;
+            let violinKdes = null;
+            if (graphType === "violin") {
+                const rawZMin = Math.min(...allPoints.map(p => p.z));
+                const rawZMax = Math.max(...allPoints.map(p => p.z));
+                const globalZSpan = rawZMax - rawZMin;
+                precomputedViolins = [];
+                series.forEach((s, idx) => {
+                    const pts = (s.points || []).filter(p => Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z));
+                    if (!pts.length) return;
+                    const cx = pts.reduce((a, p) => a + p.x, 0) / pts.length;
+                    const cy = pts.reduce((a, p) => a + p.y, 0) / pts.length;
+                    const zVals = pts.map(p => p.z);
+                    const kde = compute1DKDE(zVals, 20, globalZSpan);
+                    const stats = computeQuantileStats(zVals);
+                    const color = s.color || this.theme.palette[idx % this.theme.palette.length];
+                    precomputedViolins.push({
+                        name: s.name || `Series ${idx + 1}`,
+                        pts,
+                        x: cx,
+                        y: cy,
+                        cx,
+                        cy,
+                        midZ: stats ? stats.median : zVals[0],
+                        meanZ: zVals.reduce((a, b) => a + b, 0) / zVals.length,
+                        stats,
+                        kde,
+                        color
+                    });
+                });
+                violinKdes = precomputedViolins.map(v => v.kde);
+            }
+
+            const bounds = computeBounds(allPoints, graphType, histogramBins, densityGrid, series, violinKdes);
 
             this.hitTargets = [];
             this.placedLabelBoxes = [];
@@ -648,11 +877,11 @@
             } else if (graphType === "box") {
                 this._renderBoxes(ctx, series, allPoints, bounds, w, h, pendingLabels);
             } else if (graphType === "violin") {
-                this._renderViolins(ctx, series, allPoints, bounds, w, h, pendingLabels);
+                this._renderViolins(ctx, precomputedViolins, bounds, w, h, pendingLabels);
             } else if (graphType === "density") {
                 this._renderDensitySurface(ctx, densityGrid, bounds, w, h);
             } else if (graphType === "histogram") {
-                this._renderHistogram(ctx, histogramBins, bounds, w, h, pendingLabels);
+                this._renderHistogram(ctx, histogramBins, histUseAvgZ, bounds, w, h, pendingLabels);
             } else {
                 this._renderScatter(ctx, allPoints, bounds, w, h, pendingLabels);
             }
@@ -829,8 +1058,11 @@
         }
 
         _renderScatter(ctx, points, b, w, h, pendingLabels) {
-            const projected = points.map((p, idx) => {
-                const n = normalizePoint(p.x, p.y, p.z, b);
+            const deoverlapped = deoverlapPositions(points.map(p => ({ ...p })), b, 0.08);
+            const projected = deoverlapped.map((p, idx) => {
+                const px = p.plotX !== undefined ? p.plotX : p.x;
+                const py = p.plotY !== undefined ? p.plotY : p.y;
+                const n = normalizePoint(px, py, p.z, b);
                 const proj = project3D(n.x, n.y, n.z, this.camera, w, h);
                 const floorProj = project3D(n.x, n.y, -1, this.camera, w, h);
                 return { ...p, ...proj, floorProj, idx };
@@ -872,28 +1104,35 @@
 
         _renderBars(ctx, points, b, w, h, pendingLabels) {
             const baseZ = (b.minZ <= 0 && b.maxZ >= 0) ? 0 : b.minZ;
-            const hx = (b.maxX - b.minX) * 0.028;
-            const hy = (b.maxY - b.minY) * 0.028;
+            const deoverlapped = deoverlapPositions(points.map(p => ({ ...p })), b, 0.11);
+            const scaleFrac = clamp(0.18 / Math.sqrt(Math.max(1, deoverlapped.length)), 0.025, 0.095);
+            const hx = (b.maxX - b.minX) * scaleFrac;
+            const hy = (b.maxY - b.minY) * scaleFrac;
+            const compactLabels = deoverlapped.length <= 20;
 
-            const items = points.map((p) => {
+            const items = deoverlapped.map((p) => {
+                const px = p.plotX !== undefined ? p.plotX : p.x;
+                const py = p.plotY !== undefined ? p.plotY : p.y;
                 const zLow = Math.min(baseZ, p.z);
                 const zHigh = Math.max(baseZ, p.z);
-                const nCenter = normalizePoint(p.x, p.y, (zLow + zHigh) * 0.5, b);
+                const nCenter = normalizePoint(px, py, (zLow + zHigh) * 0.5, b);
                 const centerProj = project3D(nCenter.x, nCenter.y, nCenter.z, this.camera, w, h);
-                const nTop = normalizePoint(p.x, p.y, p.z, b);
+                const nTop = normalizePoint(px, py, p.z, b);
                 const topProj = project3D(nTop.x, nTop.y, nTop.z, this.camera, w, h);
-                return { p, zLow, zHigh, centerDepth: centerProj.depth, topProj };
+                return { p, px, py, zLow, zHigh, centerDepth: centerProj.depth, topProj };
             }).sort((a, c) => c.centerDepth - a.centerDepth);
 
-            for (const { p, zLow, zHigh, centerDepth, topProj } of items) {
-                drawBoxPrism(ctx, p.x, p.y, zLow, zHigh, hx, hy, p.color, this.camera, b, w, h, 0.94);
+            for (const { p, px, py, zLow, zHigh, centerDepth, topProj } of items) {
+                drawBoxPrism(ctx, px, py, zLow, zHigh, hx, hy, p.color, this.camera, b, w, h, 0.94);
                 const name = p.label ? `${p.label}${p.matchLabel ? " " + p.matchLabel : ""}` : "";
                 pendingLabels.push({
                     sx: topProj.sx,
                     sy: topProj.sy,
                     depth: centerDepth,
                     color: p.color,
-                    text: `${name ? name + ": " : ""}(${formatNum(p.x)}, ${formatNum(p.y)}, ${formatNum(p.z)})`
+                    text: compactLabels && name
+                        ? `${name}: ${formatNum(p.z)}`
+                        : `${name ? name + ": " : ""}(${formatNum(p.x)}, ${formatNum(p.y)}, ${formatNum(p.z)})`
                 });
                 this.hitTargets.push({ sx: topProj.sx, sy: topProj.sy, point: p });
             }
@@ -901,6 +1140,83 @@
 
         _renderLinesOrAreas(ctx, series, b, w, h, withArea, pendingLabels) {
             const baseZ = (b.minZ <= 0 && b.maxZ >= 0) ? 0 : b.minZ;
+            const nonEmptySeries = series.filter(s => (s.points || []).some(p => Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z)));
+            const isTeamSummaryComparison = nonEmptySeries.length >= 2 && nonEmptySeries.every(s => (s.points || []).length === 1);
+
+            if (isTeamSummaryComparison) {
+                const rawPts = nonEmptySeries.map((s, sIdx) => {
+                    const p = s.points[0];
+                    const color = s.color || this.theme.palette[sIdx % this.theme.palette.length];
+                    return { ...p, seriesName: s.name || p.label || "", color };
+                });
+                const deoverlapped = deoverlapPositions(rawPts, b, 0.09);
+                const pathPts = deoverlapped.map(p => {
+                    const px = p.plotX !== undefined ? p.plotX : p.x;
+                    const py = p.plotY !== undefined ? p.plotY : p.y;
+                    const nTop = normalizePoint(px, py, p.z, b);
+                    const nBot = normalizePoint(px, py, baseZ, b);
+                    const top = project3D(nTop.x, nTop.y, nTop.z, this.camera, w, h);
+                    const bot = project3D(nBot.x, nBot.y, nBot.z, this.camera, w, h);
+                    return { ...p, top, bot };
+                });
+
+                if (withArea && pathPts.length >= 2) {
+                    for (let i = 0; i < pathPts.length - 1; i++) {
+                        const a = pathPts[i];
+                        const c = pathPts[i + 1];
+                        ctx.beginPath();
+                        ctx.moveTo(a.top.sx, a.top.sy);
+                        ctx.lineTo(c.top.sx, c.top.sy);
+                        ctx.lineTo(c.bot.sx, c.bot.sy);
+                        ctx.lineTo(a.bot.sx, a.bot.sy);
+                        ctx.closePath();
+                        ctx.fillStyle = rgba(a.color, 0.28);
+                        ctx.fill();
+                    }
+                }
+
+                for (let i = 0; i < pathPts.length - 1; i++) {
+                    const a = pathPts[i];
+                    const c = pathPts[i + 1];
+                    ctx.beginPath();
+                    ctx.moveTo(a.top.sx, a.top.sy);
+                    ctx.lineTo(c.top.sx, c.top.sy);
+                    ctx.strokeStyle = this.theme.axis;
+                    ctx.lineWidth = 2.2;
+                    ctx.stroke();
+                }
+
+                const sortedMarkers = pathPts.slice().sort((a, c) => c.top.depth - a.top.depth);
+                for (const pt of sortedMarkers) {
+                    ctx.strokeStyle = rgba(pt.color, 0.55);
+                    ctx.lineWidth = 1.4;
+                    ctx.setLineDash([3, 3]);
+                    ctx.beginPath();
+                    ctx.moveTo(pt.top.sx, pt.top.sy);
+                    ctx.lineTo(pt.bot.sx, pt.bot.sy);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    ctx.beginPath();
+                    ctx.arc(pt.top.sx, pt.top.sy, 5.5, 0, Math.PI * 2);
+                    ctx.fillStyle = pt.color;
+                    ctx.fill();
+                    ctx.strokeStyle = this.theme.bg;
+                    ctx.lineWidth = 1.3;
+                    ctx.stroke();
+
+                    pendingLabels.push({
+                        sx: pt.top.sx,
+                        sy: pt.top.sy,
+                        depth: pt.top.depth,
+                        color: pt.color,
+                        text: `${pt.label || pt.seriesName}: ${formatNum(pt.z)}`
+                    });
+                    this.hitTargets.push({ sx: pt.top.sx, sy: pt.top.sy, point: pt });
+                }
+                return;
+            }
+
             const projectedSeries = series.map((s, sIdx) => {
                 const color = s.color || this.theme.palette[sIdx % this.theme.palette.length];
                 const pts = (s.points || []).filter(p => Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z)).map(p => {
@@ -962,13 +1278,10 @@
         }
 
         _renderBoxes(ctx, series, allPoints, b, w, h, pendingLabels) {
-            const groups = series.length > 1
-                ? series
-                : [{ name: "All", color: this.theme.palette[0], points: allPoints }];
-            const hx = (b.maxX - b.minX) * 0.032;
-            const hy = (b.maxY - b.minY) * 0.032;
+            const groups = series.filter(s => (s.points || []).length >= 1);
+            if (!groups.length) return;
 
-            const boxItems = [];
+            const rawItems = [];
             groups.forEach((s, idx) => {
                 const pts = (s.points || []).filter(p => Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z));
                 if (!pts.length) return;
@@ -977,16 +1290,52 @@
                 const stats = computeQuantileStats(pts.map(p => p.z));
                 if (!stats) return;
                 const color = s.color || this.theme.palette[idx % this.theme.palette.length];
-                const nMid = normalizePoint(cx, cy, stats.median, b);
-                const proj = project3D(nMid.x, nMid.y, nMid.z, this.camera, w, h);
-                boxItems.push({ name: s.name || `Series ${idx + 1}`, cx, cy, stats, color, proj });
+                rawItems.push({
+                    name: s.name || `Series ${idx + 1}`,
+                    x: cx,
+                    y: cy,
+                    cx,
+                    cy,
+                    count: pts.length,
+                    stats,
+                    color
+                });
             });
 
-            boxItems.sort((a, c) => c.proj.depth - a.proj.depth);
+            deoverlapPositions(rawItems, b, 0.11);
+            const scaleFrac = clamp(0.18 / Math.sqrt(Math.max(1, rawItems.length)), 0.032, 0.095);
+            const hx = (b.maxX - b.minX) * scaleFrac;
+            const hy = (b.maxY - b.minY) * scaleFrac;
+            const baseZ = (b.minZ <= 0 && b.maxZ >= 0) ? 0 : b.minZ;
+            const zSpan = (b.maxZ - b.minZ) || 1;
+            const minHalfH = zSpan * 0.025;
+
+            const boxItems = rawItems.map(item => {
+                const px = item.plotX !== undefined ? item.plotX : item.cx;
+                const py = item.plotY !== undefined ? item.plotY : item.cy;
+                const nMid = normalizePoint(px, py, item.stats.median, b);
+                const proj = project3D(nMid.x, nMid.y, nMid.z, this.camera, w, h);
+                return { ...item, px, py, proj };
+            }).sort((a, c) => c.proj.depth - a.proj.depth);
+
             for (const item of boxItems) {
-                const { cx, cy, stats, color } = item;
-                const nMin = normalizePoint(cx, cy, stats.min, b);
-                const nMax = normalizePoint(cx, cy, stats.max, b);
+                const { px, py, cx, cy, stats, color, count } = item;
+
+                if (count === 1) {
+                    const nBase = normalizePoint(px, py, baseZ, b);
+                    const pBase = project3D(nBase.x, nBase.y, nBase.z, this.camera, w, h);
+                    ctx.strokeStyle = rgba(color, 0.45);
+                    ctx.lineWidth = 1.6;
+                    ctx.setLineDash([4, 3]);
+                    ctx.beginPath();
+                    ctx.moveTo(pBase.sx, pBase.sy);
+                    ctx.lineTo(item.proj.sx, item.proj.sy);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+
+                const nMin = normalizePoint(px, py, stats.min, b);
+                const nMax = normalizePoint(px, py, stats.max, b);
                 const pMin = project3D(nMin.x, nMin.y, nMin.z, this.camera, w, h);
                 const pMax = project3D(nMax.x, nMax.y, nMax.z, this.camera, w, h);
 
@@ -997,22 +1346,60 @@
                 ctx.lineTo(pMax.sx, pMax.sy);
                 ctx.stroke();
 
-                drawBoxPrism(ctx, cx, cy, stats.q1, stats.q3, hx, hy, color, this.camera, b, w, h, 0.88);
+                // Whisker horizontal caps
+                for (const wz of [stats.min, stats.max]) {
+                    const capA = normalizePoint(px - hx * 0.45, py, wz, b);
+                    const capB = normalizePoint(px + hx * 0.45, py, wz, b);
+                    const pa = project3D(capA.x, capA.y, capA.z, this.camera, w, h);
+                    const pb = project3D(capB.x, capB.y, capB.z, this.camera, w, h);
+                    ctx.beginPath();
+                    ctx.moveTo(pa.sx, pa.sy);
+                    ctx.lineTo(pb.sx, pb.sy);
+                    ctx.stroke();
+                }
 
+                let boxLo = stats.q1;
+                let boxHi = stats.q3;
+                if (boxHi - boxLo < minHalfH * 2) {
+                    boxLo = stats.median - minHalfH;
+                    boxHi = stats.median + minHalfH;
+                }
+                drawBoxPrism(ctx, px, py, boxLo, boxHi, hx, hy, color, this.camera, b, w, h, 0.90);
+
+                // Median highlight perimeter ring
+                const medPts = [
+                    [-1, -1], [1, -1], [1, 1], [-1, 1]
+                ].map(([dx, dy]) => {
+                    const nm = normalizePoint(px + dx * hx * 1.03, py + dy * hy * 1.03, stats.median, b);
+                    return project3D(nm.x, nm.y, nm.z, this.camera, w, h);
+                });
+                ctx.strokeStyle = "#ffffff";
+                ctx.lineWidth = 1.8;
                 ctx.beginPath();
-                ctx.arc(item.proj.sx, item.proj.sy, 5, 0, Math.PI * 2);
-                ctx.fillStyle = "#ffffff";
-                ctx.fill();
-                ctx.strokeStyle = color;
-                ctx.lineWidth = 2;
+                ctx.moveTo(medPts[0].sx, medPts[0].sy);
+                for (let k = 1; k < 4; k++) ctx.lineTo(medPts[k].sx, medPts[k].sy);
+                ctx.closePath();
                 ctx.stroke();
+
+                // Outlier markers
+                for (const outVal of (stats.outliers || [])) {
+                    const no = normalizePoint(px, py, outVal, b);
+                    const po = project3D(no.x, no.y, no.z, this.camera, w, h);
+                    ctx.beginPath();
+                    ctx.arc(po.sx, po.sy, 3.2, 0, Math.PI * 2);
+                    ctx.fillStyle = color;
+                    ctx.fill();
+                    ctx.strokeStyle = this.theme.bg;
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
 
                 pendingLabels.push({
                     sx: pMax.sx,
                     sy: pMax.sy,
                     depth: item.proj.depth,
                     color,
-                    text: `${item.name} (Med ${formatNum(stats.median)})`
+                    text: `${item.name} (${count === 1 ? "Avg" : "Med"} ${formatNum(stats.median)})`
                 });
 
                 this.hitTargets.push({
@@ -1023,49 +1410,61 @@
                         x: cx,
                         y: cy,
                         z: stats.median,
-                        extra: `Q1: ${formatNum(stats.q1)} | Med: ${formatNum(stats.median)} | Q3: ${formatNum(stats.q3)}`
+                        extra: count > 1
+                            ? `Min: ${formatNum(stats.min)} | Q1: ${formatNum(stats.q1)} | Med: ${formatNum(stats.median)} | Q3: ${formatNum(stats.q3)} | Max: ${formatNum(stats.max)} (n=${count})`
+                            : `Average value: ${formatNum(stats.median)}`
                     }
                 });
             }
         }
 
-        _renderViolins(ctx, series, allPoints, b, w, h, pendingLabels) {
-            const groups = series.filter(s => (s.points || []).length >= 2);
-            if (!groups.length) {
-                const grid = compute2DKDEGrid(allPoints, 14);
-                const dBounds = computeBounds(allPoints, "density", null, grid);
-                this._renderDensitySurface(ctx, grid, dBounds, w, h);
-                return;
-            }
+        _renderViolins(ctx, precomputedViolins, b, w, h, pendingLabels) {
+            const rawItems = Array.isArray(precomputedViolins) ? precomputedViolins.map(v => ({ ...v })) : [];
+            if (!rawItems.length) return;
 
-            const maxRadiusX = (b.maxX - b.minX) * 0.045;
-            const maxRadiusY = (b.maxY - b.minY) * 0.045;
-            const items = [];
+            deoverlapPositions(rawItems, b, 0.11);
+            const scaleFrac = clamp(0.22 / Math.sqrt(Math.max(1, rawItems.length)), 0.045, 0.12);
+            const maxRadiusX = (b.maxX - b.minX) * scaleFrac;
+            const maxRadiusY = (b.maxY - b.minY) * scaleFrac;
+            const baseZ = (b.minZ <= 0 && b.maxZ >= 0) ? 0 : b.minZ;
 
-            groups.forEach((s, idx) => {
-                const pts = s.points.filter(p => Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z));
-                const cx = pts.reduce((a, p) => a + p.x, 0) / pts.length;
-                const cy = pts.reduce((a, p) => a + p.y, 0) / pts.length;
-                const kde = compute1DKDE(pts.map(p => p.z), 18);
-                const color = s.color || this.theme.palette[idx % this.theme.palette.length];
-                const midZ = pts.reduce((a, p) => a + p.z, 0) / pts.length;
-                const nMid = normalizePoint(cx, cy, midZ, b);
+            const items = rawItems.map(item => {
+                const px = item.plotX !== undefined ? item.plotX : item.cx;
+                const py = item.plotY !== undefined ? item.plotY : item.cy;
+                const nMid = normalizePoint(px, py, item.midZ, b);
                 const proj = project3D(nMid.x, nMid.y, nMid.z, this.camera, w, h);
-                items.push({ name: s.name, cx, cy, midZ, kde, color, proj });
-            });
+                const kdeTopZ = item.kde.length ? item.kde[item.kde.length - 1].z : item.midZ;
+                const nTop = normalizePoint(px, py, kdeTopZ, b);
+                const topProj = project3D(nTop.x, nTop.y, nTop.z, this.camera, w, h);
+                return { ...item, px, py, proj, topProj };
+            }).sort((a, c) => c.proj.depth - a.proj.depth);
 
-            items.sort((a, c) => c.proj.depth - a.proj.depth);
+            const segs = 12;
+            const allQuads = [];
+
             for (const item of items) {
-                const segs = 10;
+                if (item.pts.length <= 1) {
+                    const nBase = normalizePoint(item.px, item.py, baseZ, b);
+                    const pBase = project3D(nBase.x, nBase.y, nBase.z, this.camera, w, h);
+                    ctx.strokeStyle = rgba(item.color, 0.42);
+                    ctx.lineWidth = 1.5;
+                    ctx.setLineDash([4, 3]);
+                    ctx.beginPath();
+                    ctx.moveTo(pBase.sx, pBase.sy);
+                    ctx.lineTo(item.proj.sx, item.proj.sy);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+
                 const rings = item.kde.map(sample => {
-                    const rx = Math.max(maxRadiusX * 0.12, maxRadiusX * sample.d);
-                    const ry = Math.max(maxRadiusY * 0.12, maxRadiusY * sample.d);
+                    const rx = Math.max(maxRadiusX * 0.14, maxRadiusX * sample.d);
+                    const ry = Math.max(maxRadiusY * 0.14, maxRadiusY * sample.d);
                     const ring = [];
                     for (let k = 0; k < segs; k++) {
                         const ang = (k / segs) * Math.PI * 2;
                         const n = normalizePoint(
-                            item.cx + Math.cos(ang) * rx,
-                            item.cy + Math.sin(ang) * ry,
+                            item.px + Math.cos(ang) * rx,
+                            item.py + Math.sin(ang) * ry,
                             sample.z,
                             b
                         );
@@ -1077,23 +1476,69 @@
                 for (let r = 0; r < rings.length - 1; r++) {
                     for (let k = 0; k < segs; k++) {
                         const kNext = (k + 1) % segs;
-                        ctx.beginPath();
-                        ctx.moveTo(rings[r][k].sx, rings[r][k].sy);
-                        ctx.lineTo(rings[r][kNext].sx, rings[r][kNext].sy);
-                        ctx.lineTo(rings[r + 1][kNext].sx, rings[r + 1][kNext].sy);
-                        ctx.lineTo(rings[r + 1][k].sx, rings[r + 1][k].sy);
-                        ctx.closePath();
-                        ctx.fillStyle = rgba(item.color, 0.55);
-                        ctx.fill();
-                        ctx.strokeStyle = rgba(item.color, 0.75);
-                        ctx.lineWidth = 0.6;
-                        ctx.stroke();
+                        const p0 = rings[r][k];
+                        const p1 = rings[r][kNext];
+                        const p2 = rings[r + 1][kNext];
+                        const p3 = rings[r + 1][k];
+                        const avgDepth = (p0.depth + p1.depth + p2.depth + p3.depth) * 0.25;
+                        const ang = (k / segs) * Math.PI * 2;
+                        const shade = 0.72 + 0.36 * (0.5 + 0.5 * Math.cos(ang + 0.85));
+                        allQuads.push({ p0, p1, p2, p3, avgDepth, color: item.color, shade });
                     }
                 }
+            }
+
+            allQuads.sort((a, c) => c.avgDepth - a.avgDepth);
+            for (const q of allQuads) {
+                ctx.beginPath();
+                ctx.moveTo(q.p0.sx, q.p0.sy);
+                ctx.lineTo(q.p1.sx, q.p1.sy);
+                ctx.lineTo(q.p2.sx, q.p2.sy);
+                ctx.lineTo(q.p3.sx, q.p3.sy);
+                ctx.closePath();
+                ctx.fillStyle = rgba(shadeColor(q.color, q.shade), 0.72);
+                ctx.fill();
+                ctx.strokeStyle = rgba(q.color, 0.45);
+                ctx.lineWidth = 0.5;
+                ctx.stroke();
+            }
+
+            // Draw median rings, center markers, and queue labels
+            for (const item of items) {
+                const medSample = item.kde.reduce((best, cur) =>
+                    Math.abs(cur.z - item.midZ) < Math.abs(best.z - item.midZ) ? cur : best,
+                    item.kde[0] || { z: item.midZ, d: 1 }
+                );
+                const rx = Math.max(maxRadiusX * 0.14, maxRadiusX * medSample.d) * 1.04;
+                const ry = Math.max(maxRadiusY * 0.14, maxRadiusY * medSample.d) * 1.04;
+                ctx.beginPath();
+                for (let k = 0; k <= segs; k++) {
+                    const ang = (k / segs) * Math.PI * 2;
+                    const n = normalizePoint(
+                        item.px + Math.cos(ang) * rx,
+                        item.py + Math.sin(ang) * ry,
+                        item.midZ,
+                        b
+                    );
+                    const p = project3D(n.x, n.y, n.z, this.camera, w, h);
+                    if (k === 0) ctx.moveTo(p.sx, p.sy);
+                    else ctx.lineTo(p.sx, p.sy);
+                }
+                ctx.strokeStyle = "#ffffff";
+                ctx.lineWidth = 1.6;
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.arc(item.proj.sx, item.proj.sy, 4.2, 0, Math.PI * 2);
+                ctx.fillStyle = "#ffffff";
+                ctx.fill();
+                ctx.strokeStyle = item.color;
+                ctx.lineWidth = 1.8;
+                ctx.stroke();
 
                 pendingLabels.push({
-                    sx: item.proj.sx,
-                    sy: item.proj.sy,
+                    sx: item.topProj.sx,
+                    sy: item.topProj.sy,
                     depth: item.proj.depth,
                     color: item.color,
                     text: `${item.name || ""}: ${formatNum(item.midZ)}`
@@ -1101,7 +1546,15 @@
                 this.hitTargets.push({
                     sx: item.proj.sx,
                     sy: item.proj.sy,
-                    point: { label: item.name, x: item.cx, y: item.cy, z: item.midZ }
+                    point: {
+                        label: item.name,
+                        x: item.cx,
+                        y: item.cy,
+                        z: item.midZ,
+                        extra: item.stats && item.pts.length > 1
+                            ? `Min: ${formatNum(item.stats.min)} | Med: ${formatNum(item.stats.median)} | Mean: ${formatNum(item.meanZ)} | Max: ${formatNum(item.stats.max)} (n=${item.pts.length})`
+                            : `Average value: ${formatNum(item.midZ)}`
+                    }
                 });
             }
         }
@@ -1141,37 +1594,38 @@
             }
         }
 
-        _renderHistogram(ctx, bins, b, w, h, pendingLabels) {
+        _renderHistogram(ctx, bins, useAvgZ, b, w, h, pendingLabels) {
             if (!bins || !bins.length) return;
             const items = bins.map(bin => {
-                const nCenter = normalizePoint(bin.cx, bin.cy, bin.count * 0.5, b);
+                const heightVal = useAvgZ ? bin.avgZ : bin.count;
+                const nCenter = normalizePoint(bin.cx, bin.cy, heightVal * 0.5, b);
                 const centerProj = project3D(nCenter.x, nCenter.y, nCenter.z, this.camera, w, h);
-                const nTop = normalizePoint(bin.cx, bin.cy, bin.count, b);
+                const nTop = normalizePoint(bin.cx, bin.cy, heightVal, b);
                 const topProj = project3D(nTop.x, nTop.y, nTop.z, this.camera, w, h);
-                return { bin, centerDepth: centerProj.depth, topProj };
+                return { bin, heightVal, centerDepth: centerProj.depth, topProj };
             }).sort((a, c) => c.centerDepth - a.centerDepth);
 
             const baseColor = this.theme.palette[0];
-            for (const { bin, centerDepth, topProj } of items) {
-                const ratio = b.maxZ > 0 ? bin.count / b.maxZ : 0.5;
+            for (const { bin, heightVal, centerDepth, topProj } of items) {
+                const ratio = b.maxZ > 0 ? heightVal / b.maxZ : 0.5;
                 const col = shadeColor(baseColor, 0.65 + ratio * 0.65);
-                drawBoxPrism(ctx, bin.cx, bin.cy, 0, bin.count, bin.dx * 0.42, bin.dy * 0.42, col, this.camera, b, w, h, 0.92);
+                drawBoxPrism(ctx, bin.cx, bin.cy, 0, heightVal, bin.dx * 0.42, bin.dy * 0.42, col, this.camera, b, w, h, 0.92);
                 const teamStr = bin.teams.size ? ` [${Array.from(bin.teams).slice(0, 3).join(",")}]` : "";
                 pendingLabels.push({
                     sx: topProj.sx,
                     sy: topProj.sy,
                     depth: centerDepth,
                     color: baseColor,
-                    text: `${bin.count} pts${teamStr}`
+                    text: useAvgZ ? `${formatNum(heightVal)}${teamStr}` : `${bin.count} pts${teamStr}`
                 });
                 this.hitTargets.push({
                     sx: topProj.sx,
                     sy: topProj.sy,
                     point: {
-                        label: `Bin (${bin.count} pts)`,
+                        label: useAvgZ ? `Bin (Avg ${formatNum(heightVal)})` : `Bin (${bin.count} pts)`,
                         x: bin.cx,
                         y: bin.cy,
-                        z: bin.count,
+                        z: heightVal,
                         extra: bin.teams.size ? `Teams: ${Array.from(bin.teams).slice(0, 6).join(", ")}` : ""
                     }
                 });

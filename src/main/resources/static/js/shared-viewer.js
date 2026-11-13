@@ -955,9 +955,9 @@ async function renderGraphView(target, config, snapshot, live) {
             const gt = checkbox.value;
             let disabled = false;
 
-            if (isCategory && gt !== "bar") {
+            if (!state.is3D && isCategory && gt !== "bar") {
                 disabled = true;
-            } else if (isAverages && (gt === "line" || gt === "area")) {
+            } else if (!state.is3D && isAverages && (gt === "line" || gt === "area")) {
                 disabled = true;
             }
 
@@ -1090,7 +1090,7 @@ async function renderGraphView(target, config, snapshot, live) {
     if (selectAllTypesBtn) {
         selectAllTypesBtn.addEventListener("click", () => {
             const isAverages = state.dataView === "averages" || (state.datasource === "epa" || state.datasource === "opr");
-            const allTypes = GRAPH_TYPES.map(g => g.id).filter(id => !isAverages || (id !== "line" && id !== "area"));
+            const allTypes = GRAPH_TYPES.map(g => g.id).filter(id => state.is3D || !isAverages || (id !== "line" && id !== "area"));
             state.selectedGraphTypes = new Set(allTypes);
             document.querySelectorAll(".graph-type-checkbox").forEach(cb => {
                 cb.checked = state.selectedGraphTypes.has(cb.value);
@@ -1262,14 +1262,16 @@ async function renderGraphView(target, config, snapshot, live) {
             const mx = state.metricMap.get(state.metricXId) || metric || { id: 'score_auto', label: 'Auto points', kind: 'score', scope: 'auto' };
             const my = state.metricMap.get(state.metricYId) || metric || { id: 'score_teleop', label: 'Teleop points', kind: 'score', scope: 'teleop' };
             const mz = state.metricMap.get(state.metricZId) || metric || { id: 'score_total', label: 'Total points', kind: 'score', scope: 'total' };
-            let series3D = [];
+            let series3DMatches = [];
+            let series3DAverages = [];
             if (state.datasource && state.datasource !== 'scouted') {
                 if (state.datasource === 'epa' || state.datasource === 'opr') {
                     output.appendChild(createNotice("3D X/Y/Z axes require multiple distinct metrics. Switch Data Source to Scouted Data, Match 13 xP, or All Sources."));
                     if (loading) loading.classList.add("hidden");
                     return;
                 }
-                const pts = selectedTeams.map(tNum => {
+                const sortedSelTeams = selectedTeams.slice().sort((a, b) => Number(a) - Number(b));
+                series3DAverages = sortedSelTeams.map(tNum => {
                     const tm = state.eventTeamsMap.get(Number(tNum));
                     const tEntries = entries.filter(e => Number(e.targetTeamNumber || e.teamNumber) === Number(tNum) && (state.includePrescout || !e.isPrescout));
                     const valFor = (m) => {
@@ -1281,6 +1283,10 @@ async function renderGraphView(target, config, snapshot, live) {
                             });
                             return cnt > 0 ? sum / cnt : (m.id === 'score_total' ? Number(tm?.exp ?? tm?.match13Exp ?? 0) : 0);
                         }
+                        if (m?.kind === 'count') return tEntries.length;
+                        if (m?.id === 'ext_epa') return Number(tm?.epa ?? 0);
+                        if (m?.id === 'ext_exp') return Number(tm?.exp ?? tm?.match13Exp ?? 0);
+                        if (m?.id === 'ext_opr') return Number(tm?.opr ?? 0);
                         if (!tEntries.length) return m.scope === 'total' ? Number(tm?.averagePoints ?? 0) : 0;
                         let sum = 0, cnt = 0;
                         tEntries.forEach(e => {
@@ -1289,9 +1295,26 @@ async function renderGraphView(target, config, snapshot, live) {
                         });
                         return cnt > 0 ? sum / cnt : 0;
                     };
-                    return { x: valFor(mx), y: valFor(my), z: valFor(mz), label: `${tNum}` };
+                    return { name: `Team ${tNum}`, points: [{ x: valFor(mx), y: valFor(my), z: valFor(mz), label: `${tNum}` }] };
                 });
-                series3D = [{ name: state.datasource.toUpperCase(), points: pts }];
+                if (state.datasource === 'exp' && (statsHistory.match13History || []).length) {
+                    series3DMatches = sortedSelTeams.map(tNum => {
+                        const pts = [];
+                        (statsHistory.match13History || []).forEach(mo => {
+                            const td = extractTeamExpData(mo, tNum);
+                            if (!td) return;
+                            const mk = mo.key || mo.matchKey || mo.match_key || mo.match || '';
+                            pts.push({
+                                x: getTeamExpMetricValue(td, mx.id),
+                                y: getTeamExpMetricValue(td, my.id),
+                                z: getTeamExpMetricValue(td, mz.id),
+                                label: `${tNum}`,
+                                matchLabel: mk
+                            });
+                        });
+                        return { name: `Team ${tNum}`, points: pts };
+                    }).filter(s => s.points.length > 0);
+                }
             } else {
                 const fEntries = entries.filter(e => state.selectedTeams.has(Number(e.targetTeamNumber || e.teamNumber)) && (state.includePrescout || !e.isPrescout));
                 const byTeam = new Map();
@@ -1303,24 +1326,30 @@ async function renderGraphView(target, config, snapshot, live) {
                     const vz = metricValue(e, mz, state);
                     if (vx === null || vy === null || vz === null) return;
                     if (!byTeam.has(t)) byTeam.set(t, []);
-                    byTeam.get(t).push({ x: vx, y: vy, z: vz, matchLabel: e.matchNumber != null ? `M${e.matchNumber}` : '' });
+                    byTeam.get(t).push({ x: vx, y: vy, z: vz, matchNumber: Number(e.matchNumber || 0), matchLabel: e.matchNumber != null ? `M${e.matchNumber}` : '' });
                 });
                 const tList = Array.from(byTeam.keys()).sort((a, b) => a - b);
-                if (state.dataView === 'matches') {
-                    series3D = tList.map(t => ({ name: `Team ${t}`, points: byTeam.get(t).map(p => ({ ...p, label: `${t}` })) }));
-                } else {
-                    series3D = [{ name: 'Teams', points: tList.map(t => {
-                        const list = byTeam.get(t);
-                        const n = list.length || 1;
-                        return { x: list.reduce((a, p) => a + p.x, 0) / n, y: list.reduce((a, p) => a + p.y, 0) / n, z: list.reduce((a, p) => a + p.z, 0) / n, label: `${t}` };
-                    }) }];
-                }
+                series3DMatches = tList.map(t => ({
+                    name: `Team ${t}`,
+                    points: byTeam.get(t).slice().sort((a, b) => a.matchNumber - b.matchNumber).map(p => ({ x: p.x, y: p.y, z: p.z, label: `${t}`, matchLabel: p.matchLabel }))
+                }));
+                series3DAverages = tList.map(t => {
+                    const list = byTeam.get(t);
+                    const n = list.length || 1;
+                    return {
+                        name: `Team ${t}`,
+                        points: [{
+                            x: mx.kind === 'count' ? list.length : (list.reduce((a, p) => a + p.x, 0) / n),
+                            y: my.kind === 'count' ? list.length : (list.reduce((a, p) => a + p.y, 0) / n),
+                            z: mz.kind === 'count' ? list.length : (list.reduce((a, p) => a + p.z, 0) / n),
+                            label: `${t}`
+                        }]
+                    };
+                });
             }
             selectedGraphTypes.forEach(graphType => {
-                if ((graphType === 'line' || graphType === 'area') && state.dataView === 'averages') {
-                    output.appendChild(createGraphCard(`3D ${graphType}`, null, `${graphType} requires Match-by-match view.`));
-                    return;
-                }
+                const useMatches = state.dataView === 'matches' || graphType === 'box' || graphType === 'violin' || graphType === 'histogram' || graphType === 'density';
+                const series3D = (useMatches && series3DMatches.length) ? series3DMatches : series3DAverages;
                 const chart = createPlotlyContainer(460);
                 chart.style.height = "460px";
                 const card = createGraphCard(`3D ${graphType} (${mx.label} \u00D7 ${my.label} \u00D7 ${mz.label})`, chart);
