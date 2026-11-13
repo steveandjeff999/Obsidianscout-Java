@@ -1346,7 +1346,7 @@ async function generateGraphs(state) {
         warnBanner.innerHTML = `
             <span class="icon">${SVG_ICONS.warning}</span>
             <div style="flex:1;">
-                <strong>Discrepancy Warning:</strong> Some of the data used in these graphs contains conflicting inputs from partner teams. You can review or resolve this in the Alliance Scouting Data page.
+                <strong>Discrepancy Warning:</strong> Some of the data used in these graphs contains conflicting scouting inputs. You can review or resolve this in the All Data page.
             </div>
         `;
         output.appendChild(warnBanner);
