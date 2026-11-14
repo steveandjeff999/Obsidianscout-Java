@@ -139,16 +139,19 @@ object BannerService {
     private val dangerousTagRegex = Regex("(?i)<\\s*(script|iframe|object|embed|style|meta|link|svg|math|form)[^>]*>.*?</\\s*\\1\\s*>", RegexOption.DOT_MATCHES_ALL)
     private val standaloneTagRegex = Regex("(?i)<\\s*(script|iframe|object|embed|style|meta|link|svg|math|form)[^>]*?/?>")
     private val eventHandlerRegex = Regex("(?i)\\bon\\w+\\s*=\\s*(\"[^\"]*\"|'[^']*'|[^\\s>]+)")
-    private val javascriptUriRegex = Regex("(?i)(href|src)\\s*=\\s*(\"|')?\\s*javascript:[^\"'>]*(\"|')?")
+    private val javascriptUriRegex = Regex("(?i)(href|src)\\s*=\\s*(\"|')?\\s*(javascript:|vbscript:|data:\\s*text/html)[^\"'>]*(\"|')?")
     private val validBannerTypes = setOf("info", "warning", "success", "danger")
 
     fun sanitizeContent(input: String?): String {
-        if (input == null) return ""
-        var cleaned = input
-        cleaned = dangerousTagRegex.replace(cleaned, "")
-        cleaned = standaloneTagRegex.replace(cleaned, "")
-        cleaned = eventHandlerRegex.replace(cleaned, "")
-        cleaned = javascriptUriRegex.replace(cleaned, "")
+        var cleaned: String = input ?: return ""
+        var previous: String
+        do {
+            previous = cleaned
+            cleaned = dangerousTagRegex.replace(cleaned, "")
+            cleaned = standaloneTagRegex.replace(cleaned, "")
+            cleaned = eventHandlerRegex.replace(cleaned, "")
+            cleaned = javascriptUriRegex.replace(cleaned, "")
+        } while (cleaned != previous)
         return cleaned.trim()
     }
 

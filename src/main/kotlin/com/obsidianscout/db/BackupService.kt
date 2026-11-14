@@ -403,7 +403,7 @@ object BackupService {
                     UserBackupDto(
                         username = row[Users.username],
                         teamNumber = row[Users.teamNumber],
-                        passwordHash = row[Users.passwordHash],
+                        passwordHash = "",
                         role = row[Users.role],
                         createdAt = row[Users.createdAt].toEpochMilli(),
                         email = row[Users.email],
@@ -705,20 +705,7 @@ object BackupService {
                 }
             } else emptyList()
 
-            val passwordResetTokens = if (scope == "global") {
-                PasswordResetTokens.selectAll().map { row ->
-                    val uid = row[PasswordResetTokens.userId]?.value
-                    val userPair = uid?.let { userMap[it] }
-                    PasswordResetTokenBackupDto(
-                        username = userPair?.first,
-                        teamNumber = userPair?.second,
-                        email = row[PasswordResetTokens.email],
-                        token = row[PasswordResetTokens.token],
-                        expiresAt = row[PasswordResetTokens.expiresAt].toEpochMilli(),
-                        used = row[PasswordResetTokens.used]
-                    )
-                }
-            } else emptyList()
+            val passwordResetTokens = emptyList<PasswordResetTokenBackupDto>()
 
             val slackTeam = if (scope == "global") null else teamNumber
             val teamCacheOverrides = if (scope == "global" || type == "entire") {
@@ -877,7 +864,7 @@ object BackupService {
                             it[username] = u.username
                             it[teamNumber] = assignedTeam
                             it[program] = assignedProgram
-                            it[passwordHash] = u.passwordHash
+                            it[passwordHash] = u.passwordHash.ifBlank { "!REDACTED_RESET_REQUIRED" }
                             it[role] = sanitizeImportedRole(u.role)
                             it[createdAt] = Instant.ofEpochMilli(u.createdAt)
                             it[email] = u.email

@@ -77,7 +77,10 @@ object UpdateValidator {
      * Computes the SHA-256 hex string of [file] and compares it against [expectedSha256].
      */
     fun validateChecksum(file: File, expectedSha256: String): ValidationResult {
-        if (expectedSha256.isBlank()) return ValidationResult.Success
+        val cleanExpected = expectedSha256.trim().removePrefix("sha256:").trim().lowercase()
+        if (!cleanExpected.matches(Regex("^[0-9a-f]{64}$"))) {
+            return ValidationResult.Error("Missing or invalid expected SHA-256 checksum")
+        }
 
         if (!file.exists()) {
             return ValidationResult.Error("File to verify does not exist: ${file.absolutePath}")
@@ -93,7 +96,6 @@ object UpdateValidator {
                 }
             }
             val actualHash = digest.digest().joinToString("") { "%02x".format(it) }
-            val cleanExpected = expectedSha256.trim().lowercase()
             if (actualHash.equals(cleanExpected, ignoreCase = true)) {
                 ValidationResult.Success
             } else {

@@ -1051,7 +1051,7 @@
             const msg = document.getElementById('actionMsg');
             msg.textContent = 'Purging cache...';
             try {
-                const res = await fetch('/api/admin/cluster/redis/purge', { method: 'POST' });
+                const res = await fetch('/api/admin/cluster/redis/purge', { method: 'POST', headers: JSON_HEADERS });
                 const json = await res.json();
                 msg.style.color = 'var(--success, #10b981)';
                 msg.textContent = json.message || 'Cache purged successfully.';
@@ -1066,7 +1066,7 @@
             const msg = document.getElementById('actionMsg');
             msg.textContent = 'Recalculating memory limits...';
             try {
-                const res = await fetch('/api/admin/cluster/redis/resize', { method: 'POST' });
+                const res = await fetch('/api/admin/cluster/redis/resize', { method: 'POST', headers: JSON_HEADERS });
                 const json = await res.json();
                 msg.style.color = 'var(--success, #10b981)';
                 msg.textContent = 'Memory auto-sizer re-evaluated.';
@@ -1082,7 +1082,7 @@
             const msg = document.getElementById('actionMsg');
             msg.textContent = 'Resigning leadership...';
             try {
-                const res = await fetch('/api/admin/cluster/redis/failover', { method: 'POST' });
+                const res = await fetch('/api/admin/cluster/redis/failover', { method: 'POST', headers: JSON_HEADERS });
                 const json = await res.json();
                 msg.style.color = 'var(--success, #10b981)';
                 msg.textContent = json.message || 'Failover initiated.';

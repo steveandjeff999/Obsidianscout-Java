@@ -565,6 +565,9 @@ object CloudflaredService {
     }
 
     @Synchronized
+    /** Cheap per-request check (no settings or PATH lookups) for whether our tunnel process is up. */
+    fun isTunnelProcessAlive(): Boolean = process?.isAlive == true
+
     fun getStatus(): CloudflaredStatus {
         return try {
             val settings = SettingsService.getCloudflaredSettings()

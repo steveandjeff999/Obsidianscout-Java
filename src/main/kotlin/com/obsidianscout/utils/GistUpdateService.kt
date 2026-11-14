@@ -214,15 +214,50 @@ object GistUpdateService {
         }
     }
 
+    private val allowedUpdateHosts = setOf(
+        "github.com",
+        "api.github.com",
+        "objects.githubusercontent.com",
+        "release-assets.githubusercontent.com",
+        "codeload.github.com",
+        "gist.githubusercontent.com"
+    )
+
+    private data class ResolvedReleaseAsset(
+        val name: String,
+        val url: String,
+        val sha256: String?
+    )
+
+    private val sha256HexRegex = Regex("^[a-fA-F0-9]{64}$")
+    private val checksumLineRegex = Regex("^\\s*([0-9a-fA-F]{64})\\s+\\*?(.+?)\\s*$")
+
+    private fun isTrustedUpdateUrl(url: String): Boolean = try {
+        val uri = URI.create(url.trim())
+        uri.scheme?.lowercase() == "https" && uri.host?.lowercase() in allowedUpdateHosts
+    } catch (_: Exception) {
+        false
+    }
+
     /**
-     * Queries the GitHub Releases API to find the zip asset URL for [version], then
-     * downloads, validates, extracts, merges config files, and writes .update_result for the
+     * Queries the GitHub Releases API to find the archive asset URL and SHA-256 digest for [version],
+     * then downloads, validates, extracts, merges config files, and writes .update_result for the
      * run script to pick up.
      */
     private fun applyUpdate(version: String, currentVersion: String, expectedSha256: String, httpClient: HttpClient) {
-        val zipUrl = resolveZipUrl(version, httpClient)
-        if (zipUrl == null) {
+        val releaseAsset = resolveReleaseAsset(version, httpClient)
+        if (releaseAsset == null) {
             log.error("[GistUpdate] Could not resolve a downloadable zip for version $version. Update aborted.")
+            return
+        }
+        val zipUrl = releaseAsset.url
+        if (!isTrustedUpdateUrl(zipUrl)) {
+            log.error("[GistUpdate] Untrusted update download URL rejected: $zipUrl")
+            return
+        }
+        val effectiveSha256 = expectedSha256.ifBlank { releaseAsset.sha256.orEmpty() }
+        if (effectiveSha256.isBlank()) {
+            log.error("[GistUpdate] Missing expected SHA-256 checksum for version $version (asset ${releaseAsset.name}). Update aborted.")
             return
         }
 
@@ -267,13 +302,11 @@ object GistUpdateService {
             return
         }
 
-        if (expectedSha256.isNotBlank()) {
-            val checksumCheck = UpdateValidator.validateChecksum(zipFile, expectedSha256)
-            if (checksumCheck is UpdateValidator.ValidationResult.Error) {
-                log.error("[GistUpdate] Downloaded file failed SHA-256 validation: ${checksumCheck.message}")
-                tempDir.deleteRecursively()
-                return
-            }
+        val checksumCheck = UpdateValidator.validateChecksum(zipFile, effectiveSha256)
+        if (checksumCheck is UpdateValidator.ValidationResult.Error) {
+            log.error("[GistUpdate] Downloaded file failed SHA-256 validation: ${checksumCheck.message}")
+            tempDir.deleteRecursively()
+            return
         }
 
         log.info("[GistUpdate] Extracting bundle...")
@@ -324,10 +357,10 @@ object GistUpdateService {
     }
 
     /**
-     * Calls the GitHub Releases API to find the appropriate downloadable package for [version] and the current platform.
-     * Tries tag with 'v' prefix first (e.g. v0.3.9.3), then without 'v' prefix.
+     * Calls the GitHub Releases API to find the appropriate downloadable package and SHA-256 digest
+     * for [version] and the current platform. Tries tag with 'v' prefix first, then without 'v'.
      */
-    private fun resolveZipUrl(version: String, httpClient: HttpClient): String? {
+    private fun resolveReleaseAsset(version: String, httpClient: HttpClient): ResolvedReleaseAsset? {
         val cleanVersion = version.trim().lowercase().removePrefix("v")
         val tagWithV = "v$cleanVersion"
         val tagWithoutV = cleanVersion
@@ -380,47 +413,82 @@ object GistUpdateService {
         }
         val platformKey = "$normOs-$normArch"
 
-        var bestUrl: String? = null
-        var fatjarUrl: String? = null
-        var firstArchiveAssetUrl: String? = null
+        var bestCandidate: ResolvedReleaseAsset? = null
+        var fatjarCandidate: ResolvedReleaseAsset? = null
+        var firstArchiveCandidate: ResolvedReleaseAsset? = null
+        var checksumsTxtUrl: String? = null
 
         val assets = releaseJson["assets"]?.jsonArray
         if (assets != null) {
             for (asset in assets) {
                 val obj = asset.jsonObject
-                val name = obj["name"]?.jsonPrimitive?.content?.lowercase() ?: ""
+                val rawName = obj["name"]?.jsonPrimitive?.content ?: ""
+                val name = rawName.lowercase()
                 val url = obj["browser_download_url"]?.jsonPrimitive?.content ?: ""
                 if (url.isBlank()) continue
+
+                if (name == "checksums.txt") {
+                    checksumsTxtUrl = url
+                    continue
+                }
+
                 val isArchive = name.endsWith(".zip") || name.endsWith(".tar.gz") || name.endsWith(".tgz")
                 if (!isArchive) continue
 
-                if (firstArchiveAssetUrl == null) {
-                    firstArchiveAssetUrl = url
+                val inlineDigest = obj["digest"]?.jsonPrimitive?.content
+                    ?.removePrefix("sha256:")
+                    ?.trim()
+                    ?.takeIf { sha256HexRegex.matches(it) }
+                    ?.lowercase()
+                val candidate = ResolvedReleaseAsset(name = rawName, url = url, sha256 = inlineDigest)
+
+                if (firstArchiveCandidate == null) {
+                    firstArchiveCandidate = candidate
                 }
 
                 val matchesOs = name.contains(normOs) || (normOs == "windows" && name.contains("win")) || (normOs == "macos" && name.contains("mac"))
                 val matchesArch = name.contains(normArch)
                 val isExactPlatformMatch = name.contains(platformKey) || (matchesOs && matchesArch)
 
-                if (isExactPlatformMatch) {
-                    bestUrl = url
-                    break
-                }
-                if (!isNativeRuntime && (name.contains("fatjar") || name.contains("jar"))) {
-                    fatjarUrl = url
+                if (isExactPlatformMatch && bestCandidate == null) {
+                    bestCandidate = candidate
+                } else if (!isNativeRuntime && (name.contains("fatjar") || name.contains("jar")) && fatjarCandidate == null) {
+                    fatjarCandidate = candidate
                 }
             }
         }
 
-        val finalUrl = when {
-            !bestUrl.isNullOrBlank() -> bestUrl
-            !fatjarUrl.isNullOrBlank() -> fatjarUrl
-            !firstArchiveAssetUrl.isNullOrBlank() -> firstArchiveAssetUrl
-            else -> null
-        }
+        val selected = bestCandidate ?: fatjarCandidate ?: firstArchiveCandidate ?: return null
+        val resolvedSha256 = selected.sha256 ?: checksumsTxtUrl?.let { fetchChecksumForAsset(it, selected.name, httpClient) }
 
-        log.info("[GistUpdate] Resolved download URL for platform '$platformKey': $finalUrl")
-        return finalUrl
+        log.info("[GistUpdate] Resolved download asset '${selected.name}' for platform '$platformKey': ${selected.url} (sha256 ${if (resolvedSha256 != null) "resolved" else "missing"})")
+        return selected.copy(sha256 = resolvedSha256)
+    }
+
+    private fun fetchChecksumForAsset(checksumsUrl: String, assetName: String, httpClient: HttpClient): String? {
+        if (!isTrustedUpdateUrl(checksumsUrl)) {
+            log.warn("[GistUpdate] Untrusted checksums.txt URL rejected: $checksumsUrl")
+            return null
+        }
+        return try {
+            val req = HttpRequest.newBuilder()
+                .uri(URI.create(checksumsUrl))
+                .header("User-Agent", "ObsidianScout-GistUpdater")
+                .timeout(java.time.Duration.ofSeconds(15))
+                .build()
+            val res = httpClient.send(req, HttpResponse.BodyHandlers.ofString())
+            if (res.statusCode() != 200) return null
+            val targetName = assetName.trim()
+            res.body().lineSequence().firstNotNullOfOrNull { line ->
+                val match = checksumLineRegex.matchEntire(line) ?: return@firstNotNullOfOrNull null
+                val hash = match.groupValues[1].lowercase()
+                val fileName = match.groupValues[2].trim().removePrefix("./")
+                if (fileName.equals(targetName, ignoreCase = true)) hash else null
+            }
+        } catch (e: Exception) {
+            log.warn("[GistUpdate] Could not fetch checksums.txt: ${e.message}")
+            null
+        }
     }
 
     private fun mergeConfigs(srcRoot: File) {

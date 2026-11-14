@@ -184,10 +184,17 @@ object SharedApiKeyService {
 
     /**
      * [settings] with the shared keys filling in for any it lacks. Only for settings that are used to call the
-     * APIs: never save the result, or the shared key would become the team's own.
+     * APIs: never save the result, or the shared key would become the team's own. Shared Match 13 keys are never
+     * exposed to non-official custom Match 13 base URLs.
      */
     fun applyFallback(settings: ApiSettings): ApiSettings {
-        val filled = fillBlanks(settings.program, settings.apiKeys, read(settings.program))
+        val shared = read(settings.program)
+        val scopedShared = if (isOfficialMatch13BaseUrl(settings.match13BaseUrl)) {
+            shared
+        } else {
+            shared.copy(match13Key = "")
+        }
+        val filled = fillBlanks(settings.program, settings.apiKeys, scopedShared)
         return if (filled == settings.apiKeys) settings else settings.copy(apiKeys = filled)
     }
 

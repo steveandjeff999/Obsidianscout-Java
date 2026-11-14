@@ -246,16 +246,16 @@ fun Route.analyticsRoutes() {
                                 val firstPick = allianceObj["firstPick"]?.let { if (it is JsonPrimitive) it.content else null } ?: ""
                                 val secondPick = allianceObj["secondPick"]?.let { if (it is JsonPrimitive) it.content else null } ?: ""
                                 val backup = allianceObj["backup"]?.let { if (it is JsonPrimitive) it.content else null } ?: ""
-                                if (captain.isNotBlank()) sb.append("Alliance $allianceIndex,Captain,$captain\n")
-                                if (firstPick.isNotBlank()) sb.append("Alliance $allianceIndex,First Pick,$firstPick\n")
-                                if (secondPick.isNotBlank()) sb.append("Alliance $allianceIndex,Second Pick,$secondPick\n")
-                                if (backup.isNotBlank()) sb.append("Alliance $allianceIndex,Backup,$backup\n")
+                                if (captain.isNotBlank()) sb.append("Alliance $allianceIndex,Captain,${com.obsidianscout.utils.CSVHelper.escapeCSV(captain)}\n")
+                                if (firstPick.isNotBlank()) sb.append("Alliance $allianceIndex,First Pick,${com.obsidianscout.utils.CSVHelper.escapeCSV(firstPick)}\n")
+                                if (secondPick.isNotBlank()) sb.append("Alliance $allianceIndex,Second Pick,${com.obsidianscout.utils.CSVHelper.escapeCSV(secondPick)}\n")
+                                if (backup.isNotBlank()) sb.append("Alliance $allianceIndex,Backup,${com.obsidianscout.utils.CSVHelper.escapeCSV(backup)}\n")
                             }
                         }
                     }
                     // Pick lists follow the board in the same Alliance/Role/Team columns, plus an optional note.
                     val pickLists = com.obsidianscout.scouting.AllianceSelectionService.getPickLists(session, eventKey).pickLists
-                    fun csvCell(value: String) = "\"" + value.replace("\"", "\"\"") + "\""
+                    fun csvCell(value: String) = com.obsidianscout.utils.CSVHelper.escapeCSV(value)
                     listOf("Want" to pickLists.want, "Avoid" to pickLists.avoid, "Do Not Pick" to pickLists.dnp).forEach { (listName, teams) ->
                         teams.forEachIndexed { idx, team ->
                             sb.append("${csvCell(listName)},${csvCell("#${idx + 1}")},$team")

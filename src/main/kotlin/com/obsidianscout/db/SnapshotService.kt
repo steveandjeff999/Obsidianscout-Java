@@ -835,7 +835,6 @@ object SnapshotService {
                 EpaOprHistoryCache.deleteAll()
                 Banners.deleteAll()
                 ChatGroups.deleteAll()
-                ClusterSecrets.deleteAll()
                 ClusterNotificationLocks.deleteAll()
                 ReportedErrors.deleteAll()
                 FcmConfigs.deleteAll()
@@ -1068,15 +1067,21 @@ object SnapshotService {
                 }
                 restoredCounts["chat_groups"] = chatGrps.size.toLong()
 
+                var restoredSecretsCount = 0L
+                val existingSecretKeys = ClusterSecrets.selectAll().map { it[ClusterSecrets.keyName] }.toHashSet()
                 for (row in secrets) {
-                    ClusterSecrets.insert {
-                        it[id] = EntityID(row[ClusterSecrets.id].value, ClusterSecrets)
-                        it[keyName] = row[ClusterSecrets.keyName]
-                        it[keyValue] = row[ClusterSecrets.keyValue]
-                        it[updatedAt] = row[ClusterSecrets.updatedAt]
+                    val name = row[ClusterSecrets.keyName]
+                    if (name !in existingSecretKeys) {
+                        ClusterSecrets.insert {
+                            it[keyName] = name
+                            it[keyValue] = row[ClusterSecrets.keyValue]
+                            it[updatedAt] = row[ClusterSecrets.updatedAt]
+                        }
+                        existingSecretKeys.add(name)
+                        restoredSecretsCount++
                     }
                 }
-                restoredCounts["cluster_secrets"] = secrets.size.toLong()
+                restoredCounts["cluster_secrets"] = restoredSecretsCount
 
                 for (row in locks) {
                     ClusterNotificationLocks.insert {

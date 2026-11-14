@@ -576,6 +576,27 @@ fun Route.configRoutes() {
                     val session = call.requireAdminOrPage("admin-settings")
                     val payload = call.receive<ApiSettingsPayload>()
                     val targetProgram = if (payload.program.isNotBlank()) payload.program else session.program
+                    // Saves skip DNS so offline/LAN event servers can still save settings; every outbound fetch re-validates with DNS.
+                    val validatedStatboticsUrl = try {
+                        com.obsidianscout.integrations.validateExternalApiBaseUrl(
+                            payload.statboticsBaseUrl,
+                            "https://api.statbotics.io",
+                            stripSuffix = "/v3",
+                            resolveDns = false
+                        )
+                    } catch (e: IllegalArgumentException) {
+                        throw ApiException(HttpStatusCode.BadRequest, e.message ?: "Invalid Statbotics base URL")
+                    }
+                    val validatedMatch13Url = try {
+                        com.obsidianscout.integrations.validateExternalApiBaseUrl(
+                            payload.match13BaseUrl,
+                            "https://actions.match13.com",
+                            stripSuffix = "/v1",
+                            resolveDns = false
+                        )
+                    } catch (e: IllegalArgumentException) {
+                        throw ApiException(HttpStatusCode.BadRequest, e.message ?: "Invalid Match 13 base URL")
+                    }
                     // Pages that save only part of the settings don't send selfRegisterRoles; keep the saved value then.
                     val previous = SettingsService.getSettings(session.teamNumber, targetProgram)
                     val selfRegisterRoles = payload.selfRegisterRoles ?: previous.selfRegisterRoles
@@ -591,6 +612,8 @@ fun Route.configRoutes() {
                         session.teamNumber,
                         payload.toSettings().copy(
                             program = targetProgram,
+                            statboticsBaseUrl = validatedStatboticsUrl,
+                            match13BaseUrl = validatedMatch13Url,
                             selfRegisterRoles = selfRegisterRoles,
                             recencyBias = recencyBias,
                             alternateEventCode = alternateEventCode,

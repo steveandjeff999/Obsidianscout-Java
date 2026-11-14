@@ -3,6 +3,7 @@ package com.obsidianscout
 import com.obsidianscout.auth.ApiException
 import com.obsidianscout.auth.AuthService
 import com.obsidianscout.auth.UserSession
+import com.obsidianscout.auth.hasValidClusterSignature
 import com.obsidianscout.config.AppConfig
 import com.obsidianscout.config.AppConfigLoader
 import com.obsidianscout.config.ConfigService
@@ -443,9 +444,11 @@ fun Application.module(appConfig: AppConfig) {
         }
 
         if (method in listOf("POST", "PUT", "DELETE", "PATCH")) {
-            val isClusterNodeAuth = call.request.headers["X-Cluster-Signature"] != null
-            val isExcludedPath = path.startsWith("/api/mobile") ||
-                    path.startsWith("/api/cluster") ||
+            val isClusterNodeAuth = call.request.headers["X-Cluster-Signature"] != null &&
+                call.hasValidClusterSignature()
+            val hasSessionCookie = call.request.cookies.rawCookies.isNotEmpty()
+            val isExcludedPath = (!hasSessionCookie && (path.startsWith("/api/mobile") || path.startsWith("/api/cluster") || path.startsWith("/api/security/"))) ||
+                    path.startsWith("/api/mobile/auth") ||
                     (path.startsWith("/api/admin/cluster") && isClusterNodeAuth) ||
                     path in listOf(
                         "/api/auth/login",
@@ -453,17 +456,17 @@ fun Application.module(appConfig: AppConfig) {
                         "/api/auth/forgot-password",
                         "/api/auth/reset-password",
                         "/api/auth/first-time-setup",
-                        "/api/auth/verify-reset-token"
+                        "/api/auth/verify-reset-token",
+                        "/api/security/unblock-request",
+                        "/api/security/pow-challenge",
+                        "/api/cluster/status"
                     ) ||
                     path.startsWith("/api/auth/passkey/authenticate") ||
-                    path.startsWith("/api/security/") ||
                     path.startsWith("/api/auth/slack") ||
                     isClusterNodeAuth ||
                     call.request.headers["X-Mobile-App"] != null
             if (!isExcludedPath) {
                 val origin = call.request.headers["Origin"]
-                val referer = call.request.headers["Referer"]
-                val host = call.request.headers["Host"]
                 val csrfHeader = call.request.headers["X-CSRF-Token"] ?: call.request.headers["X-XSRF-TOKEN"]
                 val requestedWith = call.request.headers["X-Requested-With"]
                 val cookieToken = call.request.cookies["XSRF-TOKEN"]
@@ -472,8 +475,6 @@ fun Application.module(appConfig: AppConfig) {
                 if (!csrfHeader.isNullOrBlank() && cookieToken != null && csrfHeader == cookieToken) {
                     valid = true
                 } else if (requestedWith.equals("XMLHttpRequest", ignoreCase = true)) {
-                    valid = true
-                } else if (host != null && (sameHost(origin, host) || sameHost(referer, host))) {
                     valid = true
                 }
 

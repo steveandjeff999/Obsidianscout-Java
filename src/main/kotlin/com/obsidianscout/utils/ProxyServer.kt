@@ -71,13 +71,27 @@ object ProxyServer {
                                 port = targetPort,
                                 path = path,
                                 request = {
+                                    val peerIp = call.request.local.remoteAddress
+                                    val fromTrustedCfPeer = com.obsidianscout.security.CloudflareNetwork.contains(peerIp) ||
+                                        com.obsidianscout.auth.isTrustedProxyAddress(peerIp)
+                                    val strippedForwarding = buildSet {
+                                        add("x-forwarded-for")
+                                        add("x-forwarded-proto")
+                                        add("x-forwarded-host")
+                                        add("x-real-ip")
+                                        add("true-client-ip")
+                                        if (!fromTrustedCfPeer) {
+                                            add("cf-connecting-ip")
+                                        }
+                                    }
                                     incomingHeaders.forEach { key, values ->
                                         if (!key.equals(HttpHeaders.Host, ignoreCase = true) &&
                                             !key.equals(HttpHeaders.Upgrade, ignoreCase = true) &&
                                             !key.equals(HttpHeaders.Connection, ignoreCase = true) &&
                                             !key.equals("Sec-WebSocket-Key", ignoreCase = true) &&
                                             !key.equals("Sec-WebSocket-Version", ignoreCase = true) &&
-                                            !key.equals("Sec-WebSocket-Extensions", ignoreCase = true)
+                                            !key.equals("Sec-WebSocket-Extensions", ignoreCase = true) &&
+                                            key.lowercase() !in strippedForwarding
                                         ) {
                                             values.forEach { headers.append(key, it) }
                                         }
@@ -129,12 +143,26 @@ object ProxyServer {
                                     method = request.local.method
                                     url("http://127.0.0.1:$targetPort$path")
                                     
-                                    // Copy headers from client
+                                    // Copy headers from client, stripping client-spoofable forwarding headers
+                                    val peerIp = request.local.remoteAddress
+                                    val fromTrustedCfPeer = com.obsidianscout.security.CloudflareNetwork.contains(peerIp) ||
+                                        com.obsidianscout.auth.isTrustedProxyAddress(peerIp)
+                                    val strippedForwarding = buildSet {
+                                        add("x-forwarded-for")
+                                        add("x-forwarded-proto")
+                                        add("x-forwarded-host")
+                                        add("x-real-ip")
+                                        add("true-client-ip")
+                                        if (!fromTrustedCfPeer) {
+                                            add("cf-connecting-ip")
+                                        }
+                                    }
                                     request.headers.forEach { key, values ->
                                         if (!key.equals(HttpHeaders.Host, ignoreCase = true) &&
                                             !key.equals(HttpHeaders.ContentLength, ignoreCase = true) &&
                                             !key.equals(HttpHeaders.TransferEncoding, ignoreCase = true) &&
-                                            !key.equals(HttpHeaders.Cookie, ignoreCase = true)
+                                            !key.equals(HttpHeaders.Cookie, ignoreCase = true) &&
+                                            key.lowercase() !in strippedForwarding
                                         ) {
                                             values.forEach { headers.append(key, it) }
                                         }

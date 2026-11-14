@@ -6,6 +6,21 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
+private val ipv4LiteralRegex = Regex("^(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)(\\.(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)){3}$")
+
+/** True only for an IPv4/IPv6 literal. Never resolves names, so header values can't trigger DNS lookups. */
+private fun isValidIpLiteral(value: String): Boolean {
+    val clean = value.trim().removePrefix("[").removeSuffix("]").substringBefore('%')
+    if (clean.isEmpty() || clean.length > 45) return false
+    if (ipv4LiteralRegex.matches(clean)) return true
+    // IPv6 literals always contain ':'; InetAddress parses those without a DNS lookup.
+    if (':' !in clean) return false
+    if (!clean.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' || it == '.' || it == ':' }) {
+        return false
+    }
+    return runCatching { java.net.InetAddress.getByName(clean) }.isSuccess
+}
+
 /**
  * Resolves the client IP for rate limiting and audit logs.
  *
@@ -17,13 +32,27 @@ fun ApplicationCall.clientIp(): String {
     val peer = request.local.remoteAddress
     if (!isTrustedProxyAddress(peer)) return canonicalIp(peer)
 
-    request.headers["CF-Connecting-IP"]?.trim()?.takeIf { it.isNotEmpty() }?.let { return canonicalIp(it) }
     val forwarded = request.headers.getAll("X-Forwarded-For")
         ?.flatMap { it.split(",") }
         ?.map { it.trim() }
-        ?.filter { it.isNotEmpty() }
-    // The right-most entry was appended by the trusted proxy; earlier entries are client-supplied.
-    return canonicalIp(forwarded?.lastOrNull() ?: peer)
+        ?.filter { it.isNotEmpty() && isValidIpLiteral(it) }
+        .orEmpty()
+    // Walk right-to-left, skipping trusted proxy hops, so client-supplied left entries can't spoof IPs.
+    val clientHop = forwarded.asReversed().firstOrNull { !isTrustedProxyAddress(canonicalIp(it)) }
+
+    // CF-Connecting-IP is only meaningful when Cloudflare is actually in front: the peer is a Cloudflare edge,
+    // our own cloudflared tunnel is running, or a local proxy (e.g. the built-in HTTPS proxy) reports a
+    // Cloudflare edge as the hop that reached it.
+    val cfTrusted = com.obsidianscout.security.CloudflareNetwork.contains(canonicalIp(peer)) ||
+        (clientHop != null && com.obsidianscout.security.CloudflareNetwork.contains(canonicalIp(clientHop))) ||
+        com.obsidianscout.admin.CloudflaredService.isTunnelProcessAlive()
+    if (cfTrusted) {
+        request.headers["CF-Connecting-IP"]?.trim()
+            ?.takeIf { it.isNotEmpty() && isValidIpLiteral(it) }
+            ?.let { return canonicalIp(it) }
+    }
+
+    return canonicalIp(clientHop ?: forwarded.lastOrNull() ?: peer)
 }
 
 /**

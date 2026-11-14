@@ -19,6 +19,137 @@ import org.jetbrains.exposed.v1.core.and
 import java.time.Instant
 import java.time.Year
 
+private val OFFICIAL_STATBOTICS_HOSTS = setOf("api.statbotics.io")
+private val OFFICIAL_MATCH13_HOSTS = setOf("actions.match13.com", "api.match13.com")
+
+fun isOfficialMatch13BaseUrl(raw: String?): Boolean {
+    val trimmed = raw?.trim().orEmpty()
+    if (trimmed.isEmpty()) return true
+    return try {
+        val uri = java.net.URI(trimmed)
+        val scheme = uri.scheme?.lowercase()
+        val host = uri.host?.lowercase()
+        val port = uri.port
+        scheme == "https" &&
+            host != null &&
+            OFFICIAL_MATCH13_HOSTS.contains(host) &&
+            (port == -1 || port == 443) &&
+            uri.userInfo == null
+    } catch (_: Exception) {
+        false
+    }
+}
+
+private fun isBlockedSsrfAddress(addr: java.net.InetAddress): Boolean {
+    if (addr.isLoopbackAddress ||
+        addr.isSiteLocalAddress ||
+        addr.isLinkLocalAddress ||
+        addr.isAnyLocalAddress ||
+        addr.isMulticastAddress
+    ) {
+        return true
+    }
+    val bytes = addr.address
+    if (bytes.size == 4) {
+        val b0 = bytes[0].toInt() and 0xFF
+        val b1 = bytes[1].toInt() and 0xFF
+        return isBlockedIpv4Bytes(b0, b1)
+    }
+    if (bytes.size == 16) {
+        val b0 = bytes[0].toInt() and 0xFF
+        // Unique Local Addresses fc00::/7 (includes fd00::/8)
+        if ((b0 and 0xFE) == 0xFC) return true
+        // IPv4-mapped IPv6 ::ffff:0:0/96
+        val isIpv4Mapped = (0..9).all { bytes[it].toInt() == 0 } &&
+            (bytes[10].toInt() and 0xFF) == 0xFF &&
+            (bytes[11].toInt() and 0xFF) == 0xFF
+        if (isIpv4Mapped) {
+            val v4b0 = bytes[12].toInt() and 0xFF
+            val v4b1 = bytes[13].toInt() and 0xFF
+            return isBlockedIpv4Bytes(v4b0, v4b1)
+        }
+    }
+    return false
+}
+
+private fun isBlockedIpv4Bytes(b0: Int, b1: Int): Boolean {
+    if (b0 == 0 || b0 == 10 || b0 == 127) return true
+    if (b0 == 100 && b1 in 64..127) return true // CGNAT / Tailscale 100.64.0.0/10
+    if (b0 == 169 && b1 == 254) return true     // Link-local / cloud metadata 169.254.0.0/16
+    if (b0 == 172 && b1 in 16..31) return true  // RFC1918 172.16.0.0/12
+    if (b0 == 192 && b1 == 168) return true     // RFC1918 192.168.0.0/16
+    if (b0 == 198 && b1 in 18..19) return true  // Benchmarking 198.18.0.0/15
+    if (b0 >= 224) return true                  // Multicast / reserved
+    return false
+}
+
+private fun isIpLiteralHost(host: String): Boolean {
+    val clean = host.removeSurrounding("[", "]")
+    return clean.matches(Regex("^\\d{1,3}(\\.\\d{1,3}){3}$")) || clean.contains(':')
+}
+
+fun validateExternalApiBaseUrl(
+    raw: String?,
+    defaultUrl: String,
+    stripSuffix: String? = null,
+    resolveDns: Boolean = true
+): String {
+    var trimmed = raw?.trim().orEmpty().trimEnd('/')
+    if (!stripSuffix.isNullOrEmpty() && trimmed.lowercase().endsWith(stripSuffix.lowercase())) {
+        trimmed = trimmed.dropLast(stripSuffix.length).trimEnd('/')
+    }
+    if (trimmed.isEmpty()) return defaultUrl
+
+    val uri = try {
+        java.net.URI(trimmed)
+    } catch (_: Exception) {
+        throw IllegalArgumentException("External API base URL is not a valid URI.")
+    }
+    if (!uri.scheme.equals("https", ignoreCase = true)) {
+        throw IllegalArgumentException("External API base URL must use HTTPS.")
+    }
+    val host = uri.host?.trim()?.lowercase()
+        ?: throw IllegalArgumentException("External API base URL must include a hostname.")
+    if (host == "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) {
+        throw IllegalArgumentException("External API base URL host '$host' is not allowed.")
+    }
+    if (uri.userInfo != null) {
+        throw IllegalArgumentException("External API base URL must not contain embedded credentials.")
+    }
+    if (uri.rawQuery != null || uri.rawFragment != null) {
+        throw IllegalArgumentException("External API base URL must not include a query string or fragment.")
+    }
+    val port = uri.port
+    if (port != -1 && port !in 1..65535) {
+        throw IllegalArgumentException("External API base URL contains an invalid port.")
+    }
+
+    if (resolveDns || isIpLiteralHost(host)) {
+        val addresses = try {
+            java.net.InetAddress.getAllByName(host)
+        } catch (_: Exception) {
+            throw IllegalArgumentException("Could not resolve host '$host' for external API URL.")
+        }
+        if (addresses.isEmpty() || addresses.any { isBlockedSsrfAddress(it) }) {
+            throw IllegalArgumentException("External API base URL host '$host' resolves to a disallowed private, loopback, link-local, or Tailscale address.")
+        }
+    }
+
+    val hostPort = if (port != -1 && port != 443) "$host:$port" else host
+    val cleanPath = uri.rawPath?.trimEnd('/').orEmpty()
+    return "https://$hostPort$cleanPath"
+}
+
+fun normalizeStatboticsBaseUrl(raw: String?): String =
+    runCatching {
+        validateExternalApiBaseUrl(raw, "https://api.statbotics.io", stripSuffix = "/v3", resolveDns = false)
+    }.getOrDefault("https://api.statbotics.io")
+
+fun normalizeMatch13BaseUrl(raw: String?): String =
+    runCatching {
+        validateExternalApiBaseUrl(raw, "https://actions.match13.com", stripSuffix = "/v1", resolveDns = false)
+    }.getOrDefault("https://actions.match13.com")
+
 @Serializable
 data class ApiKeys(
     val tbaKey: String = "",
@@ -520,10 +651,8 @@ object SettingsService {
         val isFtc = settings.program.equals("FTC", ignoreCase = true)
         val normalizedUseStatboticsEpa = if (isFtc) false else settings.useStatboticsEpa
         val normalizedUseMatch13xP = if (isFtc) false else settings.useMatch13xP
-        val rawStatboticsUrl = settings.statboticsBaseUrl.trim()
-        val statboticsUrl = (if (rawStatboticsUrl.isBlank()) "https://api.statbotics.io" else rawStatboticsUrl).removeSuffix("/")
-        val rawMatch13Url = settings.match13BaseUrl.trim()
-        val match13Url = (if (rawMatch13Url.isBlank()) "https://actions.match13.com" else rawMatch13Url).removeSuffix("/")
+        val statboticsUrl = normalizeStatboticsBaseUrl(settings.statboticsBaseUrl)
+        val match13Url = normalizeMatch13BaseUrl(settings.match13BaseUrl)
         return settings.copy(
             eventCode = canonicalTbaEventCode(eventCode),
             alternateEventCode = normalizeAlternateEventCode(settings.alternateEventCode),

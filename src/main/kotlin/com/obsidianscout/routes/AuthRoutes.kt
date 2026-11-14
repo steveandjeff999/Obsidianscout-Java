@@ -330,7 +330,11 @@ fun Route.authRoutes() {
                     call.respond(MeResponse(responseSession))
                 }
                 get("/status") {
-                    val session = call.sessions.get<UserSession>()
+                    val session = if (call.sessions.get<UserSession>() != null) {
+                        runCatching { call.requireSession() }.getOrNull()
+                    } else {
+                        null
+                    }
                     call.respond(LoginStatusResponse(session != null))
                 }
                 get("/providers") {
@@ -376,6 +380,13 @@ fun Route.authRoutes() {
                         } catch (_: Exception) {
                             PasskeyAuthBeginRequest()
                         }
+                        val ipAddress = call.clientIp()
+                        // Blank username = IP-only limit; a shared literal key would let failures anywhere lock out everyone.
+                        val rateKey = request.username?.trim().orEmpty()
+                        if (!com.obsidianscout.auth.LoginRateLimiter.checkAllowed(ipAddress, rateKey)) {
+                            call.response.headers.append("Retry-After", "60")
+                            throw com.obsidianscout.auth.ApiException(HttpStatusCode.TooManyRequests, "Too many authentication attempts. Please wait 60 seconds.")
+                        }
                         val origin = call.request.headers["Origin"]
                         val host = call.request.headers["Host"]
                         val optionsJson = com.obsidianscout.auth.PasskeyService.beginAuthenticationJson(
@@ -389,21 +400,31 @@ fun Route.authRoutes() {
                     }
 
                     post("/authenticate/finish") {
+                        val ipAddress = call.clientIp()
+                        if (!com.obsidianscout.auth.LoginRateLimiter.checkAllowed(ipAddress, "")) {
+                            call.response.headers.append("Retry-After", "60")
+                            throw com.obsidianscout.auth.ApiException(HttpStatusCode.TooManyRequests, "Too many authentication attempts. Please wait 60 seconds.")
+                        }
                         val request = call.receive<PasskeyAuthFinishRequest>()
                         val origin = call.request.headers["Origin"]
                         val host = call.request.headers["Host"]
-                        val user = com.obsidianscout.auth.PasskeyService.finishAuthentication(
-                            credentialId = request.credentialId,
-                            clientDataJSONBase64 = request.clientDataJSON,
-                            authenticatorDataBase64 = request.authenticatorData,
-                            signatureBase64 = request.signature,
-                            userHandleBase64 = request.userHandle,
-                            clientOrigin = origin,
-                            hostHeader = host
-                        )
+                        val user = try {
+                            com.obsidianscout.auth.PasskeyService.finishAuthentication(
+                                credentialId = request.credentialId,
+                                clientDataJSONBase64 = request.clientDataJSON,
+                                authenticatorDataBase64 = request.authenticatorData,
+                                signatureBase64 = request.signature,
+                                userHandleBase64 = request.userHandle,
+                                clientOrigin = origin,
+                                hostHeader = host
+                            )
+                        } catch (e: Exception) {
+                            com.obsidianscout.auth.LoginRateLimiter.recordFailedAttempt(ipAddress, "")
+                            throw e
+                        }
 
+                        com.obsidianscout.auth.LoginRateLimiter.clear(ipAddress, "")
                         val userUuid = UUID.fromString(user.id)
-                        val ipAddress = call.clientIp()
                         com.obsidianscout.security.LoginGuard.onPasskeySuccess(call, user.id, user.username, user.teamNumber, user.program)
                         val userAgent = call.request.headers["User-Agent"] ?: ""
                         val deviceId = call.request.headers["X-Device-Id"]

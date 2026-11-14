@@ -1108,7 +1108,7 @@
                 } else {
                     const res = await fetch(`/api/admin/default-configs/${id}`, {
                         method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                         body: JSON.stringify(updated)
                     });
                     if (!res.ok) throw new Error('Failed to set active default preset');
@@ -1125,7 +1125,10 @@
                 if (window.Obsidianscout) {
                     await Obsidianscout.request(`/api/admin/default-configs/${id}`, { method: 'DELETE' });
                 } else {
-                    const res = await fetch(`/api/admin/default-configs/${id}`, { method: 'DELETE' });
+                    const res = await fetch(`/api/admin/default-configs/${id}`, {
+                        method: 'DELETE',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    });
                     if (!res.ok) throw new Error('Failed to delete preset');
                 }
                 await loadPresets();
@@ -1267,7 +1270,7 @@
                 } else {
                     const res = await fetch(url, {
                         method,
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                         body: JSON.stringify(dto)
                     });
                     if (!res.ok) {

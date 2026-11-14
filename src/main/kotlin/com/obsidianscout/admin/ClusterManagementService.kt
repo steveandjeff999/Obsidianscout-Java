@@ -442,9 +442,13 @@ object ClusterManagementService {
         }
 
     private fun buildSignedClusterRequest(urlStr: String, method: String, bodyBytes: ByteArray = ByteArray(0)): HttpRequest.Builder {
+        val uri = URI.create(urlStr)
+        val host = uri.host ?: throw IllegalArgumentException("Cluster request URL missing host")
+        if (!com.obsidianscout.auth.isTrustedProxyAddress(host)) {
+            throw IllegalArgumentException("Refusing to send signed cluster request to untrusted host: $host")
+        }
         val secret = com.obsidianscout.auth.ClusterSecretService.getSessionSecret()
         val timestamp = System.currentTimeMillis().toString()
-        val uri = URI.create(urlStr)
         val path = uri.rawPath + (if (uri.rawQuery != null) "?${uri.rawQuery}" else "")
         val bodySha256 = com.obsidianscout.auth.ClusterCryptoUtils.sha256Hex(bodyBytes)
         val dataToSign = com.obsidianscout.auth.ClusterCryptoUtils.buildSigningData(timestamp, method, path, bodySha256)

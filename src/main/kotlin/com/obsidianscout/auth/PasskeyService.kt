@@ -79,10 +79,13 @@ object PasskeyService {
             }
             if (rawHost.isNotBlank() && (isLocal || matchesSiteUrl || isConfiguredHost)) {
                 val rpId = if (candidateLower == "127.0.0.1") "localhost" else (if (matchesSiteUrl) siteHost else rawHost)
+                val configuredHttp = appConfig.getEffectiveSiteUrl().lowercase().startsWith("http://")
                 val scheme = if (isLocal) {
                     parsed?.scheme?.takeIf { it.isNotBlank() } ?: "http"
+                } else if (configuredHttp && clientOrigin?.startsWith("http://") == true) {
+                    "http"
                 } else {
-                    if (clientOrigin?.startsWith("http://") == true) "http" else "https"
+                    "https"
                 }
 
                 val port = parsed?.port?.takeIf { it != -1 && it != 80 && it != 443 }

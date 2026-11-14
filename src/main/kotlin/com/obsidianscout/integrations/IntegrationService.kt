@@ -1773,8 +1773,12 @@ object IntegrationService {
     }
 
     private suspend fun fetchStatboticsEpas(settings: ApiSettings, eventKey: String): Map<String, Double> {
-        val baseUrl = settings.statboticsBaseUrl.ifBlank { "https://api.statbotics.io" }.trimEnd('/')
-        val cleanBaseUrl = baseUrl.removeSuffix("/v3")
+        val cleanBaseUrl = try {
+            validateExternalApiBaseUrl(settings.statboticsBaseUrl, "https://api.statbotics.io", stripSuffix = "/v3", resolveDns = true)
+        } catch (error: Exception) {
+            log.warn("Rejected unsafe Statbotics URL: ${error.message}")
+            return emptyMap()
+        }
         val url = "$cleanBaseUrl/v3/team_events?event=${eventKey}&limit=1000"
         val response = try {
             client.get(url)
@@ -2050,7 +2054,12 @@ object IntegrationService {
         fresh()?.let { return it }
         return match13SeasonLock.withLock {
             fresh()?.let { return@withLock it }
-            val baseUrl = settings.match13BaseUrl.ifBlank { "https://actions.match13.com" }.trimEnd('/')
+            val baseUrl = try {
+                validateExternalApiBaseUrl(settings.match13BaseUrl, "https://actions.match13.com", stripSuffix = "/v1", resolveDns = true)
+            } catch (error: Exception) {
+                log.warn("Rejected unsafe Match 13 URL: ${error.message}")
+                return@withLock emptyMap()
+            }
             val ratings = mutableMapOf<Int, Match13SeasonRating>()
             var page: Int? = 1
             var pagesFetched = 0
@@ -2088,7 +2097,12 @@ object IntegrationService {
     }
 
     private suspend fun fetchMatch13EventxPs(settings: ApiSettings, cleanEventKey: String, key: String): Map<String, Double> {
-        val rawUrl = settings.match13BaseUrl.ifBlank { "https://actions.match13.com" }.trimEnd('/')
+        val rawUrl = try {
+            validateExternalApiBaseUrl(settings.match13BaseUrl, "https://actions.match13.com", stripSuffix = "/v1", resolveDns = true)
+        } catch (error: Exception) {
+            log.warn("Rejected unsafe Match 13 URL: ${error.message}")
+            return emptyMap()
+        }
         val url = "$rawUrl/v1/events/${cleanEventKey}/teams"
         val response = try {
             client.get(url) {
@@ -2171,7 +2185,12 @@ object IntegrationService {
     /** Null when unknown (no key, or Match 13 failed); empty when Match 13 doesn't carry the event (404). */
     private suspend fun fetchMatch13MatchHistory(settings: ApiSettings, eventKey: String): List<JsonElement>? {
         val cleanEventKey = canonicalStoredEventKey(settings.year, eventKey)
-        val rawUrl = settings.match13BaseUrl.ifBlank { "https://actions.match13.com" }.trimEnd('/')
+        val rawUrl = try {
+            validateExternalApiBaseUrl(settings.match13BaseUrl, "https://actions.match13.com", stripSuffix = "/v1", resolveDns = true)
+        } catch (error: Exception) {
+            log.warn("Rejected unsafe Match 13 URL: ${error.message}")
+            return null
+        }
         val rawKey = settings.apiKeys.match13Key.trim()
         val key = if (rawKey == "********") "" else rawKey
         // Keyless calls are always 401s; skipping them matters because history refreshes every 2 min while empty.
@@ -2226,8 +2245,12 @@ object IntegrationService {
 
     /** Null when Statbotics failed, so the stored history is kept. */
     private suspend fun fetchStatboticsMatchEpaHistory(settings: ApiSettings, eventKey: String): List<JsonElement>? {
-        val baseUrl = settings.statboticsBaseUrl.ifBlank { "https://api.statbotics.io" }.trimEnd('/')
-        val cleanBaseUrl = baseUrl.removeSuffix("/v3")
+        val cleanBaseUrl = try {
+            validateExternalApiBaseUrl(settings.statboticsBaseUrl, "https://api.statbotics.io", stripSuffix = "/v3", resolveDns = true)
+        } catch (error: Exception) {
+            log.warn("Rejected unsafe Statbotics URL: ${error.message}")
+            return null
+        }
         val url = "$cleanBaseUrl/v3/matches?event=${eventKey}&limit=1000"
         return try {
             val response = client.get(url)
@@ -2623,8 +2646,11 @@ object IntegrationService {
             }
             "statbotics" -> {
                 val rawUrl = request.statboticsBaseUrl?.trim() ?: currentSettings.statboticsBaseUrl
-                val baseUrl = (if (rawUrl.isBlank()) "https://api.statbotics.io" else rawUrl).trimEnd('/')
-                val cleanBaseUrl = baseUrl.removeSuffix("/v3")
+                val cleanBaseUrl = try {
+                    validateExternalApiBaseUrl(rawUrl, "https://api.statbotics.io", stripSuffix = "/v3", resolveDns = true)
+                } catch (e: IllegalArgumentException) {
+                    return com.obsidianscout.routes.TestApiResponse(false, e.message ?: "Invalid Statbotics base URL.")
+                }
                 try {
                     val response = client.get("$cleanBaseUrl/v3/")
                     if (response.status.isSuccess()) {
@@ -2638,7 +2664,11 @@ object IntegrationService {
             }
             "match13" -> {
                 val rawUrl = request.match13BaseUrl?.trim() ?: currentSettings.match13BaseUrl
-                val baseUrl = (if (rawUrl.isBlank()) "https://actions.match13.com" else rawUrl).trimEnd('/')
+                val baseUrl = try {
+                    validateExternalApiBaseUrl(rawUrl, "https://actions.match13.com", stripSuffix = "/v1", resolveDns = true)
+                } catch (e: IllegalArgumentException) {
+                    return com.obsidianscout.routes.TestApiResponse(false, e.message ?: "Invalid Match 13 base URL.")
+                }
                 val keyInput = request.match13Key?.trim()
                 val effectiveKey = if (keyInput.isNullOrBlank() || keyInput == "********") {
                     if (currentSettings.apiKeys.match13Key == "********") "" else currentSettings.apiKeys.match13Key

@@ -180,27 +180,108 @@ object MigrationService {
         }
     }
 
+    private val allowedSqliteDbFiles = setOf(
+        "users.db",
+        "scouting.db",
+        "pages.db",
+        "misc.db",
+        "images.db",
+        "statboticsepa.db",
+        "obsidianscout.db"
+    )
+    private val safePgHostRegex = Regex("^[a-zA-Z0-9.-]{1,253}$")
+    private val safePgDbRegex = Regex("^[a-zA-Z0-9_-]{1,63}$")
+
+    private fun resolveSafeSqliteDir(sqliteInstancePath: String): File {
+        val trimmed = sqliteInstancePath.trim()
+        require(trimmed.isNotEmpty()) { "SQLite instance path cannot be empty" }
+        require('\u0000' !in trimmed) { "Invalid null byte in SQLite instance path" }
+        require(!trimmed.startsWith("\\\\") && !trimmed.startsWith("//")) {
+            "Network/UNC SQLite paths are not allowed"
+        }
+        val workspaceRoot = File(".").canonicalFile
+        val rawFile = File(trimmed).let {
+            if (it.isAbsolute) it else File(workspaceRoot, trimmed)
+        }
+        require(!java.nio.file.Files.isSymbolicLink(rawFile.toPath())) {
+            "SQLite instance directory cannot be a symbolic link"
+        }
+        val candidate = rawFile.canonicalFile
+        require(!candidate.path.startsWith("\\\\") && !candidate.path.startsWith("//")) {
+            "Network/UNC SQLite paths are not allowed"
+        }
+        require(!java.nio.file.Files.isSymbolicLink(candidate.toPath())) {
+            "SQLite instance directory cannot be a symbolic link"
+        }
+        require(candidate.exists() && candidate.isDirectory) {
+            "SQLite instance directory does not exist: ${candidate.absolutePath}"
+        }
+        return candidate
+    }
+
+    private fun validateSqliteFileHeader(dbFile: File) {
+        val path = dbFile.toPath()
+        require(!java.nio.file.Files.isSymbolicLink(path)) {
+            "SQLite database file cannot be a symbolic link: ${dbFile.name}"
+        }
+        require(dbFile.isFile) {
+            "SQLite database path must be a regular file: ${dbFile.name}"
+        }
+        val expectedHeader = "SQLite format 3\u0000".toByteArray(Charsets.US_ASCII)
+        val buffer = ByteArray(expectedHeader.size)
+        val bytesRead = dbFile.inputStream().use { input ->
+            var offset = 0
+            while (offset < buffer.size) {
+                val read = input.read(buffer, offset, buffer.size - offset)
+                if (read < 0) break
+                offset += read
+            }
+            offset
+        }
+        require(bytesRead == expectedHeader.size && buffer.contentEquals(expectedHeader)) {
+            "File is not a valid SQLite 3 database: ${dbFile.name}"
+        }
+    }
+
+    private fun validatePostgresTarget(pgConfig: PostgresMigrationConfig, targetDb: String) {
+        val host = pgConfig.host.trim()
+        val db = targetDb.trim()
+        require(safePgHostRegex.matches(host)) { "Invalid PostgreSQL host name" }
+        require(pgConfig.port in 1..65535) { "Invalid PostgreSQL port" }
+        require(safePgDbRegex.matches(db)) { "Invalid PostgreSQL database name" }
+    }
+
     private fun runMigrationImpl(
         sourceType: String,
         sqliteInstancePath: String?,
         pgConfig: PostgresMigrationConfig?
     ) {
         val useSqlite = sourceType.lowercase() == "sqlite"
-        if (useSqlite) {
+        val safeSqliteDir = if (useSqlite) {
             require(!sqliteInstancePath.isNullOrBlank()) { "SQLite instance path is required" }
-            val dir = File(sqliteInstancePath)
+            val dir = resolveSafeSqliteDir(sqliteInstancePath)
             require(dir.exists() && dir.isDirectory) { "SQLite instance path must be a valid directory" }
+            dir
         } else {
             require(pgConfig != null) { "PostgreSQL configuration is required" }
+            null
         }
 
         // Helper to get connection
         fun connect(dbName: String): Connection {
+            require(dbName in allowedSqliteDbFiles) { "Unsupported SQLite database file: $dbName" }
             return if (useSqlite) {
-                val dbFile = File(sqliteInstancePath, dbName)
+                val rawDbFile = File(safeSqliteDir!!, dbName)
+                require(!java.nio.file.Files.isSymbolicLink(rawDbFile.toPath())) {
+                    "SQLite database file cannot be a symbolic link"
+                }
+                val dbFile = rawDbFile.canonicalFile
+                require(dbFile.parentFile == safeSqliteDir) { "Invalid SQLite database file path" }
                 require(dbFile.exists()) { "SQLite database file not found: ${dbFile.absolutePath}" }
+                validateSqliteFileHeader(dbFile)
                 Class.forName("org.sqlite.JDBC")
-                DriverManager.getConnection("jdbc:sqlite:${dbFile.absolutePath}")
+                val readOnlyProps = org.sqlite.SQLiteConfig().apply { setReadOnly(true) }.toProperties()
+                DriverManager.getConnection("jdbc:sqlite:${dbFile.absolutePath}", readOnlyProps)
             } else {
                 val targetDb = when (dbName) {
                     "users.db" -> pgConfig!!.databaseUsers
@@ -210,9 +291,15 @@ object MigrationService {
                     "statboticsepa.db" -> pgConfig!!.databaseStatboticsepa
                     else -> pgConfig!!.database
                 }
-                val url = "jdbc:postgresql://${pgConfig.host}:${pgConfig.port}/$targetDb"
+                validatePostgresTarget(pgConfig, targetDb)
+                val url = "jdbc:postgresql://${pgConfig.host.trim()}:${pgConfig.port}/${targetDb.trim()}"
+                val props = java.util.Properties().apply {
+                    setProperty("user", pgConfig.user)
+                    setProperty("password", pgConfig.passwordPlain)
+                    setProperty("connectTimeout", "5")
+                }
                 Class.forName("org.postgresql.Driver")
-                DriverManager.getConnection(url, pgConfig.user, pgConfig.passwordPlain)
+                DriverManager.getConnection(url, props)
             }
         }
 

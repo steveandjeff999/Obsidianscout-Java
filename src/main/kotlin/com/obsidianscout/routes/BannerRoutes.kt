@@ -376,7 +376,12 @@ fun Route.bannerRoutes() {
                         }
                     }
 
-                    val created = com.obsidianscout.db.BannerService.create(request, defaultProgram = session.program)
+                    val safeRequest = if (session.role != com.obsidianscout.auth.UserRole.SUPERADMIN) {
+                        request.copy(program = session.program)
+                    } else {
+                        request
+                    }
+                    val created = com.obsidianscout.db.BannerService.create(safeRequest, defaultProgram = session.program)
                     com.obsidianscout.db.NotificationWebSocketManager.invalidateAll(listOf("banners"))
                     call.respond(created)
                 }
@@ -391,6 +396,12 @@ fun Route.bannerRoutes() {
 
                     if (session.role != com.obsidianscout.auth.UserRole.SUPERADMIN && existing.program != session.program) {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "You can only modify banners for your own program")
+                    }
+                    if (session.role != com.obsidianscout.auth.UserRole.SUPERADMIN &&
+                        request.program != null &&
+                        !request.program.equals(session.program, ignoreCase = true)
+                    ) {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "You can only target banners to your own program")
                     }
 
                     if (existing.teamNumber == 0) {
