@@ -104,44 +104,43 @@ fun runUpdateHelper() {
         val tag = obj["tag_name"]?.jsonPrimitive?.content ?: continue
         val isPrerelease = obj["prerelease"]?.jsonPrimitive?.boolean ?: false
         
-        var bestUrl = ""
-        var fatjarUrl = ""
-        var firstArchiveAssetUrl = ""
+        var best: ReleaseInfo? = null
+        var fatjar: ReleaseInfo? = null
+        var firstArchive: ReleaseInfo? = null
+        var checksumsUrl: String? = null
         val assets = obj["assets"]?.jsonArray
         if (assets != null) {
             for (asset in assets) {
-                val name = asset.jsonObject["name"]?.jsonPrimitive?.content?.lowercase() ?: ""
+                val rawName = asset.jsonObject["name"]?.jsonPrimitive?.content ?: ""
+                val name = rawName.lowercase()
                 val url = asset.jsonObject["browser_download_url"]?.jsonPrimitive?.content ?: ""
                 if (url.isEmpty()) continue
+                if (name == "checksums.txt") {
+                    checksumsUrl = url
+                    continue
+                }
                 val isArchive = name.endsWith(".zip") || name.endsWith(".tar.gz") || name.endsWith(".tgz")
                 if (!isArchive) continue
 
-                if (firstArchiveAssetUrl.isEmpty()) {
-                    firstArchiveAssetUrl = url
-                }
+                val digest = UpdateValidator.normalizeSha256(asset.jsonObject["digest"]?.jsonPrimitive?.content)
+                val candidate = ReleaseInfo(tag, isPrerelease, url, rawName, digest)
+                if (firstArchive == null) firstArchive = candidate
 
                 val matchesOs = name.contains(normOs) || (normOs == "windows" && name.contains("win")) || (normOs == "macos" && name.contains("mac"))
                 val matchesArch = name.contains(normArch)
                 val isExactPlatformMatch = name.contains(platformKey) || (matchesOs && matchesArch)
 
-                if (isExactPlatformMatch) {
-                    bestUrl = url
-                    break
-                }
-                if (!isNativeRuntime && (name.contains("fatjar") || name.contains("jar"))) {
-                    fatjarUrl = url
+                if (isExactPlatformMatch && best == null) {
+                    best = candidate
+                } else if (!isNativeRuntime && (name.contains("fatjar") || name.contains("jar")) && fatjar == null) {
+                    fatjar = candidate
                 }
             }
         }
-        val finalUrl = when {
-            bestUrl.isNotEmpty() -> bestUrl
-            fatjarUrl.isNotEmpty() -> fatjarUrl
-            firstArchiveAssetUrl.isNotEmpty() -> firstArchiveAssetUrl
-            else -> obj["zipball_url"]?.jsonPrimitive?.content ?: ""
-        }
-        
-        if (finalUrl.isNotEmpty()) {
-            releases.add(ReleaseInfo(tag, isPrerelease, finalUrl))
+        // Only real release packages: the source zipball has no server binary and no published checksum.
+        val selected = best ?: fatjar ?: firstArchive
+        if (selected != null) {
+            releases.add(selected.copy(checksumsUrl = checksumsUrl))
         }
     }
     
@@ -224,7 +223,23 @@ fun runUpdateHelper() {
         tempDir.deleteRecursively()
         exitProcess(1)
     }
-    
+
+    // Verify SHA-256 against the release's per-asset digest, or its checksums.txt, before touching anything.
+    val expectedSha256 = selectedRelease.sha256
+        ?: selectedRelease.checksumsUrl?.let { fetchReleaseChecksum(client, it, selectedRelease.assetName) }
+    if (expectedSha256 == null) {
+        System.err.println("Error: Release ${selectedRelease.tag} publishes no SHA-256 checksum for ${selectedRelease.assetName}; refusing to install an unverified package.")
+        tempDir.deleteRecursively()
+        exitProcess(1)
+    }
+    val checksumCheck = UpdateValidator.validateChecksum(zipFile, expectedSha256)
+    if (checksumCheck is UpdateValidator.ValidationResult.Error) {
+        System.err.println("Error: Downloaded update failed SHA-256 verification: ${checksumCheck.message}")
+        tempDir.deleteRecursively()
+        exitProcess(1)
+    }
+    println("SHA-256 verified.")
+
     // Validate Zip Integrity
     val zipCheck = UpdateValidator.validateZipIntegrity(zipFile)
     if (zipCheck is UpdateValidator.ValidationResult.Error) {
@@ -344,7 +359,30 @@ fun runUpdateHelper() {
     }
 }
 
-private data class ReleaseInfo(val tag: String, val isPrerelease: Boolean, val url: String)
+private data class ReleaseInfo(
+    val tag: String,
+    val isPrerelease: Boolean,
+    val url: String,
+    val assetName: String,
+    val sha256: String?,
+    val checksumsUrl: String? = null
+)
+
+private fun fetchReleaseChecksum(client: HttpClient, checksumsUrl: String, assetName: String): String? {
+    val uri = runCatching { URI.create(checksumsUrl) }.getOrNull() ?: return null
+    val trustedHosts = setOf("github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com")
+    if (!uri.scheme.equals("https", ignoreCase = true) || uri.host?.lowercase() !in trustedHosts) return null
+    return try {
+        val res = client.send(
+            HttpRequest.newBuilder().uri(uri).timeout(Duration.ofSeconds(30)).build(),
+            HttpResponse.BodyHandlers.ofString()
+        )
+        if (res.statusCode() == 200) UpdateValidator.findChecksumForAsset(res.body(), assetName) else null
+    } catch (e: Exception) {
+        System.err.println("Warning: Could not fetch checksums.txt: ${e.message}")
+        null
+    }
+}
 
 private fun String.equalsIgnoreCase(other: String): Boolean = this.equals(other, ignoreCase = true)
 

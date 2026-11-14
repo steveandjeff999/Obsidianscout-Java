@@ -229,8 +229,6 @@ object GistUpdateService {
         val sha256: String?
     )
 
-    private val sha256HexRegex = Regex("^[a-fA-F0-9]{64}$")
-    private val checksumLineRegex = Regex("^\\s*([0-9a-fA-F]{64})\\s+\\*?(.+?)\\s*$")
 
     private fun isTrustedUpdateUrl(url: String): Boolean = try {
         val uri = URI.create(url.trim())
@@ -255,7 +253,13 @@ object GistUpdateService {
             log.error("[GistUpdate] Untrusted update download URL rejected: $zipUrl")
             return
         }
-        val effectiveSha256 = expectedSha256.ifBlank { releaseAsset.sha256.orEmpty() }
+        // The release's per-asset hash is authoritative: the gist holds a single sha256, which can only describe one
+        // of the platform packages, so it's used only when the release itself publishes no hash for this asset.
+        val gistSha256 = UpdateValidator.normalizeSha256(expectedSha256)
+        if (releaseAsset.sha256 != null && gistSha256 != null && gistSha256 != releaseAsset.sha256) {
+            log.info("[GistUpdate] Gist sha256 is for a different package than ${releaseAsset.name}; using the release's checksum.")
+        }
+        val effectiveSha256 = releaseAsset.sha256 ?: gistSha256.orEmpty()
         if (effectiveSha256.isBlank()) {
             log.error("[GistUpdate] Missing expected SHA-256 checksum for version $version (asset ${releaseAsset.name}). Update aborted.")
             return
@@ -435,11 +439,7 @@ object GistUpdateService {
                 val isArchive = name.endsWith(".zip") || name.endsWith(".tar.gz") || name.endsWith(".tgz")
                 if (!isArchive) continue
 
-                val inlineDigest = obj["digest"]?.jsonPrimitive?.content
-                    ?.removePrefix("sha256:")
-                    ?.trim()
-                    ?.takeIf { sha256HexRegex.matches(it) }
-                    ?.lowercase()
+                val inlineDigest = UpdateValidator.normalizeSha256(obj["digest"]?.jsonPrimitive?.content)
                 val candidate = ResolvedReleaseAsset(name = rawName, url = url, sha256 = inlineDigest)
 
                 if (firstArchiveCandidate == null) {
@@ -478,13 +478,7 @@ object GistUpdateService {
                 .build()
             val res = httpClient.send(req, HttpResponse.BodyHandlers.ofString())
             if (res.statusCode() != 200) return null
-            val targetName = assetName.trim()
-            res.body().lineSequence().firstNotNullOfOrNull { line ->
-                val match = checksumLineRegex.matchEntire(line) ?: return@firstNotNullOfOrNull null
-                val hash = match.groupValues[1].lowercase()
-                val fileName = match.groupValues[2].trim().removePrefix("./")
-                if (fileName.equals(targetName, ignoreCase = true)) hash else null
-            }
+            UpdateValidator.findChecksumForAsset(res.body(), assetName)
         } catch (e: Exception) {
             log.warn("[GistUpdate] Could not fetch checksums.txt: ${e.message}")
             null

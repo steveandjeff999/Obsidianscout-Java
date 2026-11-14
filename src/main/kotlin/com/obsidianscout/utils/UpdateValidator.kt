@@ -19,6 +19,23 @@ object UpdateValidator {
     private val log = LoggerFactory.getLogger("UpdateValidator")
     private val blacklistFile = File(".update_failed_versions")
 
+    private val sha256HexRegex = Regex("^[0-9a-f]{64}$")
+    private val checksumLineRegex = Regex("^\\s*([0-9a-fA-F]{64})\\s+\\*?(.+?)\\s*$")
+
+    /** GitHub's per-asset `digest` field ("sha256:<hex>") as lowercase hex, or null when absent/malformed. */
+    fun normalizeSha256(raw: String?): String? =
+        raw?.trim()?.lowercase()?.removePrefix("sha256:")?.trim()?.takeIf { sha256HexRegex.matches(it) }
+
+    /** Finds [assetName]'s hash in `sha256sum` output (the release's checksums.txt). */
+    fun findChecksumForAsset(checksumsText: String, assetName: String): String? {
+        val target = assetName.trim()
+        return checksumsText.lineSequence().firstNotNullOfOrNull { line ->
+            val match = checksumLineRegex.matchEntire(line) ?: return@firstNotNullOfOrNull null
+            val fileName = match.groupValues[2].trim().removePrefix("./")
+            if (fileName.equals(target, ignoreCase = true)) match.groupValues[1].lowercase() else null
+        }
+    }
+
     /**
      * Verifies that [zipFile] is a readable, non-corrupt ZIP archive.
      */
