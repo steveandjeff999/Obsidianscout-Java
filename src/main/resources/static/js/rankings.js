@@ -50,7 +50,7 @@ async function initRankingsPage() {
             ? Obsidianscout.getProgram() === "FTC"
             : (settings && settings.program === "FTC");
         const effectiveUseEpa = !isFtc && settings.useStatboticsEpa;
-        const effectiveUseExp = !isFtc && settings.useMatch13Exp;
+        const effectiveUsexP = !isFtc && (settings.useMatch13xP ?? settings.useMatch13Exp);
         const effectiveUseOpr = settings.useTbaOpr;
 
         // Metric selector options filtering based on team settings
@@ -59,9 +59,9 @@ async function initRankingsPage() {
             const optEpa = metricSelect.querySelector('option[value="epa"]');
             if (optEpa) optEpa.remove();
         }
-        if (!effectiveUseExp) {
-            const optExp = metricSelect.querySelector('option[value="exp"]');
-            if (optExp) optExp.remove();
+        if (!effectiveUsexP) {
+            const optxP = metricSelect.querySelector('option[value="xP"]');
+            if (optxP) optxP.remove();
         }
         if (!effectiveUseOpr) {
             const optOpr = metricSelect.querySelector('option[value="opr"]');
@@ -70,13 +70,13 @@ async function initRankingsPage() {
             const optOpr = metricSelect.querySelector('option[value="opr"]');
             if (optOpr) optOpr.textContent = t('predictor.ftcscout_opr', "FTC Scout OPR");
         }
-        const activeCount = (effectiveUseEpa ? 1 : 0) + (effectiveUseExp ? 1 : 0) + (effectiveUseOpr ? 1 : 0);
+        const activeCount = (effectiveUseEpa ? 1 : 0) + (effectiveUsexP ? 1 : 0) + (effectiveUseOpr ? 1 : 0);
         if (activeCount === 0) {
             const optAll = metricSelect.querySelector('option[value="all"]');
             if (optAll) optAll.remove();
         }
         if ((currentMetric === "epa" && !effectiveUseEpa) ||
-            (currentMetric === "exp" && !effectiveUseExp) ||
+            (currentMetric === "xP" && !effectiveUsexP) ||
             (currentMetric === "opr" && !effectiveUseOpr) ||
             (currentMetric === "all" && activeCount === 0)) {
             currentMetric = "scouted";
@@ -128,10 +128,10 @@ async function initRankingsPage() {
                 if (appSettings && appSettings.useStatboticsEpa) sortByColumn("epa");
             });
         }
-        const headerExpEl = document.getElementById("header-exp");
-        if (headerExpEl) {
-            headerExpEl.addEventListener("click", () => {
-                if (appSettings && appSettings.useMatch13Exp) sortByColumn("exp");
+        const headerxPEl = document.getElementById("header-xP");
+        if (headerxPEl) {
+            headerxPEl.addEventListener("click", () => {
+                if (appSettings && (appSettings.useMatch13xP ?? appSettings.useMatch13Exp)) sortByColumn("xP");
             });
         }
 
@@ -202,9 +202,11 @@ function renderTable() {
         } else if (activeSortMetric === "epa") {
             valA = a.epa !== null && a.epa !== undefined ? a.epa : -999999;
             valB = b.epa !== null && b.epa !== undefined ? b.epa : -999999;
-        } else if (activeSortMetric === "exp") {
-            valA = a.exp !== null && a.exp !== undefined ? a.exp : -999999;
-            valB = b.exp !== null && b.exp !== undefined ? b.exp : -999999;
+        } else if (activeSortMetric === "xP") {
+            const xPA = a.xP ?? a.exp;
+            const xPB = b.xP ?? b.exp;
+            valA = xPA !== null && xPA !== undefined ? xPA : -999999;
+            valB = xPB !== null && xPB !== undefined ? xPB : -999999;
         } else if (activeSortMetric === "opr") {
             valA = a.opr !== null && a.opr !== undefined ? a.opr : -999999;
             valB = b.opr !== null && b.opr !== undefined ? b.opr : -999999;
@@ -217,10 +219,10 @@ function renderTable() {
     const headerScouted = document.getElementById("header-scouted");
     const headerOpr = document.getElementById("header-opr");
     const headerEpa = document.getElementById("header-epa");
-    const headerExp = document.getElementById("header-exp");
+    const headerxP = document.getElementById("header-xP");
 
     // Clear active sorting classes/indicators
-    [headerScouted, headerOpr, headerEpa, headerExp].filter(Boolean).forEach(h => {
+    [headerScouted, headerOpr, headerEpa, headerxP].filter(Boolean).forEach(h => {
         h.style.fontWeight = "normal";
         h.style.textDecoration = "none";
         const indicator = h.querySelector(".sort-indicator");
@@ -232,35 +234,35 @@ function renderTable() {
         headerScouted.style.display = "";
         if (headerOpr) headerOpr.style.display = "none";
         if (headerEpa) headerEpa.style.display = "none";
-        if (headerExp) headerExp.style.display = "none";
+        if (headerxP) headerxP.style.display = "none";
     } else if (currentMetric === "epa") {
         headerScouted.style.display = "none";
         if (headerOpr) headerOpr.style.display = "none";
         if (headerEpa) headerEpa.style.display = "";
-        if (headerExp) headerExp.style.display = "none";
-    } else if (currentMetric === "exp") {
+        if (headerxP) headerxP.style.display = "none";
+    } else if (currentMetric === "xP") {
         headerScouted.style.display = "none";
         if (headerOpr) headerOpr.style.display = "none";
         if (headerEpa) headerEpa.style.display = "none";
-        if (headerExp) headerExp.style.display = "";
+        if (headerxP) headerxP.style.display = "";
     } else if (currentMetric === "opr") {
         headerScouted.style.display = "none";
         if (headerOpr) headerOpr.style.display = "";
         if (headerEpa) headerEpa.style.display = "none";
-        if (headerExp) headerExp.style.display = "none";
+        if (headerxP) headerxP.style.display = "none";
     } else {
         // all
         headerScouted.style.display = "";
         if (headerOpr) headerOpr.style.display = "";
         if (headerEpa) headerEpa.style.display = "";
-        if (headerExp) headerExp.style.display = "";
+        if (headerxP) headerxP.style.display = "";
     }
 
     const isFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === 'function')
         ? Obsidianscout.getProgram() === "FTC"
         : (appSettings && appSettings.program === "FTC");
     const effectiveUseEpa = !isFtc && appSettings && appSettings.useStatboticsEpa;
-    const effectiveUseExp = !isFtc && appSettings && appSettings.useMatch13Exp;
+    const effectiveUsexP = !isFtc && appSettings && (appSettings.useMatch13xP ?? appSettings.useMatch13Exp);
     const effectiveUseOpr = appSettings && appSettings.useTbaOpr;
 
     if (headerOpr && isFtc) {
@@ -273,8 +275,8 @@ function renderTable() {
     if (!effectiveUseEpa && headerEpa) {
         headerEpa.style.display = "none";
     }
-    if (!effectiveUseExp && headerExp) {
-        headerExp.style.display = "none";
+    if (!effectiveUsexP && headerxP) {
+        headerxP.style.display = "none";
     }
 
     // Highlight active sorting column
@@ -282,7 +284,7 @@ function renderTable() {
     if (activeSortMetric === "scouted") activeHeader = headerScouted;
     else if (activeSortMetric === "opr" && effectiveUseOpr) activeHeader = headerOpr;
     else if (activeSortMetric === "epa" && effectiveUseEpa) activeHeader = headerEpa;
-    else if (activeSortMetric === "exp" && effectiveUseExp) activeHeader = headerExp;
+    else if (activeSortMetric === "xP" && effectiveUsexP) activeHeader = headerxP;
 
     if (activeHeader && activeHeader.style.display !== "none") {
         activeHeader.style.fontWeight = "bold";
@@ -297,24 +299,25 @@ function renderTable() {
         let scoutedCell = `<td class="col-scouted">${team.averagePoints !== null && team.averagePoints !== undefined ? team.averagePoints.toFixed(1) : ""}</td>`;
         let oprCell = `<td class="col-opr">${team.opr !== null ? team.opr.toFixed(2) : ""}</td>`;
         let epaCell = `<td class="col-epa">${team.epa !== null ? team.epa.toFixed(2) : ""}</td>`;
-        let expCell = `<td class="col-exp">${team.exp !== null && team.exp !== undefined ? team.exp.toFixed(2) : ""}</td>`;
+        const xPVal = team.xP ?? team.exp;
+        let xPCell = `<td class="col-xP">${xPVal !== null && xPVal !== undefined ? xPVal.toFixed(2) : ""}</td>`;
 
         if (currentMetric === "scouted") {
             oprCell = "";
             epaCell = "";
-            expCell = "";
+            xPCell = "";
         } else if (currentMetric === "epa") {
             scoutedCell = "";
             oprCell = "";
-            expCell = "";
-        } else if (currentMetric === "exp") {
+            xPCell = "";
+        } else if (currentMetric === "xP") {
             scoutedCell = "";
             oprCell = "";
             epaCell = "";
         } else if (currentMetric === "opr") {
             scoutedCell = "";
             epaCell = "";
-            expCell = "";
+            xPCell = "";
         }
 
         if (!effectiveUseOpr) {
@@ -323,8 +326,8 @@ function renderTable() {
         if (!effectiveUseEpa) {
             epaCell = "";
         }
-        if (!effectiveUseExp) {
-            expCell = "";
+        if (!effectiveUsexP) {
+            xPCell = "";
         }
 
         row.innerHTML = `
@@ -334,7 +337,7 @@ function renderTable() {
             ${scoutedCell}
             ${oprCell}
             ${epaCell}
-            ${expCell}
+            ${xPCell}
         `;
         body.appendChild(row);
     });

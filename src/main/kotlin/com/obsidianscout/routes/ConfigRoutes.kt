@@ -110,7 +110,7 @@ private fun syncInputsChanged(before: ApiSettings, after: ApiSettings): Boolean 
         before.apiKeys != after.apiKeys ||
         before.useStatboticsEpa != after.useStatboticsEpa ||
         before.useTbaOpr != after.useTbaOpr ||
-        before.useMatch13Exp != after.useMatch13Exp ||
+        before.useMatch13xP != after.useMatch13xP ||
         before.statboticsBaseUrl != after.statboticsBaseUrl ||
         before.match13BaseUrl != after.match13BaseUrl
 
@@ -124,7 +124,7 @@ private fun ApiSettings.toPayload(): ApiSettingsPayload {
         timezone = timezone,
         useStatboticsEpa = useStatboticsEpa,
         useTbaOpr = useTbaOpr,
-        useMatch13Exp = useMatch13Exp,
+        useMatch13xP = useMatch13xP,
         recencyBias = recencyBias,
         chatEnabled = chatEnabled,
         matchPredictionsEnabled = matchPredictionsEnabled,
@@ -164,7 +164,7 @@ private fun ApiSettings.toPublicPayload(): ApiSettingsPayload {
         timezone = full.timezone,
         useStatboticsEpa = full.useStatboticsEpa,
         useTbaOpr = full.useTbaOpr,
-        useMatch13Exp = full.useMatch13Exp,
+        useMatch13xP = full.useMatch13xP,
         recencyBias = full.recencyBias,
         chatEnabled = false,
         matchPredictionsEnabled = false,
@@ -185,7 +185,7 @@ private fun ApiSettingsPayload.toSettings(): ApiSettings {
         timezone = timezone,
         useStatboticsEpa = useStatboticsEpa,
         useTbaOpr = useTbaOpr,
-        useMatch13Exp = useMatch13Exp,
+        useMatch13xP = useMatch13xP,
         recencyBias = recencyBias ?: com.obsidianscout.integrations.RecencyBiasSettings(),
         chatEnabled = chatEnabled,
         matchPredictionsEnabled = matchPredictionsEnabled ?: false,

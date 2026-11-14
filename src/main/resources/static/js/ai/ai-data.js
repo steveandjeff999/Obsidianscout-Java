@@ -157,7 +157,7 @@ function buildMetrics(config, qualConfig, teams) {
     const hasExternal = (key) => teams.some((tm) => tm[key] !== null && tm[key] !== undefined);
     if (hasExternal("epa")) metrics.push({ id: "ext:epa", label: "EPA", kind: "external", key: "epa", aliases: ["epa", "statbotics", "statbotics epa", "expected points added", "epa datasource", "epa data"] });
     if (hasExternal("opr")) metrics.push({ id: "ext:opr", label: "OPR", kind: "external", key: "opr", aliases: ["opr", "tba opr", "ftc scout opr", "offensive power rating", "opr datasource", "opr data"] });
-    if (hasExternal("exp")) metrics.push({ id: "ext:exp", label: "xP", kind: "external", key: "exp", aliases: ["xp", "exp", "expected points", "expected pts", "match 13 xp", "match 13 exp", "match 13", "match13", "xp datasource", "xp data"] });
+    if (hasExternal("xP") || hasExternal("exp") || hasExternal("match13xP") || hasExternal("match13Exp")) metrics.push({ id: "ext:xP", label: "xP", kind: "external", key: "xP", aliases: ["xp", "exp", "expected points", "expected pts", "match 13 xp", "match 13 exp", "match 13", "match13", "xp datasource", "xp data"] });
     metrics.forEach((m) => {
         m.aliases = Array.from(new Set([m.label.toLowerCase(), ...(m.aliases || [])]));
     });
@@ -365,9 +365,9 @@ function computeStats(ctx) {
         }
     });
 
-    const expByTeamMatch = new Map();
-    const rawExpList = (ctx.statsHistory && Array.isArray(ctx.statsHistory.match13History)) ? ctx.statsHistory.match13History : [];
-    rawExpList.forEach((matchObj) => {
+    const xPByTeamMatch = new Map();
+    const rawxPList = (ctx.statsHistory && Array.isArray(ctx.statsHistory.match13History)) ? ctx.statsHistory.match13History : [];
+    rawxPList.forEach((matchObj) => {
         if (!matchObj) return;
         const matchRaw = String(matchObj.key || matchObj.matchKey || matchObj.match_key || matchObj.match || "").toLowerCase();
         const matchNum = parseInt(matchRaw.replace(/[^0-9]/g, ""), 10);
@@ -376,22 +376,22 @@ function computeStats(ctx) {
             teams.forEach((t) => {
                 const tNum = Number(t.teamNumber || t.team_number || t.team || String(t.teamKey || "").replace(/\D/g, ""));
                 if (!tNum) return;
-                const val = t.xpPost ?? t.xp ?? t.xpPre ?? t.exp ?? t.total ?? t.total_points;
+                const val = t.xpPost ?? t.xp ?? t.xpPre ?? t.xP ?? t.exp ?? t.total ?? t.total_points;
                 if (val !== undefined && val !== null && Number.isFinite(Number(val))) {
                     const numVal = Number(val);
-                    if (matchRaw) expByTeamMatch.set(`${tNum}:${matchRaw}`, numVal);
-                    if (matchNum) expByTeamMatch.set(`${tNum}:m${matchNum}`, numVal);
+                    if (matchRaw) xPByTeamMatch.set(`${tNum}:${matchRaw}`, numVal);
+                    if (matchNum) xPByTeamMatch.set(`${tNum}:m${matchNum}`, numVal);
                 }
             });
         } else if (typeof teams === "object" && teams !== null) {
             Object.entries(teams).forEach(([k, t]) => {
                 const tNum = Number(String(k).replace(/\D/g, ""));
                 if (!tNum || !t) return;
-                const val = t.xpPost ?? t.xp ?? t.xpPre ?? t.exp ?? t.total ?? t.total_points;
+                const val = t.xpPost ?? t.xp ?? t.xpPre ?? t.xP ?? t.exp ?? t.total ?? t.total_points;
                 if (val !== undefined && val !== null && Number.isFinite(Number(val))) {
                     const numVal = Number(val);
-                    if (matchRaw) expByTeamMatch.set(`${tNum}:${matchRaw}`, numVal);
-                    if (matchNum) expByTeamMatch.set(`${tNum}:m${matchNum}`, numVal);
+                    if (matchRaw) xPByTeamMatch.set(`${tNum}:${matchRaw}`, numVal);
+                    if (matchNum) xPByTeamMatch.set(`${tNum}:m${matchNum}`, numVal);
                 }
             });
         }
@@ -445,13 +445,15 @@ function computeStats(ctx) {
             const mKey = String(entry.matchKey || "").toLowerCase();
             const mNum = entry.matchNumber;
             const epaVal = epaByTeamMatch.get(`${teamNumber}:${mKey}`) ?? (mNum ? epaByTeamMatch.get(`${teamNumber}:m${mNum}`) : null);
-            const expVal = expByTeamMatch.get(`${teamNumber}:${mKey}`) ?? (mNum ? expByTeamMatch.get(`${teamNumber}:m${mNum}`) : null);
+            const xPVal = xPByTeamMatch.get(`${teamNumber}:${mKey}`) ?? (mNum ? xPByTeamMatch.get(`${teamNumber}:m${mNum}`) : null);
             if (epaVal !== null && epaVal !== undefined) entry.values["ext:epa"] = epaVal;
             else if (team.epa !== null && team.epa !== undefined) entry.values["ext:epa"] = readNumber(team.epa);
 
-            if (expVal !== null && expVal !== undefined) entry.values["ext:exp"] = expVal;
-            else if (team.exp !== null && team.exp !== undefined) entry.values["ext:exp"] = readNumber(team.exp);
-            else if (team.match13Exp !== null && team.match13Exp !== undefined) entry.values["ext:exp"] = readNumber(team.match13Exp);
+            if (xPVal !== null && xPVal !== undefined) entry.values["ext:xP"] = xPVal;
+            else if (team.xP !== null && team.xP !== undefined) entry.values["ext:xP"] = readNumber(team.xP);
+            else if (team.exp !== null && team.exp !== undefined) entry.values["ext:xP"] = readNumber(team.exp);
+            else if (team.match13xP !== null && team.match13xP !== undefined) entry.values["ext:xP"] = readNumber(team.match13xP);
+            else if (team.match13Exp !== null && team.match13Exp !== undefined) entry.values["ext:xP"] = readNumber(team.match13Exp);
 
             if (team.opr !== null && team.opr !== undefined) entry.values["ext:opr"] = readNumber(team.opr);
         });
@@ -465,7 +467,8 @@ function computeStats(ctx) {
                 if (vals.length > 0) {
                     metrics[metric.id] = summarize(vals);
                 } else {
-                    const val = readNumber(team[metric.key]);
+                    const rawVal = metric.id === "ext:xP" ? (team.xP ?? team.exp ?? team.match13xP ?? team.match13Exp) : team[metric.key];
+                    const val = readNumber(rawVal);
                     metrics[metric.id] = val === null ? null : { avg: val, max: val, min: val, n: 1, stdev: 0 };
                 }
                 return;

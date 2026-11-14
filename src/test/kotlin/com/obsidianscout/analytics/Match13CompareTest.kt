@@ -66,9 +66,9 @@ class Match13CompareTest {
 
     @Test
     fun `no history gives no metrics and a note`() {
-        val result = Match13Compare.build(listOf(254, 1678), emptyList(), storedExp = mapOf(254 to 48.0))
+        val result = Match13Compare.build(listOf(254, 1678), emptyList(), storedxP = mapOf(254 to 48.0))
         assertTrue(result.metricDefinitions.isEmpty())
-        assertEquals(48.0, result.teams.getValue("254").exp)
+        assertEquals(48.0, result.teams.getValue("254").xP)
         assertTrue(result.note!!.contains("No Match 13"))
     }
 }

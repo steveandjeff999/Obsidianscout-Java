@@ -47,29 +47,29 @@ async function initTeamsPage() {
             ? Obsidianscout.getProgram() === "FTC"
             : (settings && settings.program === "FTC");
         const effectiveUseEpa = !isFtc && settings.useStatboticsEpa;
-        const effectiveUseExp = !isFtc && settings.useMatch13Exp;
+        const effectiveUsexP = !isFtc && (settings.useMatch13xP ?? settings.useMatch13Exp);
         const effectiveUseOpr = settings.useTbaOpr;
 
         // Restore HTML
         tableCard.innerHTML = originalTableCardHTML;
 
-        // Apply visibility for OPR/EPA/EXP headers and modal fields
+        // Apply visibility for OPR/EPA/xP headers and modal fields
         const thOpr = document.getElementById("th-team-opr");
         const thEpa = document.getElementById("th-team-epa");
-        const thExp = document.getElementById("th-team-exp");
+        const thxP = document.getElementById("th-team-xP");
         if (thOpr) {
             thOpr.style.display = effectiveUseOpr ? "" : "none";
             if (isFtc) thOpr.textContent = "FTC OPR";
         }
         if (thEpa) thEpa.style.display = effectiveUseEpa ? "" : "none";
-        if (thExp) thExp.style.display = effectiveUseExp ? "" : "none";
+        if (thxP) thxP.style.display = effectiveUsexP ? "" : "none";
 
         const fieldOpr = document.getElementById("field-team-opr");
         const fieldEpa = document.getElementById("field-team-epa");
-        const fieldExp = document.getElementById("field-team-exp");
+        const fieldxP = document.getElementById("field-team-xP");
         if (fieldOpr) fieldOpr.style.display = effectiveUseOpr ? "" : "none";
         if (fieldEpa) fieldEpa.style.display = effectiveUseEpa ? "" : "none";
-        if (fieldExp) fieldExp.style.display = effectiveUseExp ? "" : "none";
+        if (fieldxP) fieldxP.style.display = effectiveUsexP ? "" : "none";
 
         // Populate event filter select dropdown
         const eventFilter = document.getElementById("event-filter");
@@ -152,12 +152,13 @@ function renderTeamsTable(teams, eventKey) {
             ? Obsidianscout.getProgram() === "FTC"
             : (currentSettings && currentSettings.program === "FTC");
         const effectiveUseEpa = !isFtc && currentSettings && currentSettings.useStatboticsEpa;
-        const effectiveUseExp = !isFtc && currentSettings && currentSettings.useMatch13Exp;
+        const effectiveUsexP = !isFtc && currentSettings && (currentSettings.useMatch13xP ?? currentSettings.useMatch13Exp);
         const effectiveUseOpr = currentSettings && currentSettings.useTbaOpr;
 
         const oprCell = effectiveUseOpr ? `<td>${team.opr !== null ? team.opr.toFixed(2) : ""}</td>` : "";
         const epaCell = effectiveUseEpa ? `<td>${team.epa !== null ? team.epa.toFixed(2) : ""}</td>` : "";
-        const expCell = effectiveUseExp ? `<td>${team.exp !== null && team.exp !== undefined ? team.exp.toFixed(2) : ""}</td>` : "";
+        const xPVal = team.xP ?? team.exp;
+        const xPCell = effectiveUsexP ? `<td>${xPVal !== null && xPVal !== undefined ? xPVal.toFixed(2) : ""}</td>` : "";
         row.innerHTML = `
             <td><a href="/team?teamNumber=${team.teamNumber}&eventKey=${eventKey}" class="team-profile-link">${displayNum}</a></td>
             <td><a href="/team?teamNumber=${team.teamNumber}&eventKey=${eventKey}" class="team-name-link">${team.nickname || team.name || ""}</a></td>
@@ -165,7 +166,7 @@ function renderTeamsTable(teams, eventKey) {
             <td>${team.averagePoints !== null && team.averagePoints !== undefined ? team.averagePoints.toFixed(1) : ""}</td>
             ${oprCell}
             ${epaCell}
-            ${expCell}
+            ${xPCell}
             ${actionHtml}
         `;
         body.appendChild(row);
@@ -268,7 +269,7 @@ async function setupModal(defaultEventKey) {
     const countryInput = document.getElementById("team-country");
     const oprInput = document.getElementById("team-opr");
     const epaInput = document.getElementById("team-epa");
-    const expInput = document.getElementById("team-exp");
+    const xPInput = document.getElementById("team-xP");
     const titleEl = document.getElementById("team-modal-title");
 
     // Populate events dropdown
@@ -333,7 +334,7 @@ async function setupModal(defaultEventKey) {
             country: countryInput.value.trim() || null,
             opr: oprInput && oprInput.value ? parseFloat(oprInput.value) : null,
             epa: epaInput && epaInput.value ? parseFloat(epaInput.value) : null,
-            exp: expInput && expInput.value ? parseFloat(expInput.value) : null
+            xP: xPInput && xPInput.value ? parseFloat(xPInput.value) : null
         };
 
         try {
@@ -369,7 +370,7 @@ function openEditModal(team) {
     const countryInput = document.getElementById("team-country");
     const oprInput = document.getElementById("team-opr");
     const epaInput = document.getElementById("team-epa");
-    const expInput = document.getElementById("team-exp");
+    const xPInput = document.getElementById("team-xP");
     const titleEl = document.getElementById("team-modal-title");
 
     titleEl.textContent = t('teams.edit_team', "Edit Team");
@@ -385,7 +386,7 @@ function openEditModal(team) {
     countryInput.value = team.country || "USA";
     if (oprInput) oprInput.value = team.opr !== null ? team.opr : "";
     if (epaInput) epaInput.value = team.epa !== null ? team.epa : "";
-    if (expInput) expInput.value = team.exp !== null && team.exp !== undefined ? team.exp : "";
+    if (xPInput) xPInput.value = (team.xP ?? team.exp) !== null && (team.xP ?? team.exp) !== undefined ? (team.xP ?? team.exp) : "";
 
     modal.classList.add("show");
 }

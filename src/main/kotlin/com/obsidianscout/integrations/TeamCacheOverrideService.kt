@@ -121,7 +121,7 @@ object TeamCacheOverrideService {
     )
     private val teamFields: Map<String, Column<*>> = mapOf(
         "name" to ApiTeams.name, "nickname" to ApiTeams.nickname, "city" to ApiTeams.city, "state" to ApiTeams.state,
-        "country" to ApiTeams.country, "opr" to ApiTeams.opr, "epa" to ApiTeams.epa, "exp" to ApiTeams.match13Exp
+        "country" to ApiTeams.country, "opr" to ApiTeams.opr, "epa" to ApiTeams.epa, "xP" to ApiTeams.match13xP, "exp" to ApiTeams.match13xP
     )
     private val matchFields: Map<String, Column<*>> = mapOf(
         "setNumber" to ApiMatches.setNumber, "matchNumber" to ApiMatches.matchNumber, "scheduledTime" to ApiMatches.scheduledTime,
@@ -191,7 +191,8 @@ object TeamCacheOverrideService {
         if ("country" in p) values[ApiTeams.country] = p.text("country")
         if ("opr" in p) values[ApiTeams.opr] = p.double("opr")
         if ("epa" in p) values[ApiTeams.epa] = p.double("epa")
-        if ("exp" in p) values[ApiTeams.match13Exp] = p.double("exp")
+        if ("xP" in p) values[ApiTeams.match13xP] = p.double("xP")
+        else if ("exp" in p) values[ApiTeams.match13xP] = p.double("exp")
         return rowOf(ApiTeams, base, values)
     }
 
@@ -479,7 +480,7 @@ object TeamCacheOverrideService {
             team.country.takeIf { !has || it != null }?.let { Triple("country", JsonPrimitive(it), shared?.get(ApiTeams.country)) },
             team.opr.takeIf { !has || it != null }?.let { Triple("opr", JsonPrimitive(it), shared?.get(ApiTeams.opr)) },
             team.epa.takeIf { !has || it != null }?.let { Triple("epa", JsonPrimitive(it), shared?.get(ApiTeams.epa)) },
-            team.exp.takeIf { !has || it != null }?.let { Triple("exp", JsonPrimitive(it), shared?.get(ApiTeams.match13Exp)) }
+            team.xP.takeIf { !has || it != null }?.let { Triple("xP", JsonPrimitive(it), shared?.get(ApiTeams.match13xP)) }
         ))
     }
 

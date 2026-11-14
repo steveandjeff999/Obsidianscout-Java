@@ -159,12 +159,12 @@ function initMetricOptions(state) {
         return;
     }
     let metrics = [];
-    if (state.datasource === "exp") {
+    if (state.datasource === "xP") {
         metrics = [
-            { id: "score_total", label: t('alliance-selection.total_exp', "Total xP"), kind: "score", scope: "total" },
-            { id: "score_auto", label: t('alliance-selection.auto_exp', "Auto xP"), kind: "score", scope: "auto" },
-            { id: "score_teleop", label: t('alliance-selection.teleop_exp', "Teleop xP"), kind: "score", scope: "teleop" },
-            { id: "score_endgame", label: t('alliance-selection.endgame_exp', "Endgame xP"), kind: "score", scope: "endgame" }
+            { id: "score_total", label: t('alliance-selection.total_xP', "Total xP"), kind: "score", scope: "total" },
+            { id: "score_auto", label: t('alliance-selection.auto_xP', "Auto xP"), kind: "score", scope: "auto" },
+            { id: "score_teleop", label: t('alliance-selection.teleop_xP', "Teleop xP"), kind: "score", scope: "teleop" },
+            { id: "score_endgame", label: t('alliance-selection.endgame_xP', "Endgame xP"), kind: "score", scope: "endgame" }
         ];
     } else if (state.datasource === "all") {
         metrics = [
@@ -173,7 +173,7 @@ function initMetricOptions(state) {
             { id: "score_teleop", label: t('graphs.teleop_points', "Teleop points"), kind: "score", scope: "teleop" },
             { id: "score_endgame", label: t('graphs.endgame_points', "Endgame points"), kind: "score", scope: "endgame" },
             { id: "ext_epa", label: "Statbotics EPA", kind: "external", scope: "epa" },
-            { id: "ext_exp", label: "Match 13 xP", kind: "external", scope: "exp" },
+            { id: "ext_xP", label: "Match 13 xP", kind: "external", scope: "xP" },
             { id: "ext_opr", label: "TBA OPR", kind: "external", scope: "opr" }
         ];
     } else {
@@ -309,10 +309,10 @@ function initDatasource(state) {
         ? Obsidianscout.getProgram() === "FTC"
         : (settings?.program === "FTC");
     const effectiveUseEpa = !isFtc && settings?.useStatboticsEpa;
-    const effectiveUseExp = !isFtc && settings?.useMatch13Exp;
+    const effectiveUsexP = !isFtc && (settings?.useMatch13xP ?? settings?.useMatch13Exp);
     const effectiveUseOpr = settings?.useTbaOpr;
 
-    const hasAnyExternal = effectiveUseEpa || effectiveUseExp || effectiveUseOpr;
+    const hasAnyExternal = effectiveUseEpa || effectiveUsexP || effectiveUseOpr;
 
     if (settings && hasAnyExternal) {
         datasourceField.classList.remove("hidden");
@@ -336,11 +336,11 @@ function initDatasource(state) {
             datasourceSelect.appendChild(optEpa);
         }
 
-        if (effectiveUseExp) {
-            const optExp = document.createElement("option");
-            optExp.value = "exp";
-            optExp.textContent = t('alliance-selection.match13_exp', "Match 13 xP");
-            datasourceSelect.appendChild(optExp);
+        if (effectiveUsexP) {
+            const optxP = document.createElement("option");
+            optxP.value = "xP";
+            optxP.textContent = t('alliance-selection.match13_xP', "Match 13 xP");
+            datasourceSelect.appendChild(optxP);
         }
 
         if (effectiveUseOpr) {
@@ -351,7 +351,7 @@ function initDatasource(state) {
         }
 
         datasourceSelect.addEventListener("change", () => {
-            state.datasource = datasourceSelect.value;
+            state.datasource = datasourceSelect.value === "exp" ? "xP" : datasourceSelect.value;
             toggleFieldsForDatasource(state);
         });
     } else {
@@ -373,7 +373,7 @@ function toggleFieldsForDatasource(state) {
         metricField?.classList.remove("hidden");
         prescoutField?.classList.remove("hidden");
         initMetricOptions(state);
-    } else if (state.datasource === "exp" || state.datasource === "all") {
+    } else if (state.datasource === "xP" || state.datasource === "exp" || state.datasource === "all") {
         viewField?.classList.remove("hidden");
         metricField?.classList.remove("hidden");
         prescoutField?.classList.add("hidden");
@@ -588,7 +588,7 @@ function initGraphTypeControls(state) {
             const isAverages = state.dataView === "averages" || (state.datasource === "epa" || state.datasource === "opr");
             const allTypes = GRAPH_TYPES
                 .map((g) => g.id)
-                .filter((id) => state.is3D || !isAverages || (id !== "line" && id !== "area"));
+                .filter((id) => (state.is3D || id !== "density") && (state.is3D || !isAverages || (id !== "line" && id !== "area")));
             setGraphTypes(state, allTypes, countBadge);
         });
     }
@@ -1008,7 +1008,7 @@ function getVisibleTeams() {
 
 function setGraphTypes(state, types, badge) {
     const isAverages = state.dataView === "averages" || (state.datasource === "epa" || state.datasource === "opr");
-    const filteredTypes = isAverages ? types.filter((t) => t !== "line") : types;
+    const filteredTypes = types.filter((t) => (state.is3D || t !== "density") && (state.is3D || !isAverages || (t !== "line" && t !== "area")));
     state.selectedGraphTypes = new Set(filteredTypes);
     document.querySelectorAll(".graph-type-checkbox").forEach((checkbox) => {
         checkbox.checked = state.selectedGraphTypes.has(checkbox.value);
@@ -1181,7 +1181,7 @@ function openGraphFullscreen(titleText, sourceChart) {
     });
 }
 
-function extractTeamExpData(matchObj, teamNumber) {
+function extractTeamxPData(matchObj, teamNumber) {
     if (!matchObj || typeof matchObj !== "object") return null;
     const teams = matchObj.teams;
     if (!teams) return null;
@@ -1254,7 +1254,7 @@ async function generateGraphs(state) {
         const metric = state.metricMap?.get(state.metricId) || state.metrics?.[0] || { label: "Total Points", id: "score_total" };
 
         const targetKey = state.eventKey || (state.settings ? (Obsidianscout.resolveEventKey(state.settings) || "") : "") || "";
-        if (targetKey && (state.datasource === "exp" || state.datasource === "all") && (!state.statsHistory?.match13History || state.statsHistory.match13History.length === 0)) {
+        if (targetKey && (state.datasource === "xP" || state.datasource === "exp" || state.datasource === "all") && (!state.statsHistory?.match13History || state.statsHistory.match13History.length === 0)) {
             try {
                 const refreshed = await Obsidianscout.request(`/api/stats/history?eventKey=${encodeURIComponent(targetKey)}`);
                 if (refreshed) {
@@ -1301,7 +1301,7 @@ async function generateGraphs(state) {
             const chart = createPlotlyContainer(320);
             const viewTitle = state.dataView === "matches" ? "Match-by-match" : "Team averages";
             const metricLabel = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(metric.label) : metric.label;
-            const cardTitle = (state.datasource === "exp" || state.datasource === "all")
+            const cardTitle = (state.datasource === "xP" || state.datasource === "exp" || state.datasource === "all")
                 ? `${getDatasourceLabel(state.datasource, state)} (${metricLabel}) - ${graphType} (${viewTitle})`
                 : `${getDatasourceLabel(state.datasource, state)} - ${graphType} (${viewTitle})`;
             const card = createGraphCard(cardTitle, chart);
@@ -1421,18 +1421,18 @@ function formatMatchKeyToLabel(matchKey) {
     return compPart.toUpperCase();
 }
 
-function getTeamExpMetricValue(teamExpData, metricId) {
-    if (!teamExpData) return 0;
+function getTeamxPMetricValue(teamxPData, metricId) {
+    if (!teamxPData) return 0;
     if (metricId === "score_auto") {
-        return Number(teamExpData.xAutoPost ?? teamExpData.xAuto ?? teamExpData.xAutoPre ?? teamExpData.auto ?? teamExpData.auto_exp ?? teamExpData.autoExp ?? 0);
+        return Number(teamxPData.xAutoPost ?? teamxPData.xAuto ?? teamxPData.xAutoPre ?? teamxPData.auto ?? teamxPData.auto_xP ?? teamxPData.auto_exp ?? teamxPData.autoExp ?? 0);
     }
     if (metricId === "score_teleop") {
-        return Number(teamExpData.xTelePost ?? teamExpData.xTele ?? teamExpData.xTelePre ?? teamExpData.teleop ?? teamExpData.teleop_exp ?? teamExpData.teleopExp ?? 0);
+        return Number(teamxPData.xTelePost ?? teamxPData.xTele ?? teamxPData.xTelePre ?? teamxPData.teleop ?? teamxPData.teleop_xP ?? teamxPData.teleop_exp ?? teamxPData.teleopExp ?? 0);
     }
     if (metricId === "score_endgame") {
-        return Number(teamExpData.xEndPost ?? teamExpData.xEnd ?? teamExpData.xEndPre ?? teamExpData.endgame ?? teamExpData.endgame_exp ?? teamExpData.endgameExp ?? 0);
+        return Number(teamxPData.xEndPost ?? teamxPData.xEnd ?? teamxPData.xEndPre ?? teamxPData.endgame ?? teamxPData.endgame_xP ?? teamxPData.endgame_exp ?? teamxPData.endgameExp ?? 0);
     }
-    return Number(teamExpData.xpPost ?? teamExpData.xp ?? teamExpData.xpPre ?? teamExpData.exp ?? teamExpData.total ?? teamExpData.total_points ?? 0);
+    return Number(teamxPData.xpPost ?? teamxPData.xp ?? teamxPData.xpPre ?? teamxPData.xP ?? teamxPData.exp ?? teamxPData.total ?? teamxPData.total_points ?? 0);
 }
 
 function getDatasourceLabel(datasource, state) {
@@ -1440,7 +1440,7 @@ function getDatasourceLabel(datasource, state) {
         ? Obsidianscout.getProgram() === "FTC"
         : (state?.settings?.program === "FTC");
     if (datasource === "epa") return t('predictor.statbotics_epa', "Statbotics EPA");
-    if (datasource === "exp") return t('alliance-selection.match13_exp', "Match 13 xP");
+    if (datasource === "xP" || datasource === "exp") return t('alliance-selection.match13_xP', "Match 13 xP");
     if (datasource === "opr") return isFtc ? t('predictor.ftcscout_opr', "FTC Scout OPR") : t('predictor.tba_opr', "TBA OPR");
     if (datasource === "all") return t('rankings.metric.all', "All Sources");
     return t('predictor.scouted_data', "Scouted Data");
@@ -1452,12 +1452,12 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
         ? Obsidianscout.getProgram() === "FTC"
         : (state.settings?.program === "FTC");
     const effectiveUseEpa = !isFtc && state.settings?.useStatboticsEpa;
-    const effectiveUseExp = !isFtc && state.settings?.useMatch13Exp;
+    const effectiveUsexP = !isFtc && (state.settings?.useMatch13xP ?? state.settings?.useMatch13Exp);
     const effectiveUseOpr = state.settings?.useTbaOpr;
 
     // --- MATCH-BY-MATCH RENDERING ---
     if (state.dataView === "matches" || forcePerTeamMatches) {
-        if (state.datasource === "exp") {
+        if (state.datasource === "xP" || state.datasource === "exp") {
             const rawMatch13History = state.statsHistory?.match13History || [];
             if (!rawMatch13History.length) {
                 container.appendChild(buildNotice(t('graphs.no_match13_data', "No Match 13 match data available for this event.")));
@@ -1468,13 +1468,13 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
             selectedTeams.forEach((teamNumber) => {
                 const teamMatches = [];
                 rawMatch13History.forEach((matchObj) => {
-                    const teamData = extractTeamExpData(matchObj, teamNumber);
+                    const teamData = extractTeamxPData(matchObj, teamNumber);
                     if (!teamData) return;
 
                     const matchKey = matchObj.key || matchObj.matchKey || matchObj.match_key || matchObj.match || "";
                     const label = formatMatchKeyToLabel(matchKey);
                     const sortWeight = getMatchSortWeightFromLabel(label);
-                    const value = getTeamExpMetricValue(teamData, state.metricId);
+                    const value = getTeamxPMetricValue(teamData, state.metricId);
                     teamMatches.push({ label, value, sortWeight });
                 });
 
@@ -1540,26 +1540,26 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
                 }
 
                 // 2. Match 13 xP series
-                if (effectiveUseExp && rawMatch13History.length > 0) {
-                    const expMatches = [];
+                if (effectiveUsexP && rawMatch13History.length > 0) {
+                    const xPMatches = [];
                     rawMatch13History.forEach((matchObj) => {
-                        const teamData = extractTeamExpData(matchObj, teamNumber);
+                        const teamData = extractTeamxPData(matchObj, teamNumber);
                         if (!teamData) return;
 
                         const matchKey = matchObj.key || matchObj.matchKey || matchObj.match_key || matchObj.match || "";
                         const label = formatMatchKeyToLabel(matchKey);
                         const sortWeight = getMatchSortWeightFromLabel(label);
-                        const value = getTeamExpMetricValue(teamData, state.metricId);
-                        expMatches.push({ label, value, sortWeight });
+                        const value = getTeamxPMetricValue(teamData, state.metricId);
+                        xPMatches.push({ label, value, sortWeight });
                     });
 
-                    expMatches.sort((a, b) => a.sortWeight - b.sortWeight);
+                    xPMatches.sort((a, b) => a.sortWeight - b.sortWeight);
 
-                    if (expMatches.length > 0) {
+                    if (xPMatches.length > 0) {
                         series.push({
                             name: `Team ${teamNumber} (Match 13 xP)`,
-                            x: expMatches.map(m => m.label),
-                            y: expMatches.map(m => m.value)
+                            x: xPMatches.map(m => m.label),
+                            y: xPMatches.map(m => m.value)
                         });
                     }
                 }
@@ -1588,16 +1588,17 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
             teamNumber,
             label: `Team ${teamNumber}`,
             epa: team ? (team.epa !== null && team.epa !== undefined ? team.epa : 0) : 0,
-            exp: team ? (team.exp !== null && team.exp !== undefined ? team.exp : (team.match13Exp !== null && team.match13Exp !== undefined ? team.match13Exp : 0)) : 0,
+            xP: team ? (team.xP ?? team.exp ?? team.match13xP ?? team.match13Exp ?? 0) : 0,
             opr: team ? (team.opr !== null && team.opr !== undefined ? team.opr : 0) : 0,
             scouted: team ? (team.averagePoints !== null && team.averagePoints !== undefined ? team.averagePoints : 0) : 0
         };
     });
 
     // 2. Sort the data based on state.sort
-    const sortField = state.datasource === "all"
-        ? (effectiveUseEpa ? "epa" : (effectiveUseExp ? "exp" : (effectiveUseOpr ? "opr" : "scouted")))
-        : state.datasource;
+    const dsSortKey = state.datasource === "exp" ? "xP" : state.datasource;
+    const sortField = dsSortKey === "all"
+        ? (effectiveUseEpa ? "epa" : (effectiveUsexP ? "xP" : (effectiveUseOpr ? "opr" : "scouted")))
+        : dsSortKey;
 
     data.sort((a, b) => {
         if (state.sort === "team_asc") return a.teamNumber - b.teamNumber;
@@ -1612,8 +1613,8 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
         if (state.datasource === "epa" && effectiveUseEpa) {
             const series = data.map(item => ({ label: item.label, value: item.epa }));
             renderPlotlyBar(container, series, { orientation: "h" });
-        } else if (state.datasource === "exp" && effectiveUseExp) {
-            const series = data.map(item => ({ label: item.label, value: item.exp }));
+        } else if ((state.datasource === "xP" || state.datasource === "exp") && effectiveUsexP) {
+            const series = data.map(item => ({ label: item.label, value: item.xP }));
             renderPlotlyBar(container, series, { orientation: "h" });
         } else if (state.datasource === "opr" && effectiveUseOpr) {
             const series = data.map(item => ({ label: item.label, value: item.opr }));
@@ -1632,11 +1633,11 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
                     y: data.map(item => item.epa)
                 });
             }
-            if (effectiveUseExp) {
+            if (effectiveUsexP) {
                 series.push({
                     name: "Match 13 xP",
                     x: labels,
-                    y: data.map(item => item.exp)
+                    y: data.map(item => item.xP)
                 });
             }
             if (effectiveUseOpr) {
@@ -1675,12 +1676,12 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
                 });
             }
         }
-        if (state.datasource === "exp" || state.datasource === "all") {
-            if (effectiveUseExp) {
+        if (state.datasource === "xP" || state.datasource === "exp" || state.datasource === "all") {
+            if (effectiveUsexP) {
                 series.push({
                     name: "Match 13 xP",
                     x: labels,
-                    y: data.map(item => item.exp)
+                    y: data.map(item => item.xP)
                 });
             }
         }
@@ -2622,17 +2623,17 @@ function resolveTeamExternalMetric3D(teamNumber, metric, state) {
     const team = state.eventTeamsMap ? state.eventTeamsMap.get(Number(teamNumber)) : null;
     if (!metric || !metric.id) return 0;
     if (metric.id === "ext_epa") return Number(team?.epa ?? 0);
-    if (metric.id === "ext_exp") {
+    if (metric.id === "ext_xP" || metric.id === "ext_exp") {
         const rawHistory = state.statsHistory?.match13History || [];
         let sum = 0, cnt = 0;
         rawHistory.forEach((matchObj) => {
-            const td = extractTeamExpData(matchObj, teamNumber);
+            const td = extractTeamxPData(matchObj, teamNumber);
             if (!td) return;
-            sum += getTeamExpMetricValue(td, "score_total");
+            sum += getTeamxPMetricValue(td, "score_total");
             cnt++;
         });
         if (cnt > 0) return sum / cnt;
-        return Number(team?.exp ?? team?.match13Exp ?? 0);
+        return Number(team?.xP ?? team?.exp ?? team?.match13xP ?? team?.match13Exp ?? 0);
     }
     if (metric.id === "ext_opr") return Number(team?.opr ?? 0);
     return 0;
@@ -2701,18 +2702,18 @@ function build3DSeriesScouted(entries, mx, my, mz, state, forcePerTeamMatches = 
 
 function build3DSeriesNonScouted(selectedTeams, mx, my, mz, state, forcePerTeamMatches = false) {
     const rawHistory = state.statsHistory?.match13History || [];
-    if (state.datasource === "exp" && (state.dataView === "matches" || (forcePerTeamMatches && rawHistory.length > 0))) {
+    if ((state.datasource === "xP" || state.datasource === "exp") && (state.dataView === "matches" || (forcePerTeamMatches && rawHistory.length > 0))) {
         return selectedTeams.map((teamNumber) => {
             const pts = [];
             rawHistory.forEach((matchObj) => {
-                const td = extractTeamExpData(matchObj, teamNumber);
+                const td = extractTeamxPData(matchObj, teamNumber);
                 if (!td) return;
                 const matchKey = matchObj.key || matchObj.matchKey || matchObj.match_key || matchObj.match || "";
                 const label = formatMatchKeyToLabel(matchKey);
                 pts.push({
-                    x: getTeamExpMetricValue(td, mx.id),
-                    y: getTeamExpMetricValue(td, my.id),
-                    z: getTeamExpMetricValue(td, mz.id),
+                    x: getTeamxPMetricValue(td, mx.id),
+                    y: getTeamxPMetricValue(td, my.id),
+                    z: getTeamxPMetricValue(td, mz.id),
                     label: `${teamNumber}`,
                     matchLabel: label,
                     sortWeight: getMatchSortWeightFromLabel(label)
@@ -2734,16 +2735,16 @@ function build3DSeriesNonScouted(selectedTeams, mx, my, mz, state, forcePerTeamM
         const team = state.eventTeamsMap ? state.eventTeamsMap.get(Number(teamNumber)) : null;
         const teamEntries = filteredEntries.filter(e => Number(e.targetTeamNumber) === Number(teamNumber));
 
-        const avgExpMetric = (metricId) => {
+        const avgxPMetric = (metricId) => {
             let sum = 0, cnt = 0;
             rawHistory.forEach((matchObj) => {
-                const td = extractTeamExpData(matchObj, teamNumber);
+                const td = extractTeamxPData(matchObj, teamNumber);
                 if (!td) return;
-                sum += getTeamExpMetricValue(td, metricId);
+                sum += getTeamxPMetricValue(td, metricId);
                 cnt++;
             });
             if (cnt > 0) return sum / cnt;
-            if (metricId === "score_total") return Number(team?.exp ?? team?.match13Exp ?? 0);
+            if (metricId === "score_total") return Number(team?.xP ?? team?.exp ?? team?.match13xP ?? team?.match13Exp ?? 0);
             return 0;
         };
 
@@ -2759,7 +2760,7 @@ function build3DSeriesNonScouted(selectedTeams, mx, my, mz, state, forcePerTeamM
         };
 
         const valFor = (m) => {
-            if (state.datasource === "exp") return avgExpMetric(m.id);
+            if (state.datasource === "xP" || state.datasource === "exp") return avgxPMetric(m.id);
             if (m?.id?.startsWith("ext_")) return resolveTeamExternalMetric3D(teamNumber, m, state);
             return avgScoutedMetric(m);
         };

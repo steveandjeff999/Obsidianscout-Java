@@ -85,7 +85,7 @@ test("team comparison builds metrics from stored entries", () => {
     const result = analytics.buildComparison({
         config: cases.config,
         entries: cases.entries,
-        teams: [{ eventKey: "2026test", teamNumber: 1678, nickname: "Citrus", opr: 50, epa: null, exp: 30 }],
+        teams: [{ eventKey: "2026test", teamNumber: 1678, nickname: "Citrus", opr: 50, epa: null, xP: 30 }],
         teamNumbers: [1678, 118],
         eventKey: "2026test",
         recencyBias: { enabled: false }

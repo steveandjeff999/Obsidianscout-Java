@@ -29,7 +29,7 @@ private data class SyncInputs(
     val alternateEventCode: String,
     val timezone: String,
     val useStatboticsEpa: Boolean,
-    val useMatch13Exp: Boolean,
+    val useMatch13xP: Boolean,
     val apiKeys: ApiKeys,
     val statboticsBaseUrl: String,
     val match13BaseUrl: String
@@ -43,7 +43,7 @@ private data class SyncInputs(
             alternateEventCode = settings.alternateEventCode,
             timezone = settings.timezone,
             useStatboticsEpa = settings.useStatboticsEpa,
-            useMatch13Exp = settings.useMatch13Exp,
+            useMatch13xP = settings.useMatch13xP,
             apiKeys = settings.apiKeys,
             statboticsBaseUrl = settings.statboticsBaseUrl,
             match13BaseUrl = settings.match13BaseUrl

@@ -1,3 +1,5 @@
+@file:OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+
 package com.obsidianscout.routes
 
 import com.obsidianscout.auth.UserRole
@@ -75,8 +77,10 @@ object ApiCompat {
     /**
      * 2: superadmin shared API keys (`GET`/`PUT /api/admin/shared-api-keys`). The app only shows its editor from
      * this level on.
+     * 3: Match 13 Expected Points fields renamed from `exp` / `useMatch13Exp` / `totalExp` / `expDiff` /
+     * `match13TeamExp` to `xP` / `useMatch13xP` / `totalxP` / `xPDiff` / `match13TeamxP`.
      */
-    const val API_LEVEL = 2
+    const val API_LEVEL = 3
     const val MIN_APP_API_LEVEL = 1
 }
 
@@ -371,7 +375,8 @@ data class ApiSettingsPayload(
     val timezone: String = "UTC",
     val useStatboticsEpa: Boolean = false,
     val useTbaOpr: Boolean = false,
-    val useMatch13Exp: Boolean = false,
+    @kotlinx.serialization.json.JsonNames("useMatch13Exp")
+    val useMatch13xP: Boolean = false,
     /** Omitted (null) on save keeps the team's current value. */
     val recencyBias: com.obsidianscout.integrations.RecencyBiasSettings? = null,
     val chatEnabled: Boolean = true,
@@ -465,7 +470,8 @@ data class TeamRecord(
     val country: String? = null,
     val opr: Double? = null,
     val epa: Double? = null,
-    val exp: Double? = null,
+    @kotlinx.serialization.json.JsonNames("exp")
+    val xP: Double? = null,
     val averagePoints: Double? = null
 )
 
@@ -538,7 +544,7 @@ data class Match13PredictionDetail(
 )
 
 @Serializable
-data class Match13TeamExpDetail(
+data class Match13TeamxPDetail(
     val xpPost: Double? = null,
     val xpPre: Double? = null,
     val xAutoPost: Double? = null,
@@ -558,8 +564,10 @@ data class MatchTeamPrediction(
     val scoutedMatchesCount: Int,
     val epa: Double?,
     val opr: Double?,
-    val exp: Double? = null,
-    val match13TeamExp: Match13TeamExpDetail? = null,
+    @kotlinx.serialization.json.JsonNames("exp")
+    val xP: Double? = null,
+    @kotlinx.serialization.json.JsonNames("match13TeamExp")
+    val match13TeamxP: Match13TeamxPDetail? = null,
     val hasDiscrepancy: Boolean = false,
     /** True when [averageScoutedScore] gives recent matches more weight. */
     val recencyWeighted: Boolean = false
@@ -571,7 +579,8 @@ data class AlliancePrediction(
     val totalScoutedScore: Double,
     val totalEpa: Double,
     val totalOpr: Double,
-    val totalExp: Double = 0.0
+    @kotlinx.serialization.json.JsonNames("totalExp")
+    val totalxP: Double = 0.0
 )
 
 @Serializable
@@ -582,7 +591,8 @@ data class MatchPredictionResponse(
     val blueAlliance: AlliancePrediction,
     val useStatboticsEpa: Boolean,
     val useTbaOpr: Boolean,
-    val useMatch13Exp: Boolean = false,
+    @kotlinx.serialization.json.JsonNames("useMatch13Exp")
+    val useMatch13xP: Boolean = false,
     val match13Pred: Match13PredictionDetail? = null,
     val recencyWeighted: Boolean = false
 )
@@ -1118,10 +1128,12 @@ data class TeamValidationRecord(
     val averageScoutedScore: Double?,
     val epa: Double?,
     val opr: Double?,
-    val exp: Double? = null,
+    @kotlinx.serialization.json.JsonNames("exp")
+    val xP: Double? = null,
     val epaDiff: Double?,
     val oprDiff: Double?,
-    val expDiff: Double? = null,
+    @kotlinx.serialization.json.JsonNames("expDiff")
+    val xPDiff: Double? = null,
     val isAnomaly: Boolean,
     val anomalyReason: String? = null,
     val hasDiscrepancy: Boolean = false
@@ -1139,7 +1151,8 @@ data class ValidationSummaryResponse(
     val teamsWithAnomalies: Int,
     val useStatboticsEpa: Boolean,
     val useTbaOpr: Boolean,
-    val useMatch13Exp: Boolean = false,
+    @kotlinx.serialization.json.JsonNames("useMatch13Exp")
+    val useMatch13xP: Boolean = false,
     val threshold: Double,
     val matches: List<MatchValidationRecord>,
     val teams: List<TeamValidationRecord>

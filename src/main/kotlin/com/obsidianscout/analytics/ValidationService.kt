@@ -44,7 +44,7 @@ object ValidationService {
         return readTransaction {
             val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
             val useStatboticsEpa = !isFtc && settings.useStatboticsEpa
-            val useMatch13Exp = !isFtc && settings.useMatch13Exp
+            val useMatch13xP = !isFtc && settings.useMatch13xP
             val useTbaOpr = settings.useTbaOpr
 
             val allTeamsInEvent = TeamCacheOverrideService.teamRows(eventKeyLower, session.teamNumber, session.program)
@@ -320,7 +320,7 @@ object ValidationService {
                 val teamRow = teamInfoMap[resolvedKey] ?: teamInfoMap["$progPrefix$teamNumber"]
                 val nickname = teamRow?.get(ApiTeams.nickname) ?: teamRow?.get(ApiTeams.name) ?: "Team $teamNumber"
                 val epa = teamRow?.get(ApiTeams.epa)
-                val exp = teamRow?.get(ApiTeams.match13Exp)
+                val xP = teamRow?.get(ApiTeams.match13xP)
                 val opr = teamRow?.get(ApiTeams.opr)
 
                 val teamEntries = entriesByTeam[teamNumber] ?: emptyList()
@@ -336,8 +336,8 @@ object ValidationService {
                     round((avgScoutedScore - epa) * 10.0) / 10.0
                 } else null
 
-                val expDiff = if (avgScoutedScore != null && exp != null && useMatch13Exp && exp > 0) {
-                    round((avgScoutedScore - exp) * 10.0) / 10.0
+                val xPDiff = if (avgScoutedScore != null && xP != null && useMatch13xP && xP > 0) {
+                    round((avgScoutedScore - xP) * 10.0) / 10.0
                 } else null
 
                 val oprDiff = if (avgScoutedScore != null && opr != null && useTbaOpr && opr > 0) {
@@ -345,10 +345,10 @@ object ValidationService {
                 } else null
 
                 val isEpaAnomaly = (epaDiff != null && abs(epaDiff) >= anomalyThreshold)
-                val isExpAnomaly = (expDiff != null && abs(expDiff) >= anomalyThreshold)
+                val isxPAnomaly = (xPDiff != null && abs(xPDiff) >= anomalyThreshold)
                 val isOprAnomaly = (oprDiff != null && abs(oprDiff) >= anomalyThreshold)
                 val hasDiscrepancy = teamEntries.any { it.hasDiscrepancy }
-                val isAnomaly = isEpaAnomaly || isExpAnomaly || isOprAnomaly || hasDiscrepancy
+                val isAnomaly = isEpaAnomaly || isxPAnomaly || isOprAnomaly || hasDiscrepancy
 
                 if (isAnomaly) totalTeamsWithAnomalies++
 
@@ -357,9 +357,9 @@ object ValidationService {
                     val sign = if (epaDiff!! > 0) "+$epaDiff" else "$epaDiff"
                     anomalyReasons.add("Scouted avg (${avgScoutedScore}) deviates from EPA (${epa}) by $sign")
                 }
-                if (isExpAnomaly) {
-                    val sign = if (expDiff!! > 0) "+$expDiff" else "$expDiff"
-                    anomalyReasons.add("Scouted avg (${avgScoutedScore}) deviates from EXP (${exp}) by $sign")
+                if (isxPAnomaly) {
+                    val sign = if (xPDiff!! > 0) "+$xPDiff" else "$xPDiff"
+                    anomalyReasons.add("Scouted avg (${avgScoutedScore}) deviates from xP (${xP}) by $sign")
                 }
                 if (isOprAnomaly) {
                     val sign = if (oprDiff!! > 0) "+$oprDiff" else "$oprDiff"
@@ -377,10 +377,10 @@ object ValidationService {
                     averageScoutedScore = avgScoutedScore,
                     epa = epa,
                     opr = opr,
-                    exp = exp,
+                    xP = xP,
                     epaDiff = epaDiff,
                     oprDiff = oprDiff,
-                    expDiff = expDiff,
+                    xPDiff = xPDiff,
                     isAnomaly = isAnomaly,
                     anomalyReason = if (anomalyReasons.isNotEmpty()) anomalyReasons.joinToString("; ") else null,
                     hasDiscrepancy = hasDiscrepancy
@@ -398,7 +398,7 @@ object ValidationService {
                 teamsWithAnomalies = totalTeamsWithAnomalies,
                 useStatboticsEpa = useStatboticsEpa,
                 useTbaOpr = useTbaOpr,
-                useMatch13Exp = useMatch13Exp,
+                useMatch13xP = useMatch13xP,
                 threshold = anomalyThreshold,
                 matches = matchRecords,
                 teams = teamRecords

@@ -67,7 +67,7 @@ async function loadPredictorData() {
         }
 
         const effectiveUseEpa = !isFtc && settings.useStatboticsEpa;
-        const effectiveUseExp = !isFtc && settings.useMatch13Exp;
+        const effectiveUsexP = !isFtc && (settings.useMatch13xP ?? settings.useMatch13Exp);
         const effectiveUseOpr = settings.useTbaOpr;
 
         // Apply initial visibility & labels to DOM elements even before a match is selected
@@ -82,15 +82,15 @@ async function loadPredictorData() {
             else epaCard.classList.remove("hidden");
         }
 
-        const expComp = document.getElementById("exp-comparison");
-        const expCard = document.getElementById("spotlight-exp-card");
-        if (expComp) {
-            if (!effectiveUseExp) expComp.classList.add("hidden");
-            else expComp.classList.remove("hidden");
+        const xPComp = document.getElementById("xP-comparison");
+        const xPCard = document.getElementById("spotlight-xP-card");
+        if (xPComp) {
+            if (!effectiveUsexP) xPComp.classList.add("hidden");
+            else xPComp.classList.remove("hidden");
         }
-        if (expCard) {
-            if (!effectiveUseExp) expCard.classList.add("hidden");
-            else expCard.classList.remove("hidden");
+        if (xPCard) {
+            if (!effectiveUsexP) xPCard.classList.add("hidden");
+            else xPCard.classList.remove("hidden");
         }
 
         const oprComp = document.getElementById("opr-comparison");
@@ -120,7 +120,7 @@ async function loadPredictorData() {
             }
         }
 
-        const activeSourcesCount = (effectiveUseEpa ? 1 : 0) + (effectiveUseExp ? 1 : 0) + (effectiveUseOpr ? 1 : 0);
+        const activeSourcesCount = (effectiveUseEpa ? 1 : 0) + (effectiveUsexP ? 1 : 0) + (effectiveUseOpr ? 1 : 0);
         if (activeSourcesCount > 0) {
             datasourceField.classList.remove("hidden");
             datasourceSelect.innerHTML = "";
@@ -144,11 +144,11 @@ async function loadPredictorData() {
                 datasourceSelect.appendChild(optEpa);
             }
 
-            if (effectiveUseExp) {
-                const optExp = document.createElement("option");
-                optExp.value = "exp";
-                optExp.textContent = t('alliance-selection.match13_exp', "Match 13 xP");
-                datasourceSelect.appendChild(optExp);
+            if (effectiveUsexP) {
+                const optxP = document.createElement("option");
+                optxP.value = "xP";
+                optxP.textContent = t('alliance-selection.match13_xP', "Match 13 xP");
+                datasourceSelect.appendChild(optxP);
             }
 
             if (effectiveUseOpr) {
@@ -347,22 +347,22 @@ function renderPrediction(data) {
         ? Obsidianscout.getProgram() === "FTC" 
         : (currentSettings && currentSettings.program === "FTC");
     const effectiveUseEpa = !isFtc && currentSettings && currentSettings.useStatboticsEpa;
-    const effectiveUseExp = !isFtc && currentSettings && currentSettings.useMatch13Exp;
+    const effectiveUsexP = !isFtc && currentSettings && (currentSettings.useMatch13xP ?? currentSettings.useMatch13Exp);
     const effectiveUseOpr = currentSettings && currentSettings.useTbaOpr;
 
     const datasourceSelect = document.getElementById("datasource-select");
-    const selectedSource = (currentSettings && (effectiveUseEpa || effectiveUseExp || effectiveUseOpr) && datasourceSelect) 
+    const selectedSource = (currentSettings && (effectiveUseEpa || effectiveUsexP || effectiveUseOpr) && datasourceSelect) 
         ? datasourceSelect.value 
         : "scouted";
 
     const scoutedComp = document.getElementById("scouted-comparison");
     const epaComp = document.getElementById("epa-comparison");
-    const expComp = document.getElementById("exp-comparison");
+    const xPComp = document.getElementById("xP-comparison");
     const oprComp = document.getElementById("opr-comparison");
 
     const scoutedCard = document.getElementById("spotlight-scouted-card");
     const epaCard = document.getElementById("spotlight-epa-card");
-    const expCard = document.getElementById("spotlight-exp-card");
+    const xPCard = document.getElementById("spotlight-xP-card");
     const oprCard = document.getElementById("spotlight-opr-card");
 
     // Update OPR comparison title for FTC vs FRC
@@ -389,21 +389,21 @@ function renderPrediction(data) {
         renderSpotlight("spotlight-epa-winner", "spotlight-epa-subtext", redEpa, blueEpa, "EPA");
     }
 
-    // 3. EXP Comparison Bar
-    if (effectiveUseExp) {
-        const redExp = red.totalExp || 0.0;
-        const blueExp = blue.totalExp || 0.0;
-        const lblExpRed = document.getElementById("lbl-exp-red");
-        const lblExpBlue = document.getElementById("lbl-exp-blue");
-        if (lblExpRed) lblExpRed.textContent = `Red: ${redExp.toFixed(1)}`;
-        if (lblExpBlue) lblExpBlue.textContent = `Blue: ${blueExp.toFixed(1)}`;
-        updateBar("bar-exp-red", "bar-exp-blue", redExp, blueExp);
+    // 3. xP Comparison Bar
+    if (effectiveUsexP) {
+        const redxP = red.totalxP ?? red.totalExp ?? 0.0;
+        const bluexP = blue.totalxP ?? blue.totalExp ?? 0.0;
+        const lblxPRed = document.getElementById("lbl-xP-red");
+        const lblxPBlue = document.getElementById("lbl-xP-blue");
+        if (lblxPRed) lblxPRed.textContent = `Red: ${redxP.toFixed(1)}`;
+        if (lblxPBlue) lblxPBlue.textContent = `Blue: ${bluexP.toFixed(1)}`;
+        updateBar("bar-xP-red", "bar-xP-blue", redxP, bluexP);
         if (data.match13Pred && data.match13Pred.winProb !== null && data.match13Pred.winProb !== undefined) {
             const winProb = data.match13Pred.winProb;
-            const subtext = `Win Prob: ${(winProb * 100).toFixed(1)}% Red / ${((1 - winProb) * 100).toFixed(1)}% Blue (Diff: ${Math.abs(redExp - blueExp).toFixed(1)})`;
-            renderSpotlight("spotlight-exp-winner", "spotlight-exp-subtext", redExp, blueExp, "EXP", subtext);
+            const subtext = `Win Prob: ${(winProb * 100).toFixed(1)}% Red / ${((1 - winProb) * 100).toFixed(1)}% Blue (Diff: ${Math.abs(redxP - bluexP).toFixed(1)})`;
+            renderSpotlight("spotlight-xP-winner", "spotlight-xP-subtext", redxP, bluexP, "xP", subtext);
         } else {
-            renderSpotlight("spotlight-exp-winner", "spotlight-exp-subtext", redExp, blueExp, "EXP");
+            renderSpotlight("spotlight-xP-winner", "spotlight-xP-subtext", redxP, bluexP, "xP");
         }
     }
 
@@ -428,12 +428,12 @@ function renderPrediction(data) {
             epaComp.classList.add("hidden");
             epaCard.classList.add("hidden");
         }
-        if (effectiveUseExp && expComp && expCard) {
-            expComp.classList.remove("hidden");
-            expCard.classList.remove("hidden");
-        } else if (expComp && expCard) {
-            expComp.classList.add("hidden");
-            expCard.classList.add("hidden");
+        if (effectiveUsexP && xPComp && xPCard) {
+            xPComp.classList.remove("hidden");
+            xPCard.classList.remove("hidden");
+        } else if (xPComp && xPCard) {
+            xPComp.classList.add("hidden");
+            xPCard.classList.add("hidden");
         }
         if (effectiveUseOpr) {
             oprComp.classList.remove("hidden");
@@ -450,8 +450,8 @@ function renderPrediction(data) {
         scoutedCard.classList.remove("hidden");
         epaComp.classList.add("hidden");
         epaCard.classList.add("hidden");
-        if (expComp) expComp.classList.add("hidden");
-        if (expCard) expCard.classList.add("hidden");
+        if (xPComp) xPComp.classList.add("hidden");
+        if (xPCard) xPCard.classList.add("hidden");
         oprComp.classList.add("hidden");
         oprCard.classList.add("hidden");
 
@@ -462,8 +462,8 @@ function renderPrediction(data) {
         scoutedCard.classList.add("hidden");
         epaComp.classList.remove("hidden");
         epaCard.classList.remove("hidden");
-        if (expComp) expComp.classList.add("hidden");
-        if (expCard) expCard.classList.add("hidden");
+        if (xPComp) xPComp.classList.add("hidden");
+        if (xPCard) xPCard.classList.add("hidden");
         oprComp.classList.add("hidden");
         oprCard.classList.add("hidden");
 
@@ -471,27 +471,27 @@ function renderPrediction(data) {
         const blueEpa = blue.totalEpa;
         document.getElementById("red-total-scouted").textContent = `${redEpa.toFixed(1)} EPA`;
         document.getElementById("blue-total-scouted").textContent = `${blueEpa.toFixed(1)} EPA`;
-    } else if (selectedSource === "exp" && effectiveUseExp) {
+    } else if ((selectedSource === "xP" || selectedSource === "exp") && effectiveUsexP) {
         scoutedComp.classList.add("hidden");
         scoutedCard.classList.add("hidden");
         epaComp.classList.add("hidden");
         epaCard.classList.add("hidden");
-        if (expComp) expComp.classList.remove("hidden");
-        if (expCard) expCard.classList.remove("hidden");
+        if (xPComp) xPComp.classList.remove("hidden");
+        if (xPCard) xPCard.classList.remove("hidden");
         oprComp.classList.add("hidden");
         oprCard.classList.add("hidden");
 
-        const redExp = red.totalExp || 0.0;
-        const blueExp = blue.totalExp || 0.0;
-        document.getElementById("red-total-scouted").textContent = `${redExp.toFixed(1)} EXP`;
-        document.getElementById("blue-total-scouted").textContent = `${blueExp.toFixed(1)} EXP`;
+        const redxP = red.totalxP ?? red.totalExp ?? 0.0;
+        const bluexP = blue.totalxP ?? blue.totalExp ?? 0.0;
+        document.getElementById("red-total-scouted").textContent = `${redxP.toFixed(1)} xP`;
+        document.getElementById("blue-total-scouted").textContent = `${bluexP.toFixed(1)} xP`;
     } else if (selectedSource === "opr" && effectiveUseOpr) {
         scoutedComp.classList.add("hidden");
         scoutedCard.classList.add("hidden");
         epaComp.classList.add("hidden");
         epaCard.classList.add("hidden");
-        if (expComp) expComp.classList.add("hidden");
-        if (expCard) expCard.classList.add("hidden");
+        if (xPComp) xPComp.classList.add("hidden");
+        if (xPCard) xPCard.classList.add("hidden");
         oprComp.classList.remove("hidden");
         oprCard.classList.remove("hidden");
 
@@ -502,8 +502,8 @@ function renderPrediction(data) {
     }
 
     // 5. Build Team Breakdown Lists
-    renderTeamList("red-team-list", red.teams, selectedSource, effectiveUseEpa, effectiveUseExp, effectiveUseOpr);
-    renderTeamList("blue-team-list", blue.teams, selectedSource, effectiveUseEpa, effectiveUseExp, effectiveUseOpr);
+    renderTeamList("red-team-list", red.teams, selectedSource, effectiveUseEpa, effectiveUsexP, effectiveUseOpr);
+    renderTeamList("blue-team-list", blue.teams, selectedSource, effectiveUseEpa, effectiveUsexP, effectiveUseOpr);
 }
 
 function updateBar(redBarId, blueBarId, redVal, blueVal) {
@@ -550,7 +550,7 @@ function renderSpotlight(winnerId, subtextId, redVal, blueVal, label, customSubt
     }
 }
 
-function renderTeamList(listId, teams, selectedSource, effectiveUseEpa, effectiveUseExp, effectiveUseOpr) {
+function renderTeamList(listId, teams, selectedSource, effectiveUseEpa, effectiveUsexP, effectiveUseOpr) {
     const list = document.getElementById(listId);
     list.innerHTML = "";
 
@@ -570,20 +570,23 @@ function renderTeamList(listId, teams, selectedSource, effectiveUseEpa, effectiv
             if (t.epa !== null && effectiveUseEpa) {
                 metricsHtml += `<span class="metric-pill">EPA: ${t.epa.toFixed(1)}</span>`;
             }
-            if (t.exp !== null && t.exp !== undefined && effectiveUseExp) {
-                metricsHtml += `<span class="metric-pill">EXP: ${t.exp.toFixed(1)}</span>`;
+            const xPVal = t.xP ?? t.exp;
+            if (xPVal !== null && xPVal !== undefined && effectiveUsexP) {
+                metricsHtml += `<span class="metric-pill">xP: ${xPVal.toFixed(1)}</span>`;
             }
             if (t.opr !== null && effectiveUseOpr) {
                 metricsHtml += `<span class="metric-pill">OPR: ${t.opr.toFixed(1)}</span>`;
             }
-        } else if (selectedSource === "exp" && effectiveUseExp) {
-            primaryLabel = t.exp !== null && t.exp !== undefined 
-                ? `${t.exp.toFixed(1)} EXP` 
-                : "No EXP data";
-            if (t.match13TeamExp) {
-                const auto = t.match13TeamExp.xAutoPost !== null ? t.match13TeamExp.xAutoPost.toFixed(1) : "-";
-                const tele = t.match13TeamExp.xTelePost !== null ? t.match13TeamExp.xTelePost.toFixed(1) : "-";
-                const end = t.match13TeamExp.xEndPost !== null ? t.match13TeamExp.xEndPost.toFixed(1) : "-";
+        } else if ((selectedSource === "xP" || selectedSource === "exp") && effectiveUsexP) {
+            const xPVal = t.xP ?? t.exp;
+            primaryLabel = xPVal !== null && xPVal !== undefined 
+                ? `${xPVal.toFixed(1)} xP` 
+                : "No xP data";
+            const match13Detail = t.match13TeamxP ?? t.match13TeamExp;
+            if (match13Detail) {
+                const auto = match13Detail.xAutoPost !== null ? match13Detail.xAutoPost.toFixed(1) : "-";
+                const tele = match13Detail.xTelePost !== null ? match13Detail.xTelePost.toFixed(1) : "-";
+                const end = match13Detail.xEndPost !== null ? match13Detail.xEndPost.toFixed(1) : "-";
                 metricsHtml += `<span class="metric-pill" title="Auto: ${auto}, Teleop: ${tele}, Endgame: ${end}">Auto: ${auto} | Tele: ${tele} | End: ${end}</span>`;
             }
             
@@ -591,16 +594,17 @@ function renderTeamList(listId, teams, selectedSource, effectiveUseEpa, effectiv
             if (t.averageScoutedScore !== null) {
                 metricsHtml += `<span class="metric-pill">Scouted: ${t.averageScoutedScore.toFixed(1)} pts</span>`;
             }
-            if (t.exp !== null && t.exp !== undefined && effectiveUseExp) {
-                metricsHtml += `<span class="metric-pill">EXP: ${t.exp.toFixed(1)}</span>`;
+            if (xPVal !== null && xPVal !== undefined && effectiveUsexP) {
+                metricsHtml += `<span class="metric-pill">xP: ${xPVal.toFixed(1)}</span>`;
             }
             if (t.opr !== null && effectiveUseOpr) {
                 metricsHtml += `<span class="metric-pill">OPR: ${t.opr.toFixed(1)}</span>`;
             }
-        } else if (selectedSource === "exp" && effectiveUseExp) {
-            primaryLabel = t.exp !== null && t.exp !== undefined
-                ? `${t.exp.toFixed(1)} EXP` 
-                : "No EXP data";
+        } else if ((selectedSource === "xP" || selectedSource === "exp") && effectiveUsexP) {
+            const xPVal = t.xP ?? t.exp;
+            primaryLabel = xPVal !== null && xPVal !== undefined
+                ? `${xPVal.toFixed(1)} xP` 
+                : "No xP data";
             
             metricsHtml += `<span class="metric-pill">${t.scoutedMatchesCount} matches</span>`;
             if (t.averageScoutedScore !== null) {
@@ -624,8 +628,9 @@ function renderTeamList(listId, teams, selectedSource, effectiveUseEpa, effectiv
             if (t.epa !== null && effectiveUseEpa) {
                 metricsHtml += `<span class="metric-pill">EPA: ${t.epa.toFixed(1)}</span>`;
             }
-            if (t.exp !== null && t.exp !== undefined && effectiveUseExp) {
-                metricsHtml += `<span class="metric-pill">EXP: ${t.exp.toFixed(1)}</span>`;
+            const xPVal = t.xP ?? t.exp;
+            if (xPVal !== null && xPVal !== undefined && effectiveUsexP) {
+                metricsHtml += `<span class="metric-pill">xP: ${xPVal.toFixed(1)}</span>`;
             }
         }
 

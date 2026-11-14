@@ -40,6 +40,14 @@ object SqliteSchemaUpgrader {
                         stmt.executeUpdate(sql)
                         added.add("$tableName.${column.name}")
                         consoleLog.warn("[Database] Added missing SQLite column $tableName.${column.name}")
+                        if (tableName.equals("api_teams", ignoreCase = true) &&
+                            column.name.equals("match13_xp", ignoreCase = true) &&
+                            existing.contains("match13_exp")
+                        ) {
+                            stmt.executeUpdate(
+                                "UPDATE \"$tableName\" SET \"match13_xp\" = \"match13_exp\" WHERE \"match13_xp\" IS NULL AND \"match13_exp\" IS NOT NULL"
+                            )
+                        }
                     } catch (e: Exception) {
                         consoleLog.error("[Database] Failed to add SQLite column $tableName.${column.name}: ${e.message}")
                     }

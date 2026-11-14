@@ -24,7 +24,7 @@ object Match13Compare {
 
     suspend fun compare(session: UserSession, teamNumbers: List<Int>, eventKeyParam: String?): TeamComparisonResponse {
         val settings = AllianceService.getEffectiveSettings(session.teamNumber, session.program)
-        if (settings.program == "FTC" || !settings.useMatch13Exp) {
+        if (settings.program == "FTC" || !settings.useMatch13xP) {
             return TeamComparisonResponse(source = SOURCE, note = "Match 13 xP is turned off for this team.")
         }
         val eventKey = eventKeyParam?.trim()?.ifBlank { null }
@@ -40,7 +40,7 @@ object Match13Compare {
             teamNumbers,
             history,
             nicknames = teamRows.mapValues { (_, row) -> row[ApiTeams.nickname] ?: row[ApiTeams.name] },
-            storedExp = teamRows.mapValues { (_, row) -> row[ApiTeams.match13Exp] },
+            storedxP = teamRows.mapValues { (_, row) -> row[ApiTeams.match13xP] },
         )
         return response.copy(eventKey = eventKey)
     }
@@ -50,7 +50,7 @@ object Match13Compare {
         teamNumbers: List<Int>,
         history: List<JsonElement>,
         nicknames: Map<Int, String?> = emptyMap(),
-        storedExp: Map<Int, Double?> = emptyMap(),
+        storedxP: Map<Int, Double?> = emptyMap(),
     ): TeamComparisonResponse {
         var anyData = false
         val teams = teamNumbers.associate { team ->
@@ -79,7 +79,7 @@ object Match13Compare {
                 teamNumber = team,
                 nickname = nicknames[team],
                 matchesScouted = played.size,
-                exp = metrics["xp_current"] ?: storedExp[team],
+                xP = metrics["xp_current"] ?: storedxP[team],
                 metrics = metrics,
             )
         }
@@ -121,7 +121,7 @@ object Match13Compare {
         }
     }
 
-    private fun total(data: JsonObject): Double = data.firstNum("xpPost", "xp", "xpPre", "exp", "total") ?: 0.0
+    private fun total(data: JsonObject): Double = data.firstNum("xpPost", "xp", "xpPre", "xP", "exp", "total") ?: 0.0
 
     private fun JsonObject.num(key: String): Double? = (this[key] as? JsonPrimitive)?.content?.toDoubleOrNull()
 

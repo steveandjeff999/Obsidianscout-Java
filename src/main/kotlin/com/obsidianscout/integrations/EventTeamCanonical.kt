@@ -117,7 +117,7 @@ object EventTeamCanonical {
             it[ApiTeams.country] = text(ApiTeams.country)
             it[ApiTeams.opr] = number(ApiTeams.opr)
             it[ApiTeams.epa] = number(ApiTeams.epa)
-            it[ApiTeams.match13Exp] = number(ApiTeams.match13Exp)
+            it[ApiTeams.match13xP] = number(ApiTeams.match13xP)
         }
     }
 

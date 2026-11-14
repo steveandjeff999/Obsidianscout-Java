@@ -1,3 +1,5 @@
+@file:OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+
 package com.obsidianscout.analytics
 
 import com.obsidianscout.integrations.TeamCacheOverrideService
@@ -58,7 +60,8 @@ data class TeamComparisonData(
     val nickname: String? = null,
     val matchesScouted: Int = 0,
     val epa: Double? = null,
-    val exp: Double? = null,
+    @kotlinx.serialization.json.JsonNames("exp")
+    val xP: Double? = null,
     val opr: Double? = null,
     val avgTotalPoints: Double = 0.0,
     val avgAutoPoints: Double = 0.0,
@@ -195,10 +198,10 @@ object AnalyticsService {
             val teamRow = teamInfoMap[teamNum]
             val nickname = teamRow?.get(ApiTeams.nickname) ?: teamRow?.get(ApiTeams.name)
             val epa = teamRow?.get(ApiTeams.epa)
-            val exp = teamRow?.get(ApiTeams.match13Exp)
+            val xP = teamRow?.get(ApiTeams.match13xP)
             val opr = teamRow?.get(ApiTeams.opr)
             if (epa != null) metrics["epa"] = epa
-            if (exp != null) metrics["exp"] = exp
+            if (xP != null) metrics["xP"] = xP
             if (opr != null) metrics["opr"] = opr
 
             val customWidgets = generate(config, entries).widgets
@@ -208,7 +211,7 @@ object AnalyticsService {
                 nickname = nickname,
                 matchesScouted = count,
                 epa = epa,
-                exp = exp,
+                xP = xP,
                 opr = opr,
                 avgTotalPoints = avgTotal,
                 avgAutoPoints = avgAuto,
@@ -229,7 +232,7 @@ object AnalyticsService {
         metricDefs.add(TeamComparisonMetric("max_points", "Max Match Points", "overview", "number", "pts"))
         metricDefs.add(TeamComparisonMetric("matches_scouted", "Matches Scouted", "overview", "number", "matches"))
         metricDefs.add(TeamComparisonMetric("epa", "Statbotics EPA", "overview", "number", "EPA"))
-        metricDefs.add(TeamComparisonMetric("exp", "Match 13 xP", "overview", "number", "xP"))
+        metricDefs.add(TeamComparisonMetric("xP", "Match 13 xP", "overview", "number", "xP"))
         metricDefs.add(TeamComparisonMetric("opr", "TBA OPR", "overview", "number", "OPR"))
 
         config.fields.forEach { field ->

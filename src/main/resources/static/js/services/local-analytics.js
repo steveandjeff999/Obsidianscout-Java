@@ -429,17 +429,17 @@ export function buildComparison({ config, entries, teams, teamNumbers, eventKey:
         const row = teamInfo.get(teamNum);
         const num = (v) => (typeof v === "number" ? v : null);
         const epa = row ? num(row.epa) : null;
-        const exp = row ? num(row.exp) : null;
+        const xP = row ? num(row.xP ?? row.exp) : null;
         const opr = row ? num(row.opr) : null;
         if (epa !== null) metrics.epa = epa;
-        if (exp !== null) metrics.exp = exp;
+        if (xP !== null) metrics.xP = xP;
         if (opr !== null) metrics.opr = opr;
 
         teamsOut[String(teamNum)] = {
             teamNumber: teamNum,
             nickname: row ? (row.nickname ?? row.name ?? null) : null,
             matchesScouted: list.length,
-            epa, exp, opr,
+            epa, xP, opr,
             avgTotalPoints: avgTotal,
             avgAutoPoints: avgAuto,
             avgTeleopPoints: avgTeleop,
@@ -460,7 +460,7 @@ export function buildComparison({ config, entries, teams, teamNumbers, eventKey:
         def("max_points", "Max Match Points", "overview", "number", "pts"),
         def("matches_scouted", "Matches Scouted", "overview", "number", "matches"),
         def("epa", "Statbotics EPA", "overview", "number", "EPA"),
-        def("exp", "Match 13 xP", "overview", "number", "xP"),
+        def("xP", "Match 13 xP", "overview", "number", "xP"),
         def("opr", "TBA OPR", "overview", "number", "OPR")
     ];
     for (const field of fields) {
@@ -525,7 +525,7 @@ export function buildDataset({ matchConfig, pitConfig, qualConfig, matchEntries,
             state: t.state ?? null,
             opr: t.opr ?? null,
             epa: t.epa ?? null,
-            exp: t.exp ?? null
+            xP: t.xP ?? t.exp ?? null
         });
     }
 
@@ -552,7 +552,7 @@ export function buildDataset({ matchConfig, pitConfig, qualConfig, matchEntries,
     fields.push(meta("calc_endgame_score", "Endgame Score", "number", "calculated", "Phase Scores"));
     if (!isFtc) {
         fields.push(meta("statbotics_epa", "EPA", "number", "calculated", "Statistics"));
-        fields.push(meta("match13_exp", "EXP", "number", "calculated", "Statistics"));
+        fields.push(meta("match13_xP", "xP", "number", "calculated", "Statistics"));
     }
     fields.push(meta("tba_opr", isFtc ? "FTC Scout OPR" : "OPR", "number", "calculated", "Statistics"));
     for (const field of (pitConfig && pitConfig.fields) || []) {
@@ -566,7 +566,7 @@ export function buildDataset({ matchConfig, pitConfig, qualConfig, matchEntries,
     }
 
     const byTeam = (key) => new Map(teamsList.map((t) => [t.teamNumber, t[key]]));
-    const oprMap = byTeam("opr"), epaMap = byTeam("epa"), expMap = byTeam("exp");
+    const oprMap = byTeam("opr"), epaMap = byTeam("epa"), xPMap = byTeam("xP");
     const configFields = matchConfig.fields || [];
 
     const flattenedMatches = matches.map((entry) => {
@@ -584,7 +584,7 @@ export function buildDataset({ matchConfig, pitConfig, qualConfig, matchEntries,
             calc_teleop_score: scoreSection(matchConfig, entry, "teleop"),
             calc_endgame_score: scoreSection(matchConfig, entry, "endgame", "climb"),
             statbotics_epa: epaMap.get(t) ?? 0,
-            match13_exp: expMap.get(t) ?? 0,
+            match13_xP: xPMap.get(t) ?? 0,
             tba_opr: oprMap.get(t) ?? 0,
             hasDiscrepancy: !!entry.hasDiscrepancy
         };

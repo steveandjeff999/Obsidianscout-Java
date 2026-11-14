@@ -1,3 +1,5 @@
+@file:OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+
 package com.obsidianscout.analytics
 
 import com.obsidianscout.integrations.TeamCacheOverrideService
@@ -79,7 +81,8 @@ data class TeamAnalyticsSummary(
     val state: String? = null,
     val opr: Double? = null,
     val epa: Double? = null,
-    val exp: Double? = null
+    @kotlinx.serialization.json.JsonNames("exp")
+    val xP: Double? = null
 )
 
 @Serializable
@@ -370,7 +373,7 @@ object AnalyticsReportService {
                     state = row[ApiTeams.state],
                     opr = row[ApiTeams.opr],
                     epa = row[ApiTeams.epa],
-                    exp = row[ApiTeams.match13Exp]
+                    xP = row[ApiTeams.match13xP]
                 )
             }.distinctBy { it.teamNumber }
         }
@@ -423,7 +426,7 @@ object AnalyticsReportService {
         fields.add(FieldMetadata("calc_endgame_score", "Endgame Score", "number", "calculated", "Phase Scores"))
         if (!isFtc) {
             fields.add(FieldMetadata("statbotics_epa", "EPA", "number", "calculated", "Statistics"))
-            fields.add(FieldMetadata("match13_exp", "EXP", "number", "calculated", "Statistics"))
+            fields.add(FieldMetadata("match13_xP", "xP", "number", "calculated", "Statistics"))
         }
         fields.add(FieldMetadata("tba_opr", if (isFtc) "FTC Scout OPR" else "OPR", "number", "calculated", "Statistics"))
 
@@ -460,7 +463,7 @@ object AnalyticsReportService {
 
         val teamOprMap = teamsList.associate { it.teamNumber to it.opr }
         val teamEpaMap = teamsList.associate { it.teamNumber to it.epa }
-        val teamExpMap = teamsList.associate { it.teamNumber to it.exp }
+        val teamxPMap = teamsList.associate { it.teamNumber to it.xP }
 
         // Transform and flatten match records
         val flattenedMatches = matchEntries.map { entry ->
@@ -483,7 +486,7 @@ object AnalyticsReportService {
                 put("calc_teleop_score", teleopScore)
                 put("calc_endgame_score", endgameScore)
                 put("statbotics_epa", teamEpaMap[tNum] ?: 0.0)
-                put("match13_exp", teamExpMap[tNum] ?: 0.0)
+                put("match13_xP", teamxPMap[tNum] ?: 0.0)
                 put("tba_opr", teamOprMap[tNum] ?: 0.0)
                 put("hasDiscrepancy", entry.hasDiscrepancy)
 

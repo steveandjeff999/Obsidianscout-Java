@@ -451,7 +451,7 @@ object RankingProjectionService {
 
         val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
         val useEpa = !isFtc && settings.useStatboticsEpa
-        val useExp = !isFtc && settings.useMatch13Exp
+        val usexP = !isFtc && settings.useMatch13xP
         val useOpr = settings.useTbaOpr
 
         val teams: List<TeamRecord> = IntegrationService.listTeams(eventKey, session)
@@ -485,14 +485,14 @@ object RankingProjectionService {
         // Same blend as the alliance-selection "Weighted" metric.
         val metrics = mutableListOf("Scouted")
         if (useEpa) metrics += "EPA"
-        if (useExp) metrics += "xP"
+        if (usexP) metrics += "xP"
         if (useOpr) metrics += if (isFtc) "FTC Scout OPR" else "OPR"
         val strengths = teams.mapNotNull { t ->
             var num = 0.0
             var den = 0.0
             t.averagePoints?.let { num += it; den += 1.0 }
             if (useEpa) t.epa?.let { num += it * 0.8; den += 0.8 }
-            if (useExp) t.exp?.let { num += it * 0.8; den += 0.8 }
+            if (usexP) t.xP?.let { num += it * 0.8; den += 0.8 }
             if (useOpr) t.opr?.let { num += it * 0.6; den += 0.6 }
             if (den > 0) t.teamNumber to num / den else null
         }.toMap()

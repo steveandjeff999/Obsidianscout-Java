@@ -1,3 +1,5 @@
+@file:OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+
 package com.obsidianscout.integrations
 
 import org.jetbrains.exposed.v1.core.*
@@ -236,7 +238,8 @@ data class ApiSettings(
     val timezone: String = "UTC",
     val useStatboticsEpa: Boolean = false,
     val useTbaOpr: Boolean = false,
-    val useMatch13Exp: Boolean = false,
+    @kotlinx.serialization.json.JsonNames("useMatch13Exp", "use_match13_exp", "use_match13_xP")
+    val useMatch13xP: Boolean = false,
     val recencyBias: RecencyBiasSettings = RecencyBiasSettings(),
     val chatEnabled: Boolean = true,
     /** Match predictions game: scouts call each match's winner and compete on a leaderboard. Off until an admin enables it. */
@@ -516,7 +519,7 @@ object SettingsService {
         }
         val isFtc = settings.program.equals("FTC", ignoreCase = true)
         val normalizedUseStatboticsEpa = if (isFtc) false else settings.useStatboticsEpa
-        val normalizedUseMatch13Exp = if (isFtc) false else settings.useMatch13Exp
+        val normalizedUseMatch13xP = if (isFtc) false else settings.useMatch13xP
         val rawStatboticsUrl = settings.statboticsBaseUrl.trim()
         val statboticsUrl = (if (rawStatboticsUrl.isBlank()) "https://api.statbotics.io" else rawStatboticsUrl).removeSuffix("/")
         val rawMatch13Url = settings.match13BaseUrl.trim()
@@ -527,7 +530,7 @@ object SettingsService {
             eventKey = resolvedKey,
             timezone = settings.timezone.ifBlank { "UTC" },
             useStatboticsEpa = normalizedUseStatboticsEpa,
-            useMatch13Exp = normalizedUseMatch13Exp,
+            useMatch13xP = normalizedUseMatch13xP,
             recencyBias = settings.recencyBias.normalized(),
             scoutPages = normalizedScoutPages,
             analyticsPages = normalizedAnalyticsPages,

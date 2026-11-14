@@ -348,7 +348,7 @@ object IntegrationService {
                             it[ApiTeams.country] = incoming.country.clipTeamLocation()
                             it[ApiTeams.opr] = incoming.opr
                             it[ApiTeams.epa] = incoming.epa
-                            it[ApiTeams.match13Exp] = incoming.exp
+                            it[ApiTeams.match13xP] = incoming.xP
                             it[ApiTeams.dataJson] = incoming.dataJson
                             it[ApiTeams.updatedAt] = now
                         }
@@ -369,8 +369,8 @@ object IntegrationService {
                             if (team.epa != null) {
                                 it[ApiTeams.epa] = team.epa
                             }
-                            if (team.exp != null) {
-                                it[ApiTeams.match13Exp] = team.exp
+                            if (team.xP != null) {
+                                it[ApiTeams.match13xP] = team.xP
                             }
                             it[ApiTeams.dataJson] = team.dataJson
                             it[ApiTeams.updatedAt] = now
@@ -446,7 +446,7 @@ object IntegrationService {
         country = row[ApiTeams.country],
         opr = incoming.opr,
         epa = incoming.epa,
-        exp = incoming.exp,
+        xP = incoming.xP,
         dataJson = row[ApiTeams.dataJson],
         source = teamSourceOf(row[ApiTeams.dataJson])
     )
@@ -460,7 +460,7 @@ object IntegrationService {
             existing[ApiTeams.country] != team.country.clipTeamLocation() ||
             (team.opr != null && existing[ApiTeams.opr] != team.opr) ||
             (team.epa != null && existing[ApiTeams.epa] != team.epa) ||
-            (team.exp != null && existing[ApiTeams.match13Exp] != team.exp) ||
+            (team.xP != null && existing[ApiTeams.match13xP] != team.xP) ||
             existing[ApiTeams.dataJson] != team.dataJson
 
     /**
@@ -481,16 +481,16 @@ object IntegrationService {
         }
         val tbaEnabled = settings.apiKeys.tbaKey.isNotBlank()
         val statboticsEnabled = !tbaOnly && settings.useStatboticsEpa
-        val match13Enabled = !tbaOnly && settings.useMatch13Exp && settings.apiKeys.match13Key.isNotBlank()
+        val match13Enabled = !tbaOnly && settings.useMatch13xP && settings.apiKeys.match13Key.isNotBlank()
 
-        val (oprs, epas, exps) = coroutineScope {
+        val (oprs, epas, xPs) = coroutineScope {
             val oprsDeferred = if (tbaEnabled) async { fetchTbaOprs(settings, eventKey) } else null
             val epasDeferred = if (statboticsEnabled) async { fetchStatboticsEpas(settings, eventKey) } else null
-            val expsDeferred = if (match13Enabled) async { fetchMatch13Exps(settings, eventKey) } else null
-            Triple(oprsDeferred?.await(), epasDeferred?.await(), expsDeferred?.await())
+            val xPsDeferred = if (match13Enabled) async { fetchMatch13xPs(settings, eventKey) } else null
+            Triple(oprsDeferred?.await(), epasDeferred?.await(), xPsDeferred?.await())
         }
 
-        if (oprs == null && epas == null && exps == null) {
+        if (oprs == null && epas == null && xPs == null) {
             return 0
         }
         val now = Instant.now()
@@ -501,12 +501,12 @@ object IntegrationService {
                     val teamKey = row[ApiTeams.teamKey]
                     val opr = oprs?.get(teamKey)
                     val epa = epas?.get(teamKey)
-                    val exp = exps?.get(teamKey)
+                    val xP = xPs?.get(teamKey)
                     // Only stats that actually moved count; unchanged rows skip the write.
                     val hasOpr = oprs != null && oprs.containsKey(teamKey) && row[ApiTeams.opr] != opr
                     val hasEpa = epas != null && epas.containsKey(teamKey) && row[ApiTeams.epa] != epa
-                    val hasExp = exps != null && exps.containsKey(teamKey) && row[ApiTeams.match13Exp] != exp
-                    if (hasOpr || hasEpa || hasExp) {
+                    val hasxP = xPs != null && xPs.containsKey(teamKey) && row[ApiTeams.match13xP] != xP
+                    if (hasOpr || hasEpa || hasxP) {
                         ApiTeams.update({ ApiTeams.id eq row[ApiTeams.id] }) {
                             if (hasOpr) {
                                 it[ApiTeams.opr] = opr
@@ -514,8 +514,8 @@ object IntegrationService {
                             if (hasEpa) {
                                 it[ApiTeams.epa] = epa
                             }
-                            if (hasExp) {
-                                it[ApiTeams.match13Exp] = exp
+                            if (hasxP) {
+                                it[ApiTeams.match13xP] = xP
                             }
                             it[ApiTeams.updatedAt] = now
                         }
@@ -523,7 +523,7 @@ object IntegrationService {
                 }
             }
         }
-        return maxOf(oprs?.size ?: 0, epas?.size ?: 0, exps?.size ?: 0)
+        return maxOf(oprs?.size ?: 0, epas?.size ?: 0, xPs?.size ?: 0)
     }
 
     private val lastOnDemandStatsSync = java.util.concurrent.ConcurrentHashMap<String, Instant>()
@@ -787,7 +787,7 @@ object IntegrationService {
                     country = row[ApiTeams.country],
                     opr = row[ApiTeams.opr],
                     epa = row[ApiTeams.epa],
-                    exp = row[ApiTeams.match13Exp],
+                    xP = row[ApiTeams.match13xP],
                     averagePoints = avgScore
                 )
             }
@@ -1822,7 +1822,7 @@ object IntegrationService {
         val (oprs, epaHistory, match13History) = coroutineScope {
             val oprsDeferred = async { fetchTbaOprs(settings, normalizedKey) }
             val epaDeferred = async { if (settings.useStatboticsEpa) fetchStatboticsMatchEpaHistory(settings, normalizedKey) else null }
-            val match13Deferred = async { if (settings.useMatch13Exp) fetchMatch13MatchHistory(settings, normalizedKey) else null }
+            val match13Deferred = async { if (settings.useMatch13xP) fetchMatch13MatchHistory(settings, normalizedKey) else null }
             Triple(oprsDeferred.await(), epaDeferred.await(), match13Deferred.await())
         }
         writeStatsHistory(normalizedKey, oprs, epaHistory, match13History)
@@ -1911,7 +1911,7 @@ object IntegrationService {
             EpaOprHistoryCache.selectAll().where { EpaOprHistoryCache.eventKey eq normalizedKey }.firstOrNull()
         }
 
-        val needsMatch13 = settings.useMatch13Exp
+        val needsMatch13 = settings.useMatch13xP
         val isCachedMatch13Missing = cached != null && (cached[EpaOprHistoryCache.match13HistoryJson].isNullOrBlank() || cached[EpaOprHistoryCache.match13HistoryJson] == "[]")
 
         // Only block the request when there is nothing cached at all. An event Match 13 does not
@@ -1961,24 +1961,24 @@ object IntegrationService {
         }
     }
 
-    private suspend fun fetchMatch13Exps(settings: ApiSettings, eventKey: String): Map<String, Double> {
+    private suspend fun fetchMatch13xPs(settings: ApiSettings, eventKey: String): Map<String, Double> {
         val cleanEventKey = canonicalStoredEventKey(settings.year, eventKey)
         val rawKey = settings.apiKeys.match13Key.trim()
         val key = if (rawKey == "********") "" else rawKey
         // Every Match 13 route needs a key; without one each call is a guaranteed 401.
         if (key.isBlank()) return emptyMap()
-        val eventExps = fetchMatch13EventExps(settings, cleanEventKey, key)
+        val eventxPs = fetchMatch13EventxPs(settings, cleanEventKey, key)
 
         // Match 13 picks up new events after FIRST/TBA do, so a freshly created event can be
         // missing there (404) or only partly filled. Cover the gap from each team's season rating.
         val roster = readTransaction {
             ApiTeams.selectAll().where { ApiTeams.eventKey eq cleanEventKey }.map { it[ApiTeams.teamKey] }
         }
-        val missing = roster.filter { it.startsWith("frc") && !eventExps.containsKey(it) }
-        if (missing.isEmpty()) return eventExps
+        val missing = roster.filter { it.startsWith("frc") && !eventxPs.containsKey(it) }
+        if (missing.isEmpty()) return eventxPs
         val year = cleanEventKey.take(4).toIntOrNull() ?: settings.year
         val fallback = try {
-            fetchMatch13FallbackExps(settings, key, year, missing)
+            fetchMatch13FallbackxPs(settings, key, year, missing)
         } catch (e: Exception) {
             log.warn("Match 13 season fallback failed for $cleanEventKey: ${e.message}")
             emptyMap()
@@ -1986,7 +1986,7 @@ object IntegrationService {
         if (fallback.isNotEmpty()) {
             log.info("Match 13: filled xP for ${fallback.size}/${missing.size} team(s) at $cleanEventKey from season ratings")
         }
-        return eventExps + fallback
+        return eventxPs + fallback
     }
 
     private data class Match13SeasonRating(val xp: Double, val normXp: Double?)
@@ -2001,7 +2001,7 @@ object IntegrationService {
      * xP for teams the event endpoint did not cover: this season's rating first (it tracks the team's
      * most recent event), then last season's normalized xP mapped onto this season's points scale.
      */
-    private suspend fun fetchMatch13FallbackExps(
+    private suspend fun fetchMatch13FallbackxPs(
         settings: ApiSettings,
         key: String,
         year: Int,
@@ -2087,7 +2087,7 @@ object IntegrationService {
         }
     }
 
-    private suspend fun fetchMatch13EventExps(settings: ApiSettings, cleanEventKey: String, key: String): Map<String, Double> {
+    private suspend fun fetchMatch13EventxPs(settings: ApiSettings, cleanEventKey: String, key: String): Map<String, Double> {
         val rawUrl = settings.match13BaseUrl.ifBlank { "https://actions.match13.com" }.trimEnd('/')
         val url = "$rawUrl/v1/events/${cleanEventKey}/teams"
         val response = try {
@@ -2116,15 +2116,16 @@ object IntegrationService {
         return try {
             val element = JsonSupport.json.parseToJsonElement(responseText)
             
-            fun extractTeamAndExp(obj: JsonObject): Pair<String, Double>? {
+            fun extractTeamAndxP(obj: JsonObject): Pair<String, Double>? {
                 val teamNumber = obj.readInt("teamNumber")
                     ?: obj.readInt("team_number")
                     ?: obj.readInt("team")
                     ?: (obj.readString("teamKey") ?: obj.readString("team_key"))?.removePrefix("frc")?.toIntOrNull()
                     ?: return null
-                val exp = obj.readDouble("xpEnd")
+                val xP = obj.readDouble("xpEnd")
                     ?: obj.readDouble("xpMean")
                     ?: obj.readDouble("xp")
+                    ?: obj.readDouble("xP")
                     ?: obj.readDouble("exp")
                     ?: obj.readDouble("expectedPoints")
                     ?: obj.readDouble("expected_points")
@@ -2133,28 +2134,29 @@ object IntegrationService {
                     ?: (obj["exp"] as? JsonObject)?.readDouble("total")
                     ?: (obj["expectedPoints"] as? JsonObject)?.readDouble("total_points")
                     ?: return null
-                return "frc$teamNumber" to exp
+                return "frc$teamNumber" to xP
             }
 
             when (element) {
                 is JsonArray -> {
-                    element.mapNotNull { item -> (item as? JsonObject)?.let { extractTeamAndExp(it) } }.toMap()
+                    element.mapNotNull { item -> (item as? JsonObject)?.let { extractTeamAndxP(it) } }.toMap()
                 }
                 is JsonObject -> {
                     val teamsArray = element["teams"] as? JsonArray
                     if (teamsArray != null) {
-                        teamsArray.mapNotNull { item -> (item as? JsonObject)?.let { extractTeamAndExp(it) } }.toMap()
+                        teamsArray.mapNotNull { item -> (item as? JsonObject)?.let { extractTeamAndxP(it) } }.toMap()
                     } else {
-                        val expsObj = (element["exps"] as? JsonObject) ?: element
-                        expsObj.entries.mapNotNull { (k, v) ->
+                        val xPsObj = (element["xPs"] as? JsonObject) ?: (element["exps"] as? JsonObject) ?: element
+                        xPsObj.entries.mapNotNull { (k, v) ->
                             val teamNum = k.removePrefix("frc").toIntOrNull() ?: return@mapNotNull null
-                            val expVal = (v as? JsonPrimitive)?.content?.toDoubleOrNull()
+                            val xPVal = (v as? JsonPrimitive)?.content?.toDoubleOrNull()
                                 ?: (v as? JsonObject)?.readDouble("xpEnd")
                                 ?: (v as? JsonObject)?.readDouble("xpMean")
                                 ?: (v as? JsonObject)?.readDouble("xp")
+                                ?: (v as? JsonObject)?.readDouble("xP")
                                 ?: (v as? JsonObject)?.readDouble("exp")
                                 ?: return@mapNotNull null
-                            "frc$teamNum" to expVal
+                            "frc$teamNum" to xPVal
                         }.toMap()
                     }
                 }
@@ -2697,7 +2699,7 @@ internal data class TeamSyncRecord(
     val country: String?,
     val opr: Double?,
     val epa: Double?,
-    val exp: Double? = null,
+    val xP: Double? = null,
     val dataJson: String,
     /** "tba", "first", or "unknown" (manual rows and anything older). */
     val source: String = "unknown"
@@ -2748,7 +2750,7 @@ private fun TeamSyncRecord.fillBlanksFrom(other: TeamSyncRecord): TeamSyncRecord
     country = country.orIfBlank(other.country),
     opr = opr ?: other.opr,
     epa = epa ?: other.epa,
-    exp = exp ?: other.exp
+    xP = xP ?: other.xP
 )
 
 /** One record per team from TBA's and FIRST's rosters: TBA's record, with gaps filled from FIRST's. */
@@ -2770,7 +2772,7 @@ internal fun mergeTeamWithStored(stored: TeamSyncRecord, incoming: TeamSyncRecor
     } else {
         stored.fillBlanksFrom(incoming)
     }
-    return merged.copy(teamNumber = incoming.teamNumber, opr = incoming.opr, epa = incoming.epa, exp = incoming.exp)
+    return merged.copy(teamNumber = incoming.teamNumber, opr = incoming.opr, epa = incoming.epa, xP = incoming.xP)
 }
 
 private fun JsonObject.readString(key: String): String? {

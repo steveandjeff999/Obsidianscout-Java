@@ -2192,11 +2192,12 @@
             ? Obsidianscout.getProgram() === "FTC"
             : (state.settings?.program === "FTC");
         const effectiveUseEpa = !isFtc && state.settings?.useStatboticsEpa;
-        const effectiveUseExp = !isFtc && state.settings?.useMatch13Exp;
+        const effectiveUsexP = !isFtc && (state.settings?.useMatch13xP ?? state.settings?.useMatch13Exp);
         const effectiveUseOpr = state.settings?.useTbaOpr;
 
         const epa = (team.epa !== null && team.epa !== undefined) ? team.epa.toFixed(1) : "-";
-        const exp = (team.exp !== null && team.exp !== undefined) ? team.exp.toFixed(1) : "-";
+        const xPVal = team.xP ?? team.exp;
+        const xP = (xPVal !== null && xPVal !== undefined) ? xPVal.toFixed(1) : "-";
         const opr = (team.opr !== null && team.opr !== undefined) ? team.opr.toFixed(1) : "-";
 
         const teamMatches = state.matches.filter(m => {
@@ -2211,7 +2212,7 @@
             if (scoped.match.length === 0) {
                 if (effectiveUseEpa && state.statsHistory?.epaHistory?.some(item => Number(item.team || item.team_number || String(item.teamKey || "").replace(/\D/g, "")) === Number(teamNumber))) {
                     teamGraphDatasource[teamNumber] = "statbotics";
-                } else if (effectiveUseExp && state.statsHistory?.match13History?.some(m => extractTeamExpData(m, teamNumber) !== null)) {
+                } else if (effectiveUsexP && state.statsHistory?.match13History?.some(m => extractTeamxPData(m, teamNumber) !== null)) {
                     teamGraphDatasource[teamNumber] = "match13";
                 } else {
                     teamGraphDatasource[teamNumber] = "scouted";
@@ -2242,10 +2243,10 @@
                     <div class="breakdown-stat-label">Statbotics EPA</div>
                     <div class="breakdown-stat-val highlight-epa">${epa}</div>
                 </div>` : ''}
-                ${effectiveUseExp ? `
+                ${effectiveUsexP ? `
                 <div class="breakdown-stat-card">
                     <div class="breakdown-stat-label">Match 13 xP</div>
-                    <div class="breakdown-stat-val highlight-avg">${exp}</div>
+                    <div class="breakdown-stat-val highlight-avg">${xP}</div>
                 </div>` : ''}
                 ${effectiveUseOpr ? `
                 <div class="breakdown-stat-card">
@@ -2292,7 +2293,7 @@
                     <div class="graph-datasource-pills" id="datasource-pills-${uniqueTabId}">
                         <button type="button" class="graph-datasource-btn ${currentDatasource === 'scouted' ? 'active' : ''}" data-source="scouted" data-team="${teamNumber}">Scouted</button>
                         ${effectiveUseEpa ? `<button type="button" class="graph-datasource-btn ${currentDatasource === 'statbotics' ? 'active' : ''}" data-source="statbotics" data-team="${teamNumber}">Statbotics</button>` : ''}
-                        ${effectiveUseExp ? `<button type="button" class="graph-datasource-btn ${currentDatasource === 'match13' ? 'active' : ''}" data-source="match13" data-team="${teamNumber}">Match 13</button>` : ''}
+                        ${effectiveUsexP ? `<button type="button" class="graph-datasource-btn ${currentDatasource === 'match13' ? 'active' : ''}" data-source="match13" data-team="${teamNumber}">Match 13</button>` : ''}
                     </div>
                     <button type="button" class="graph-fullscreen-btn-inline" id="btn-fullscreen-${uniqueTabId}" title="View graph in fullscreen">
                         <span class="material-symbols-outlined">fullscreen</span> Fullscreen
@@ -2582,7 +2583,7 @@
         return base;
     }
 
-    function extractTeamExpData(matchObj, teamNumber) {
+    function extractTeamxPData(matchObj, teamNumber) {
         if (!matchObj || typeof matchObj !== "object") return null;
         const teams = matchObj.teams;
         if (!teams) return null;
@@ -2641,12 +2642,12 @@
             const teamMatches = [];
 
             match13History.forEach(matchObj => {
-                const teamData = extractTeamExpData(matchObj, teamNumber);
+                const teamData = extractTeamxPData(matchObj, teamNumber);
                 if (!teamData) return;
                 const matchKey = matchObj.key || matchObj.matchKey || matchObj.match_key || matchObj.match || "";
                 const label = formatMatchKeyToLabel(matchKey);
                 const sortWeight = getMatchSortWeightFromLabel(label);
-                const val = Number(teamData.xpPost ?? teamData.xp ?? teamData.total ?? teamData.exp ?? 0);
+                const val = Number(teamData.xpPost ?? teamData.xp ?? teamData.total ?? teamData.xP ?? teamData.exp ?? 0);
                 teamMatches.push({ label, val, sortWeight });
             });
 
@@ -2799,7 +2800,7 @@
             ? Obsidianscout.getProgram() === "FTC"
             : (state.settings?.program === "FTC");
         const effectiveUseEpa = !isFtc && state.settings?.useStatboticsEpa;
-        const effectiveUseExp = !isFtc && state.settings?.useMatch13Exp;
+        const effectiveUsexP = !isFtc && (state.settings?.useMatch13xP ?? state.settings?.useMatch13Exp);
 
         let currentModalSource = initialDatasource;
 
@@ -2822,7 +2823,7 @@
                 pillsContainer.innerHTML = `
                     <button type="button" class="graph-datasource-btn ${source === 'scouted' ? 'active' : ''}" data-source="scouted">Scouted</button>
                     ${effectiveUseEpa ? `<button type="button" class="graph-datasource-btn ${source === 'statbotics' ? 'active' : ''}" data-source="statbotics">Statbotics</button>` : ''}
-                    ${effectiveUseExp ? `<button type="button" class="graph-datasource-btn ${source === 'match13' ? 'active' : ''}" data-source="match13">Match 13</button>` : ''}
+                    ${effectiveUsexP ? `<button type="button" class="graph-datasource-btn ${source === 'match13' ? 'active' : ''}" data-source="match13">Match 13</button>` : ''}
                 `;
                 pillsContainer.querySelectorAll(".graph-datasource-btn").forEach(btn => {
                     btn.addEventListener("click", () => {

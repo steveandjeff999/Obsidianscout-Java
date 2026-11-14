@@ -66,7 +66,7 @@ const responses = {
     "/api/pit-config": { fields: [] },
     // EPA / OPR / xP per team, so the external metrics exist (OPR deliberately does not follow EPA's order).
     [`/api/teams?eventKey=${EVENT}`]: TEAMS.map((n, i) => ({ teamNumber: n, teamKey: `frc${n}`, eventKey: EVENT, nickname: `Team ${n}`,
-        epa: 80 - i * 5, opr: 60 - ((i * 7) % 12) * 4, exp: 75 - i * 3 })),
+        epa: 80 - i * 5, opr: 60 - ((i * 7) % 12) * 4, xP: 75 - i * 3 })),
     [`/api/matches?eventKey=${EVENT}`]: matches,
     "/api/scouting?includePrescout=true": entries,
     "/api/qual-scouting?includePrescout=true": qual,
@@ -365,7 +365,7 @@ test("columns can be stats, counts and arithmetic, and filters can use arithmeti
     assert.deepEqual(out.table.columns.slice(2), ["Auto points (max)", "Teleop points (std dev)", "Matches scouted", "EPA - xP", "(Auto points + Teleop points) / 2"]);
     const team = ctx.teams.get(254);
     const row = out.facts.rows.find((r) => r.team === 254);
-    assert.equal(row["EPA - xP"], Math.round((team.epa - team.exp) * 10) / 10);
+    assert.equal(row["EPA - xP"], Math.round((team.epa - team.xP) * 10) / 10);
     assert.equal(row["Matches scouted"], ctx.stats.get(254).matchesScouted);
     const missing = await Tools.TOOLS.make_table.run(ctx, { columns: ["warp drive"] }, {});
     assert.match(missing.facts.error, /Could not find: warp drive/);
@@ -456,7 +456,7 @@ test("model tool calling routes to make_table and handles edits", async () => {
 });
 
 test("metrics with no data at the event do not block a table", async () => {
-    const noXp = { ...ctx, metrics: ctx.metrics.filter((m) => m.id !== "ext:exp") };
+    const noXp = { ...ctx, metrics: ctx.metrics.filter((m) => m.id !== "ext:xP") };
     const route = Tools.ruleRoute("make a table with epa scouted opr and xP for all teams", noXp);
     assert.ok(!route.refine, `leftover: ${route.leftover}`);
     assert.ok(route.args.columns.includes("xP"));

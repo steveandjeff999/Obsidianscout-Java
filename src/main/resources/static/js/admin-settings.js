@@ -452,7 +452,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             setVal("settings-statbotics-url", loadedSettings.statboticsBaseUrl || "https://api.statbotics.io");
             setVal("settings-match13-url", loadedSettings.match13BaseUrl || "https://actions.match13.com");
             setChecked("settings-epa", loadedSettings.useStatboticsEpa);
-            setChecked("settings-exp", loadedSettings.useMatch13Exp);
+            setChecked("settings-xP", loadedSettings.useMatch13xP ?? loadedSettings.useMatch13Exp);
             setChecked("settings-opr", loadedSettings.useTbaOpr);
             setRecencyBias(loadedSettings.recencyBias);
             setChecked("settings-chat", loadedSettings.chatEnabled);
@@ -505,9 +505,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (epaCheckbox && epaCheckbox.parentElement) {
                     epaCheckbox.parentElement.style.display = "none";
                 }
-                const expCheckbox = document.getElementById("settings-exp");
-                if (expCheckbox && expCheckbox.parentElement) {
-                    expCheckbox.parentElement.style.display = "none";
+                const xPCheckbox = document.getElementById("settings-xP");
+                if (xPCheckbox && xPCheckbox.parentElement) {
+                    xPCheckbox.parentElement.style.display = "none";
                 }
                 const oprCheckbox = document.getElementById("settings-opr");
                 if (oprCheckbox && oprCheckbox.parentElement) {
@@ -538,9 +538,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (epaCheckbox && epaCheckbox.parentElement) {
                     epaCheckbox.parentElement.style.display = "";
                 }
-                const expCheckbox = document.getElementById("settings-exp");
-                if (expCheckbox && expCheckbox.parentElement) {
-                    expCheckbox.parentElement.style.display = "";
+                const xPCheckbox = document.getElementById("settings-xP");
+                if (xPCheckbox && xPCheckbox.parentElement) {
+                    xPCheckbox.parentElement.style.display = "";
                 }
                 const oprCheckbox = document.getElementById("settings-opr");
                 if (oprCheckbox && oprCheckbox.parentElement) {
@@ -771,7 +771,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     loadedSettings.alternateEventCode = getVal("settings-alternate-event-code").trim();
                     loadedSettings.timezone = getVal("settings-timezone").trim();
                     loadedSettings.useStatboticsEpa = getChecked("settings-epa");
-                    loadedSettings.useMatch13Exp = getChecked("settings-exp");
+                    loadedSettings.useMatch13xP = getChecked("settings-xP");
                     loadedSettings.useTbaOpr = getChecked("settings-opr");
                     loadedSettings.recencyBias = getRecencyBias();
                     loadedSettings.chatEnabled = getChecked("settings-chat");

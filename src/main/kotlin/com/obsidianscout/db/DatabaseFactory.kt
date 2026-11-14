@@ -445,6 +445,13 @@ object DatabaseFactory {
                                         try {
                                             stmt.executeUpdate(sql)
                                             consoleLog.warn("[Database] Successfully added missing column $columnName to table $tableName.")
+                                            if (tableName == "api_teams" && columnName == "match13_xp") {
+                                                runCatching {
+                                                    stmt.executeUpdate(
+                                                        "UPDATE api_teams SET match13_xp = match13_exp WHERE match13_xp IS NULL AND match13_exp IS NOT NULL"
+                                                    )
+                                                }
+                                            }
                                         } catch (e: Exception) {
                                             consoleLog.error("[Database] Error adding column $columnName to $tableName: ${e.message}")
 

@@ -17,7 +17,7 @@ import com.obsidianscout.routes.AlliancePrediction
 import com.obsidianscout.routes.MatchPredictionResponse
 import com.obsidianscout.routes.MatchTeamPrediction
 import com.obsidianscout.routes.Match13PredictionDetail
-import com.obsidianscout.routes.Match13TeamExpDetail
+import com.obsidianscout.routes.Match13TeamxPDetail
 import com.obsidianscout.scouting.ScoutingEntryRecord
 import io.ktor.http.HttpStatusCode
 import kotlinx.serialization.builtins.ListSerializer
@@ -56,9 +56,9 @@ object PredictorService {
             val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
             val allTeams = TeamCacheOverrideService.teamRows(eventKey, session.teamNumber, session.program)
             val checkEpa = !isFtc && settings.useStatboticsEpa && allTeams.isNotEmpty() && allTeams.all { it[ApiTeams.epa] == null || it[ApiTeams.epa] == 0.0 }
-            val checkExp = !isFtc && settings.useMatch13Exp && allTeams.isNotEmpty() && allTeams.all { it[ApiTeams.match13Exp] == null || it[ApiTeams.match13Exp] == 0.0 }
+            val checkxP = !isFtc && settings.useMatch13xP && allTeams.isNotEmpty() && allTeams.all { it[ApiTeams.match13xP] == null || it[ApiTeams.match13xP] == 0.0 }
             val checkOpr = settings.useTbaOpr && allTeams.isNotEmpty() && allTeams.all { it[ApiTeams.opr] == null || it[ApiTeams.opr] == 0.0 }
-            checkEpa || checkExp || checkOpr
+            checkEpa || checkxP || checkOpr
         }
 
         if (needsStatsSync) {
@@ -66,7 +66,7 @@ object PredictorService {
                 val settings = readTransaction { com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program) }
                 com.obsidianscout.integrations.IntegrationService.syncStatsOnDemand(settings, eventKey)
             } catch (e: Exception) {
-                throw ApiException(HttpStatusCode.BadGateway, "Failed to fetch EPA/OPR/EXP stats from API: ${e.message}")
+                throw ApiException(HttpStatusCode.BadGateway, "Failed to fetch EPA/OPR/xP stats from API: ${e.message}")
             }
         }
 
@@ -90,7 +90,7 @@ object PredictorService {
 
             val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
             val useStatboticsEpa = !isFtc && settings.useStatboticsEpa
-            val useMatch13Exp = !isFtc && settings.useMatch13Exp
+            val useMatch13xP = !isFtc && settings.useMatch13xP
             val useTbaOpr = settings.useTbaOpr
 
             val allTeamsInEvent = TeamCacheOverrideService.teamRows(eventKey, session.teamNumber, session.program)
@@ -201,7 +201,7 @@ object PredictorService {
                 }
             }
 
-            val cachedHistory = if (useMatch13Exp) {
+            val cachedHistory = if (useMatch13xP) {
                 EpaOprHistoryCache.selectAll().where { EpaOprHistoryCache.eventKey eq eventKey }.firstOrNull()
             } else null
             val match13List: List<JsonObject> = if (cachedHistory != null) {
@@ -252,21 +252,21 @@ object PredictorService {
                 val teamRow = teamInfoMap[resolvedKey] ?: teamInfoMap[primaryKey]
                 val nickname = teamRow?.get(ApiTeams.nickname) ?: teamRow?.get(ApiTeams.name) ?: "Team $teamNumber"
                 val epa = teamRow?.get(ApiTeams.epa)
-                val exp = teamRow?.get(ApiTeams.match13Exp)
+                val xP = teamRow?.get(ApiTeams.match13xP)
                 val opr = teamRow?.get(ApiTeams.opr)
 
-                val teamExpObj = (match13TeamsObj?.get(teamNumber.toString()) as? JsonObject)
+                val teamxPObj = (match13TeamsObj?.get(teamNumber.toString()) as? JsonObject)
                     ?: (match13TeamsObj?.get("frc$teamNumber") as? JsonObject)
-                val match13TeamExp = if (teamExpObj != null) {
-                    Match13TeamExpDetail(
-                        xpPost = teamExpObj.readDouble("xpPost") ?: teamExpObj.readDouble("xp"),
-                        xpPre = teamExpObj.readDouble("xpPre"),
-                        xAutoPost = teamExpObj.readDouble("xAutoPost") ?: teamExpObj.readDouble("xAuto"),
-                        xAutoPre = teamExpObj.readDouble("xAutoPre"),
-                        xTelePost = teamExpObj.readDouble("xTelePost") ?: teamExpObj.readDouble("xTele"),
-                        xTelePre = teamExpObj.readDouble("xTelePre"),
-                        xEndPost = teamExpObj.readDouble("xEndPost") ?: teamExpObj.readDouble("xEnd"),
-                        xEndPre = teamExpObj.readDouble("xEndPre")
+                val match13TeamxP = if (teamxPObj != null) {
+                    Match13TeamxPDetail(
+                        xpPost = teamxPObj.readDouble("xpPost") ?: teamxPObj.readDouble("xp"),
+                        xpPre = teamxPObj.readDouble("xpPre"),
+                        xAutoPost = teamxPObj.readDouble("xAutoPost") ?: teamxPObj.readDouble("xAuto"),
+                        xAutoPre = teamxPObj.readDouble("xAutoPre"),
+                        xTelePost = teamxPObj.readDouble("xTelePost") ?: teamxPObj.readDouble("xTele"),
+                        xTelePre = teamxPObj.readDouble("xTelePre"),
+                        xEndPost = teamxPObj.readDouble("xEndPost") ?: teamxPObj.readDouble("xEnd"),
+                        xEndPre = teamxPObj.readDouble("xEndPre")
                     )
                 } else null
 
@@ -285,9 +285,9 @@ object PredictorService {
                     averageScoutedScore = avgScore,
                     scoutedMatchesCount = teamEntries.size,
                     epa = epa,
-                    exp = exp,
+                    xP = xP,
                     opr = opr,
-                    match13TeamExp = match13TeamExp,
+                    match13TeamxP = match13TeamxP,
                     hasDiscrepancy = hasDiscrepancy
                 )
             }
@@ -301,10 +301,10 @@ object PredictorService {
             val totalRedEpa = redPredictions.mapNotNull { it.epa }.sum()
             val totalBlueEpa = bluePredictions.mapNotNull { it.epa }.sum()
 
-            val totalRedExp = (if (useMatch13Exp && match13Pred?.redScore != null) match13Pred.redScore else null)
-                ?: redPredictions.mapNotNull { it.exp }.sum()
-            val totalBlueExp = (if (useMatch13Exp && match13Pred?.blueScore != null) match13Pred.blueScore else null)
-                ?: bluePredictions.mapNotNull { it.exp }.sum()
+            val totalRedxP = (if (useMatch13xP && match13Pred?.redScore != null) match13Pred.redScore else null)
+                ?: redPredictions.mapNotNull { it.xP }.sum()
+            val totalBluexP = (if (useMatch13xP && match13Pred?.blueScore != null) match13Pred.blueScore else null)
+                ?: bluePredictions.mapNotNull { it.xP }.sum()
 
             val totalRedOpr = redPredictions.mapNotNull { it.opr }.sum()
             val totalBlueOpr = bluePredictions.mapNotNull { it.opr }.sum()
@@ -316,18 +316,18 @@ object PredictorService {
                     teams = redPredictions,
                     totalScoutedScore = totalRedScouted,
                     totalEpa = totalRedEpa,
-                    totalExp = totalRedExp,
+                    totalxP = totalRedxP,
                     totalOpr = totalRedOpr
                 ),
                 blueAlliance = AlliancePrediction(
                     teams = bluePredictions,
                     totalScoutedScore = totalBlueScouted,
                     totalEpa = totalBlueEpa,
-                    totalExp = totalBlueExp,
+                    totalxP = totalBluexP,
                     totalOpr = totalBlueOpr
                 ),
                 useStatboticsEpa = useStatboticsEpa,
-                useMatch13Exp = useMatch13Exp,
+                useMatch13xP = useMatch13xP,
                 useTbaOpr = useTbaOpr,
                 match13Pred = match13Pred,
                 recencyWeighted = (redPredictions + bluePredictions).any { it.recencyWeighted }
@@ -360,10 +360,10 @@ object PredictorService {
             val isFtc = session.program.equals("FTC", ignoreCase = true)
             val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
             val useStatboticsEpa = !isFtc && settings.useStatboticsEpa
-            val useMatch13Exp = !isFtc && settings.useMatch13Exp
+            val useMatch13xP = !isFtc && settings.useMatch13xP
             val useTbaOpr = settings.useTbaOpr
 
-            val cachedHistory = if (useMatch13Exp) {
+            val cachedHistory = if (useMatch13xP) {
                 EpaOprHistoryCache.selectAll().where { EpaOprHistoryCache.eventKey eq eventKeyLower }.firstOrNull()
             } else null
             val match13List: List<JsonObject> = if (cachedHistory != null) {
@@ -491,7 +491,7 @@ object PredictorService {
                     val teamRow = teamInfoMap[resolvedKey] ?: teamInfoMap[primaryKey]
                     val nickname = teamRow?.get(ApiTeams.nickname) ?: teamRow?.get(ApiTeams.name) ?: "Team $teamNumber"
                     val epa = teamRow?.get(ApiTeams.epa)
-                    val exp = teamRow?.get(ApiTeams.match13Exp)
+                    val xP = teamRow?.get(ApiTeams.match13xP)
                     val opr = teamRow?.get(ApiTeams.opr)
 
                     val teamEntries = entriesByTeam[teamNumber] ?: emptyList()
@@ -509,7 +509,7 @@ object PredictorService {
                         averageScoutedScore = avgScore,
                         scoutedMatchesCount = teamEntries.size,
                         epa = epa,
-                        exp = exp,
+                        xP = xP,
                         opr = opr,
                         hasDiscrepancy = hasDiscrepancy
                     )
@@ -540,22 +540,22 @@ object PredictorService {
                 val match13TeamsObj = match13MatchObj?.get("teams") as? JsonObject
 
                 fun enrichTeamPrediction(base: MatchTeamPrediction): MatchTeamPrediction {
-                    val teamExpObj = (match13TeamsObj?.get(base.teamNumber.toString()) as? JsonObject)
+                    val teamxPObj = (match13TeamsObj?.get(base.teamNumber.toString()) as? JsonObject)
                         ?: (match13TeamsObj?.get("frc${base.teamNumber}") as? JsonObject)
-                    val match13TeamExp = if (teamExpObj != null) {
-                        Match13TeamExpDetail(
-                            xpPost = teamExpObj.readDouble("xpPost") ?: teamExpObj.readDouble("xp"),
-                            xpPre = teamExpObj.readDouble("xpPre"),
-                            xAutoPost = teamExpObj.readDouble("xAutoPost") ?: teamExpObj.readDouble("xAuto"),
-                            xAutoPre = teamExpObj.readDouble("xAutoPre"),
-                            xTelePost = teamExpObj.readDouble("xTelePost") ?: teamExpObj.readDouble("xTele"),
-                            xTelePre = teamExpObj.readDouble("xTelePre"),
-                            xEndPost = teamExpObj.readDouble("xEndPost") ?: teamExpObj.readDouble("xEnd"),
-                            xEndPre = teamExpObj.readDouble("xEndPre")
+                val match13TeamxP = if (teamxPObj != null) {
+                    Match13TeamxPDetail(
+                        xpPost = teamxPObj.readDouble("xpPost") ?: teamxPObj.readDouble("xp"),
+                        xpPre = teamxPObj.readDouble("xpPre"),
+                        xAutoPost = teamxPObj.readDouble("xAutoPost") ?: teamxPObj.readDouble("xAuto"),
+                        xAutoPre = teamxPObj.readDouble("xAutoPre"),
+                        xTelePost = teamxPObj.readDouble("xTelePost") ?: teamxPObj.readDouble("xTele"),
+                        xTelePre = teamxPObj.readDouble("xTelePre"),
+                        xEndPost = teamxPObj.readDouble("xEndPost") ?: teamxPObj.readDouble("xEnd"),
+                        xEndPre = teamxPObj.readDouble("xEndPre")
                         )
                     } else null
 
-                    return base.copy(match13TeamExp = match13TeamExp)
+                    return base.copy(match13TeamxP = match13TeamxP)
                 }
 
                 val redTeamKeys = JsonSupport.json.decodeFromString(
@@ -580,10 +580,10 @@ object PredictorService {
                 val totalRedEpa = redPredictions.mapNotNull { it.epa }.sum()
                 val totalBlueEpa = bluePredictions.mapNotNull { it.epa }.sum()
 
-                val totalRedExp = (if (useMatch13Exp && match13Pred?.redScore != null) match13Pred.redScore else null)
-                    ?: redPredictions.mapNotNull { it.exp }.sum()
-                val totalBlueExp = (if (useMatch13Exp && match13Pred?.blueScore != null) match13Pred.blueScore else null)
-                    ?: bluePredictions.mapNotNull { it.exp }.sum()
+                val totalRedxP = (if (useMatch13xP && match13Pred?.redScore != null) match13Pred.redScore else null)
+                    ?: redPredictions.mapNotNull { it.xP }.sum()
+                val totalBluexP = (if (useMatch13xP && match13Pred?.blueScore != null) match13Pred.blueScore else null)
+                    ?: bluePredictions.mapNotNull { it.xP }.sum()
 
                 val totalRedOpr = redPredictions.mapNotNull { it.opr }.sum()
                 val totalBlueOpr = bluePredictions.mapNotNull { it.opr }.sum()
@@ -595,18 +595,18 @@ object PredictorService {
                         teams = redPredictions,
                         totalScoutedScore = totalRedScouted,
                         totalEpa = totalRedEpa,
-                        totalExp = totalRedExp,
+                        totalxP = totalRedxP,
                         totalOpr = totalRedOpr
                     ),
                     blueAlliance = AlliancePrediction(
                         teams = bluePredictions,
                         totalScoutedScore = totalBlueScouted,
                         totalEpa = totalBlueEpa,
-                        totalExp = totalBlueExp,
+                        totalxP = totalBluexP,
                         totalOpr = totalBlueOpr
                     ),
                     useStatboticsEpa = useStatboticsEpa,
-                    useMatch13Exp = useMatch13Exp,
+                    useMatch13xP = useMatch13xP,
                     useTbaOpr = useTbaOpr,
                     match13Pred = match13Pred,
                     recencyWeighted = (redPredictions + bluePredictions).any { it.recencyWeighted }

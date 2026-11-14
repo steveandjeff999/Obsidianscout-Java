@@ -346,7 +346,7 @@ function resolveColumns(ctx, list) {
 }
 
 function defaultColumns(ctx) {
-    const ids = ["score_total", "score_auto", "score_teleop", "score_endgame", "ext:epa", "ext:opr", "ext:exp"];
+    const ids = ["score_total", "score_auto", "score_teleop", "score_endgame", "ext:epa", "ext:opr", "ext:xP"];
     return ids.map((id) => ctx.metrics.find((m) => m.id === id)).filter(Boolean).map((m) => metricColumn(m, "avg"));
 }
 
@@ -357,7 +357,7 @@ function phaseColumns(ctx) {
 const fmtCell = (v) => (v === null || v === undefined ? "-" : v);
 // External metrics people ask for by name even when the event has no data for them (or an admin turned them off).
 const EXTERNAL_NAMES = [
-    { label: "xP", id: "ext:exp", re: /\b(?:xp|exp|expected points|match ?13)\b/i },
+    { label: "xP", id: "ext:xP", re: /\b(?:xp|exp|expected points|match ?13)\b/i },
     { label: "EPA", id: "ext:epa", re: /\b(?:epa|statbotics)\b/i },
     { label: "OPR", id: "ext:opr", re: /\b(?:opr|offensive power rating)\b/i }
 ];

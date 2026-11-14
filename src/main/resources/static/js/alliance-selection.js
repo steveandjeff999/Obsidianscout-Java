@@ -90,7 +90,7 @@
                 ? Obsidianscout.getProgram() === "FTC" 
                 : (settings && settings.program === "FTC");
             const effectiveUseEpa = !isFtc && settings.useStatboticsEpa;
-            const effectiveUseExp = !isFtc && settings.useMatch13Exp;
+            const effectiveUsexP = !isFtc && (settings.useMatch13xP ?? settings.useMatch13Exp);
             const effectiveUseOpr = settings.useTbaOpr;
 
             loadViewPrefs();
@@ -103,9 +103,9 @@
                     const optEpa = metricSelect.querySelector('option[value="epa"]');
                     if (optEpa) optEpa.remove();
                 }
-                if (!effectiveUseExp) {
-                    const optExp = metricSelect.querySelector('option[value="exp"]');
-                    if (optExp) optExp.remove();
+                if (!effectiveUsexP) {
+                    const optxP = metricSelect.querySelector('option[value="xP"]');
+                    if (optxP) optxP.remove();
                 }
                 if (!effectiveUseOpr) {
                     const optOpr = metricSelect.querySelector('option[value="opr"]');
@@ -115,7 +115,7 @@
                     if (optOpr) optOpr.textContent = "FTC Scout OPR";
                 }
                 if ((selectedMetric === "epa" && !effectiveUseEpa) ||
-                    (selectedMetric === "exp" && !effectiveUseExp) ||
+                    (selectedMetric === "xP" && !effectiveUsexP) ||
                     (selectedMetric === "opr" && !effectiveUseOpr)) {
                     selectedMetric = "weighted";
                     metricSelect.value = "weighted";
@@ -696,15 +696,15 @@
             ? Obsidianscout.getProgram() === "FTC" 
             : (state.settings?.program === "FTC");
         const effectiveUseEpa = !isFtc && state.settings?.useStatboticsEpa;
-        const effectiveUseExp = !isFtc && state.settings?.useMatch13Exp;
+        const effectiveUsexP = !isFtc && (state.settings?.useMatch13xP ?? state.settings?.useMatch13Exp);
         const effectiveUseOpr = state.settings?.useTbaOpr;
 
         if (effectiveUseEpa && team.epa !== null && team.epa !== undefined) {
             num += team.epa * 0.8;
             den += 0.8;
         }
-        if (effectiveUseExp && team.exp !== null && team.exp !== undefined) {
-            num += team.exp * 0.8;
+        if (effectiveUsexP && (team.xP ?? team.exp) !== null && (team.xP ?? team.exp) !== undefined) {
+            num += (team.xP ?? team.exp) * 0.8;
             den += 0.8;
         }
         if (effectiveUseOpr && team.opr !== null && team.opr !== undefined) {
@@ -738,7 +738,8 @@
         try {
             const saved = JSON.parse(localStorage.getItem(VIEW_PREFS_KEY) || "null");
             if (!saved || typeof saved !== "object") return;
-            if (["weighted", "scouted", "epa", "exp", "opr"].includes(saved.metric)) selectedMetric = saved.metric;
+            const normMetric = saved.metric === "exp" ? "xP" : saved.metric;
+            if (["weighted", "scouted", "epa", "xP", "opr"].includes(normMetric)) selectedMetric = normMetric;
             if (["combined", "score", "list"].includes(saved.sortMode)) sortMode = saved.sortMode;
             if (["all", "no-dnp", "want", "avoid", "dnp", "unlisted"].includes(saved.showFilter)) showFilter = saved.showFilter;
             if (saved.adjustments && typeof saved.adjustments === "object") {
@@ -840,7 +841,8 @@
         switch (selectedMetric) {
             case "scouted": return finiteOrNull(team.averagePoints);
             case "epa": return finiteOrNull(team.epa);
-            case "exp": return finiteOrNull(team.exp);
+            case "xP":
+            case "exp": return finiteOrNull(team.xP ?? team.exp);
             case "opr": return finiteOrNull(team.opr);
             default: return getWeightedScore(team);
         }
@@ -1152,7 +1154,7 @@
 
             const points = team.averagePoints !== null && team.averagePoints !== undefined ? team.averagePoints.toFixed(1) : "-";
             const epa = team.epa !== null && team.epa !== undefined ? team.epa.toFixed(1) : "-";
-            const exp = team.exp !== null && team.exp !== undefined ? team.exp.toFixed(1) : "-";
+            const xP = (team.xP ?? team.exp) !== null && (team.xP ?? team.exp) !== undefined ? Number(team.xP ?? team.exp).toFixed(1) : "-";
             const opr = team.opr !== null && team.opr !== undefined ? team.opr.toFixed(1) : "-";
             const rank = teamRanks[team.teamNumber];
 
@@ -1160,11 +1162,11 @@
                 ? Obsidianscout.getProgram() === "FTC" 
                 : (state.settings?.program === "FTC");
             const effectiveUseEpa = !isFtc && state.settings?.useStatboticsEpa;
-            const effectiveUseExp = !isFtc && state.settings?.useMatch13Exp;
+            const effectiveUsexP = !isFtc && (state.settings?.useMatch13xP ?? state.settings?.useMatch13Exp);
             const effectiveUseOpr = state.settings?.useTbaOpr;
 
             const epaSpan = effectiveUseEpa ? `<span>EPA: ${epa}</span>` : "";
-            const expSpan = effectiveUseExp ? `<span>EXP: ${exp}</span>` : "";
+            const xPSpan = effectiveUsexP ? `<span>xP: ${xP}</span>` : "";
             const oprSpan = effectiveUseOpr ? `<span>${isFtc ? 'FTC OPR' : 'OPR'}: ${opr}</span>` : "";
 
             const esc = Obsidianscout.escapeHtml;
@@ -1186,7 +1188,7 @@
                 <div class="selector-metrics">
                     <span>Scouted: ${points}</span>
                     ${epaSpan}
-                    ${expSpan}
+                    ${xPSpan}
                     ${oprSpan}
                 </div>
             `;
@@ -1222,11 +1224,11 @@
             ? Obsidianscout.getProgram() === "FTC" 
             : (state.settings?.program === "FTC");
         const effectiveUseEpa = !isFtc && state.settings?.useStatboticsEpa;
-        const effectiveUseExp = !isFtc && state.settings?.useMatch13Exp;
+        const effectiveUsexP = !isFtc && (state.settings?.useMatch13xP ?? state.settings?.useMatch13Exp);
         const effectiveUseOpr = state.settings?.useTbaOpr;
 
         const epa = team.epa !== null && team.epa !== undefined ? team.epa.toFixed(1) : "-";
-        const exp = team.exp !== null && team.exp !== undefined ? team.exp.toFixed(1) : "-";
+        const xP = (team.xP ?? team.exp) !== null && (team.xP ?? team.exp) !== undefined ? Number(team.xP ?? team.exp).toFixed(1) : "-";
         const opr = team.opr !== null && team.opr !== undefined ? team.opr.toFixed(1) : "-";
         const teamMatches = state.matches.filter(m => {
             const allTeamsInMatch = (m.redTeams || []).concat(m.blueTeams || []);
@@ -1236,8 +1238,8 @@
         const cardEpa = document.getElementById("breakdown-card-epa");
         if (cardEpa) cardEpa.style.display = effectiveUseEpa ? "" : "none";
 
-        const cardExp = document.getElementById("breakdown-card-exp");
-        if (cardExp) cardExp.style.display = effectiveUseExp ? "" : "none";
+        const cardxP = document.getElementById("breakdown-card-xP");
+        if (cardxP) cardxP.style.display = effectiveUsexP ? "" : "none";
 
         const cardOpr = document.getElementById("breakdown-card-opr");
         if (cardOpr) {
@@ -1248,8 +1250,8 @@
 
         document.getElementById("breakdown-stat-scouted").textContent = calculatedAvg;
         document.getElementById("breakdown-stat-epa").textContent = epa;
-        const statExp = document.getElementById("breakdown-stat-exp");
-        if (statExp) statExp.textContent = exp;
+        const statxP = document.getElementById("breakdown-stat-xP");
+        if (statxP) statxP.textContent = xP;
         document.getElementById("breakdown-stat-opr").textContent = opr;
         document.getElementById("breakdown-stat-matches").textContent = teamMatches.length;
 

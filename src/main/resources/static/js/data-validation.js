@@ -400,14 +400,14 @@ function renderTeamsTable() {
     }
 
     const useEpa = currentValidationData.useStatboticsEpa;
-    const useExp = currentValidationData.useMatch13Exp;
+    const usexP = currentValidationData.useMatch13xP ?? currentValidationData.useMatch13Exp;
     const useOpr = currentValidationData.useTbaOpr;
 
     const thEpa = document.getElementById("th-val-epa");
-    const thExp = document.getElementById("th-val-exp");
+    const thxP = document.getElementById("th-val-xP");
     const thOpr = document.getElementById("th-val-opr");
     if (thEpa) thEpa.style.display = useEpa ? "" : "none";
-    if (thExp) thExp.style.display = useExp ? "" : "none";
+    if (thxP) thxP.style.display = usexP ? "" : "none";
     if (thOpr) thOpr.style.display = useOpr ? "" : "none";
 
     teams.forEach(team => {
@@ -452,19 +452,20 @@ function renderTeamsTable() {
             tr.appendChild(epaTd);
         }
 
-        // EXP & Delta
-        if (useExp) {
-            const expTd = document.createElement("td");
-            if (team.exp !== null && team.exp !== undefined) {
-                const expDiff = team.expDiff;
-                const diffHtml = expDiff !== null
-                    ? `<span class="delta-chip ${Math.abs(expDiff) >= (currentValidationData.threshold || 15) ? 'anomaly' : 'normal'}" style="margin-left: 6px;">Δ ${expDiff > 0 ? '+' + expDiff : expDiff}</span>`
+        // xP & Delta
+        if (usexP) {
+            const xPTd = document.createElement("td");
+            const xPVal = team.xP ?? team.exp;
+            if (xPVal !== null && xPVal !== undefined) {
+                const xPDiff = team.xPDiff ?? team.expDiff;
+                const diffHtml = xPDiff !== null && xPDiff !== undefined
+                    ? `<span class="delta-chip ${Math.abs(xPDiff) >= (currentValidationData.threshold || 15) ? 'anomaly' : 'normal'}" style="margin-left: 6px;">Δ ${xPDiff > 0 ? '+' + xPDiff : xPDiff}</span>`
                     : '';
-                expTd.innerHTML = `<span>${team.exp}</span> ${diffHtml}`;
+                xPTd.innerHTML = `<span>${xPVal}</span> ${diffHtml}`;
             } else {
-                expTd.innerHTML = `<span class="metric-subtext">N/A</span>`;
+                xPTd.innerHTML = `<span class="metric-subtext">N/A</span>`;
             }
-            tr.appendChild(expTd);
+            tr.appendChild(xPTd);
         }
 
         // OPR & Delta

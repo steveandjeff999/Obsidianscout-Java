@@ -353,14 +353,14 @@ object WidgetSnapshotService {
 
     /**
      * The predictor page's "All" view: each team's points are the average of its available metrics (scouted, and
-     * EXP / EPA / OPR when the team turned those on), summed per alliance; Match13's own score and win chance win
+     * xP / EPA / OPR when the team turned those on), summed per alliance; Match13's own score and win chance win
      * when present.
      */
     fun summarizePrediction(p: MatchPredictionResponse, ourAlliance: String?): WidgetPrediction {
         fun teamPoints(t: com.obsidianscout.routes.MatchTeamPrediction): Double? {
             val values = buildList {
                 t.averageScoutedScore?.takeIf { it > 0 }?.let(::add)
-                if (p.useMatch13Exp) t.exp?.takeIf { it > 0 }?.let(::add)
+                if (p.useMatch13xP) t.xP?.takeIf { it > 0 }?.let(::add)
                 if (p.useStatboticsEpa) t.epa?.takeIf { it > 0 }?.let(::add)
                 if (p.useTbaOpr) t.opr?.takeIf { it > 0 }?.let(::add)
             }
@@ -372,7 +372,7 @@ object WidgetSnapshotService {
             if (points.isNotEmpty()) return points.sum()
             val totals = buildList {
                 if (a.totalScoutedScore > 0) add(a.totalScoutedScore)
-                if (p.useMatch13Exp && a.totalExp > 0) add(a.totalExp)
+                if (p.useMatch13xP && a.totalxP > 0) add(a.totalxP)
                 if (p.useStatboticsEpa && a.totalEpa > 0) add(a.totalEpa)
                 if (p.useTbaOpr && a.totalOpr > 0) add(a.totalOpr)
             }

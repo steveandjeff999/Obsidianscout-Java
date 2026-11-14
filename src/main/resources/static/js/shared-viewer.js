@@ -428,7 +428,7 @@ function buildMetricOptions(config) {
     return options;
 }
 
-function extractTeamExpData(matchObj, teamNumber) {
+function extractTeamxPData(matchObj, teamNumber) {
     if (!matchObj || typeof matchObj !== "object") return null;
     const teams = matchObj.teams;
     if (!teams) return null;
@@ -450,23 +450,23 @@ function extractTeamExpData(matchObj, teamNumber) {
     return null;
 }
 
-function getTeamExpMetricValue(teamExpData, metricId) {
-    if (!teamExpData) return 0;
+function getTeamxPMetricValue(teamxPData, metricId) {
+    if (!teamxPData) return 0;
     if (metricId === "score_auto") {
-        return Number(teamExpData.xAutoPost ?? teamExpData.xAuto ?? teamExpData.xAutoPre ?? teamExpData.auto ?? teamExpData.auto_exp ?? teamExpData.autoExp ?? 0);
+        return Number(teamxPData.xAutoPost ?? teamxPData.xAuto ?? teamxPData.xAutoPre ?? teamxPData.auto ?? teamxPData.auto_xP ?? teamxPData.auto_exp ?? teamxPData.autoExp ?? 0);
     }
     if (metricId === "score_teleop") {
-        return Number(teamExpData.xTelePost ?? teamExpData.xTele ?? teamExpData.xTelePre ?? teamExpData.teleop ?? teamExpData.teleop_exp ?? teamExpData.teleopExp ?? 0);
+        return Number(teamxPData.xTelePost ?? teamxPData.xTele ?? teamxPData.xTelePre ?? teamxPData.teleop ?? teamxPData.teleop_xP ?? teamxPData.teleop_exp ?? teamxPData.teleopExp ?? 0);
     }
     if (metricId === "score_endgame") {
-        return Number(teamExpData.xEndPost ?? teamExpData.xEnd ?? teamExpData.xEndPre ?? teamExpData.endgame ?? teamExpData.endgame_exp ?? teamExpData.endgameExp ?? 0);
+        return Number(teamxPData.xEndPost ?? teamxPData.xEnd ?? teamxPData.xEndPre ?? teamxPData.endgame ?? teamxPData.endgame_xP ?? teamxPData.endgame_exp ?? teamxPData.endgameExp ?? 0);
     }
-    return Number(teamExpData.xpPost ?? teamExpData.xp ?? teamExpData.xpPre ?? teamExpData.exp ?? teamExpData.total ?? teamExpData.total_points ?? 0);
+    return Number(teamxPData.xpPost ?? teamxPData.xp ?? teamxPData.xpPre ?? teamxPData.xP ?? teamxPData.exp ?? teamxPData.total ?? teamxPData.total_points ?? 0);
 }
 
 function getDatasourceLabel(datasource, isFtc = false) {
     if (datasource === "epa") return t('predictor.statbotics_epa', "Statbotics EPA");
-    if (datasource === "exp") return t('alliance-selection.match13_exp', "Match 13 xP");
+    if (datasource === "xP" || datasource === "exp") return t('alliance-selection.match13_xP', "Match 13 xP");
     if (datasource === "opr") return isFtc ? t('predictor.ftcscout_opr', "FTC Scout OPR") : t('predictor.tba_opr', "TBA OPR");
     if (datasource === "all") return t('rankings.metric.all', "All Sources");
     return t('predictor.scouted_data', "Scouted Data");
@@ -628,9 +628,11 @@ async function renderGraphView(target, config, snapshot, live) {
         : (settings.program === "FTC");
 
     const effectiveUseEpa = !isFtc && Boolean(settings.useStatboticsEpa || teams.some(t => t.epa !== undefined && t.epa !== null && t.epa !== 0) || (statsHistory.epaHistory && statsHistory.epaHistory.length > 0));
-    const effectiveUseExp = !isFtc && Boolean(settings.useMatch13Exp || (statsHistory.match13History && statsHistory.match13History.length > 0) || teams.some(t => (t.exp !== undefined && t.exp !== null && t.exp !== 0) || (t.match13Exp !== undefined && t.match13Exp !== null && t.match13Exp !== 0)));
+    const effectiveUsexP = !isFtc && Boolean((settings.useMatch13xP ?? settings.useMatch13Exp) || (statsHistory.match13History && statsHistory.match13History.length > 0) || teams.some(t => ((t.xP ?? t.exp) !== undefined && (t.xP ?? t.exp) !== null && (t.xP ?? t.exp) !== 0) || ((t.match13xP ?? t.match13Exp) !== undefined && (t.match13xP ?? t.match13Exp) !== null && (t.match13xP ?? t.match13Exp) !== 0)));
     const effectiveUseOpr = Boolean(settings.useTbaOpr || teams.some(t => t.opr !== undefined && t.opr !== null && t.opr !== 0) || (statsHistory.oprs && Object.keys(statsHistory.oprs).length > 0));
-    const hasAnyExternal = effectiveUseEpa || effectiveUseExp || effectiveUseOpr;
+    const hasAnyExternal = effectiveUseEpa || effectiveUsexP || effectiveUseOpr;
+    const normExtId = (id) => (id === 'ext_exp' ? 'ext_xP' : id);
+    const rawDs = config.datasource || (snapshot && snapshot.datasource) || 'scouted';
 
     const state = {
         entries,
@@ -640,17 +642,17 @@ async function renderGraphView(target, config, snapshot, live) {
         settings,
         isFtc,
         effectiveUseEpa,
-        effectiveUseExp,
+        effectiveUsexP,
         effectiveUseOpr,
         config: scoutingConfig,
         metrics: availableMetrics,
         metricMap: new Map(availableMetrics.map(m => [m.id, m])),
-        metricId: config.metricId || (snapshot && snapshot.metricId) || 'score_total',
+        metricId: normExtId(config.metricId || (snapshot && snapshot.metricId) || 'score_total'),
         is3D: Boolean(config.is3D ?? (snapshot && snapshot.is3D) ?? false),
-        metricXId: config.metricXId || (snapshot && snapshot.metricXId) || 'score_auto',
-        metricYId: config.metricYId || (snapshot && snapshot.metricYId) || 'score_teleop',
-        metricZId: config.metricZId || (snapshot && snapshot.metricZId) || 'score_total',
-        datasource: config.datasource || (snapshot && snapshot.datasource) || 'scouted',
+        metricXId: normExtId(config.metricXId || (snapshot && snapshot.metricXId) || 'score_auto'),
+        metricYId: normExtId(config.metricYId || (snapshot && snapshot.metricYId) || 'score_teleop'),
+        metricZId: normExtId(config.metricZId || (snapshot && snapshot.metricZId) || 'score_total'),
+        datasource: rawDs === 'exp' ? 'xP' : rawDs,
         dataView: config.dataView || (snapshot && snapshot.dataView) || 'averages',
         sort: config.sort || (snapshot && snapshot.sort) || 'value_desc',
         includePrescout: config.includePrescout || (snapshot && snapshot.includePrescout) || false,
@@ -737,7 +739,7 @@ async function renderGraphView(target, config, snapshot, live) {
                                     <option value="all" ${state.datasource === 'all' ? 'selected' : ''}>${t('rankings.metric.all', 'All Sources')}</option>
                                     <option value="scouted" ${state.datasource === 'scouted' ? 'selected' : ''}>${t('predictor.scouted_data', 'Scouted Data')}</option>
                                     ${effectiveUseEpa ? `<option value="epa" ${state.datasource === 'epa' ? 'selected' : ''}>${t('predictor.statbotics_epa', 'Statbotics EPA')}</option>` : ''}
-                                    ${effectiveUseExp ? `<option value="exp" ${state.datasource === 'exp' ? 'selected' : ''}>${t('alliance-selection.match13_exp', 'Match 13 xP')}</option>` : ''}
+                                    ${effectiveUsexP ? `<option value="xP" ${(state.datasource === 'xP' || state.datasource === 'exp') ? 'selected' : ''}>${t('alliance-selection.match13_xP', 'Match 13 xP')}</option>` : ''}
                                     ${effectiveUseOpr ? `<option value="opr" ${state.datasource === 'opr' ? 'selected' : ''}>${isFtc ? t('predictor.ftcscout_opr', 'FTC Scout OPR') : t('predictor.tba_opr', 'TBA OPR')}</option>` : ''}
                                 </select>
                             </div>
@@ -996,7 +998,7 @@ async function renderGraphView(target, config, snapshot, live) {
             metricField?.classList.remove("hidden");
             viewField?.classList.remove("hidden");
             prescoutField?.classList.remove("hidden");
-        } else if (state.datasource === "exp" || state.datasource === "all") {
+        } else if (state.datasource === "xP" || state.datasource === "exp" || state.datasource === "all") {
             metricField?.classList.remove("hidden");
             viewField?.classList.remove("hidden");
             prescoutField?.classList.add("hidden");
@@ -1275,17 +1277,17 @@ async function renderGraphView(target, config, snapshot, live) {
                     const tm = state.eventTeamsMap.get(Number(tNum));
                     const tEntries = entries.filter(e => Number(e.targetTeamNumber || e.teamNumber) === Number(tNum) && (state.includePrescout || !e.isPrescout));
                     const valFor = (m) => {
-                        if (state.datasource === 'exp') {
+                        if (state.datasource === 'xP' || state.datasource === 'exp') {
                             let sum = 0, cnt = 0;
                             (statsHistory.match13History || []).forEach(mo => {
-                                const td = extractTeamExpData(mo, tNum);
-                                if (td) { sum += getTeamExpMetricValue(td, m.id); cnt++; }
+                                const td = extractTeamxPData(mo, tNum);
+                                if (td) { sum += getTeamxPMetricValue(td, m.id); cnt++; }
                             });
-                            return cnt > 0 ? sum / cnt : (m.id === 'score_total' ? Number(tm?.exp ?? tm?.match13Exp ?? 0) : 0);
+                            return cnt > 0 ? sum / cnt : (m.id === 'score_total' ? Number(tm?.xP ?? tm?.exp ?? tm?.match13xP ?? tm?.match13Exp ?? 0) : 0);
                         }
                         if (m?.kind === 'count') return tEntries.length;
                         if (m?.id === 'ext_epa') return Number(tm?.epa ?? 0);
-                        if (m?.id === 'ext_exp') return Number(tm?.exp ?? tm?.match13Exp ?? 0);
+                        if (m?.id === 'ext_xP' || m?.id === 'ext_exp') return Number(tm?.xP ?? tm?.exp ?? tm?.match13xP ?? tm?.match13Exp ?? 0);
                         if (m?.id === 'ext_opr') return Number(tm?.opr ?? 0);
                         if (!tEntries.length) return m.scope === 'total' ? Number(tm?.averagePoints ?? 0) : 0;
                         let sum = 0, cnt = 0;
@@ -1297,17 +1299,17 @@ async function renderGraphView(target, config, snapshot, live) {
                     };
                     return { name: `Team ${tNum}`, points: [{ x: valFor(mx), y: valFor(my), z: valFor(mz), label: `${tNum}` }] };
                 });
-                if (state.datasource === 'exp' && (statsHistory.match13History || []).length) {
+                if ((state.datasource === 'xP' || state.datasource === 'exp') && (statsHistory.match13History || []).length) {
                     series3DMatches = sortedSelTeams.map(tNum => {
                         const pts = [];
                         (statsHistory.match13History || []).forEach(mo => {
-                            const td = extractTeamExpData(mo, tNum);
+                            const td = extractTeamxPData(mo, tNum);
                             if (!td) return;
                             const mk = mo.key || mo.matchKey || mo.match_key || mo.match || '';
                             pts.push({
-                                x: getTeamExpMetricValue(td, mx.id),
-                                y: getTeamExpMetricValue(td, my.id),
-                                z: getTeamExpMetricValue(td, mz.id),
+                                x: getTeamxPMetricValue(td, mx.id),
+                                y: getTeamxPMetricValue(td, my.id),
+                                z: getTeamxPMetricValue(td, mz.id),
                                 label: `${tNum}`,
                                 matchLabel: mk
                             });
@@ -1379,7 +1381,7 @@ async function renderGraphView(target, config, snapshot, live) {
 
                 const chart = createPlotlyContainer(320);
                 const viewTitle = state.dataView === "matches" ? "Match-by-match" : "Team averages";
-                const cardTitle = (state.datasource === "exp" || state.datasource === "all")
+                const cardTitle = (state.datasource === "xP" || state.datasource === "exp" || state.datasource === "all")
                     ? `${getDatasourceLabel(state.datasource, state.isFtc)} (${metricLabel}) - ${graphType} (${viewTitle})`
                     : `${getDatasourceLabel(state.datasource, state.isFtc)} - ${graphType} (${viewTitle})`;
                 const card = createGraphCard(cardTitle, chart);
@@ -1560,7 +1562,7 @@ async function renderGraphView(target, config, snapshot, live) {
         const theme = resolveThemeTokens();
 
         if (st.dataView === "matches") {
-            if (st.datasource === "exp") {
+            if (st.datasource === "xP" || st.datasource === "exp") {
                 const rawMatch13History = st.statsHistory?.match13History || [];
                 if (!rawMatch13History.length) {
                     container.appendChild(createNotice(t('graphs.no_match13_data', "No Match 13 match data available for this event.")));
@@ -1570,12 +1572,12 @@ async function renderGraphView(target, config, snapshot, live) {
                 selectedTeams.forEach(teamNumber => {
                     const teamMatches = [];
                     rawMatch13History.forEach(matchObj => {
-                        const teamData = extractTeamExpData(matchObj, teamNumber);
+                        const teamData = extractTeamxPData(matchObj, teamNumber);
                         if (!teamData) return;
                         const matchKey = matchObj.key || matchObj.matchKey || matchObj.match_key || matchObj.match || "";
                         const label = formatMatchKeyToLabel(matchKey);
                         const sortWeight = getMatchSortWeightFromLabel(label);
-                        const value = getTeamExpMetricValue(teamData, st.metricId);
+                        const value = getTeamxPMetricValue(teamData, st.metricId);
                         teamMatches.push({ label, value, sortWeight });
                     });
                     teamMatches.sort((a, b) => a.sortWeight - b.sortWeight);
@@ -1619,23 +1621,23 @@ async function renderGraphView(target, config, snapshot, live) {
                         });
                     }
 
-                    if (st.effectiveUseExp && rawMatch13History.length > 0) {
-                        const expMatches = [];
+                    if (st.effectiveUsexP && rawMatch13History.length > 0) {
+                        const xPMatches = [];
                         rawMatch13History.forEach(matchObj => {
-                            const teamData = extractTeamExpData(matchObj, teamNumber);
+                            const teamData = extractTeamxPData(matchObj, teamNumber);
                             if (!teamData) return;
                             const matchKey = matchObj.key || matchObj.matchKey || matchObj.match_key || matchObj.match || "";
                             const label = formatMatchKeyToLabel(matchKey);
                             const sortWeight = getMatchSortWeightFromLabel(label);
-                            const value = getTeamExpMetricValue(teamData, st.metricId);
-                            expMatches.push({ label, value, sortWeight });
+                            const value = getTeamxPMetricValue(teamData, st.metricId);
+                            xPMatches.push({ label, value, sortWeight });
                         });
-                        expMatches.sort((a, b) => a.sortWeight - b.sortWeight);
-                        if (expMatches.length > 0) {
+                        xPMatches.sort((a, b) => a.sortWeight - b.sortWeight);
+                        if (xPMatches.length > 0) {
                             series.push({
                                 name: `Team ${teamNumber} (Match 13 xP)`,
-                                x: expMatches.map(m => m.label),
-                                y: expMatches.map(m => m.value)
+                                x: xPMatches.map(m => m.label),
+                                y: xPMatches.map(m => m.value)
                             });
                         }
                     }
@@ -1672,12 +1674,11 @@ async function renderGraphView(target, config, snapshot, live) {
                 epaVal = Number(team?.statboticsEpa ?? team?.normEpa ?? 0);
             }
 
-            // EXP resolution
-            let expVal = (team && team.exp !== null && team.exp !== undefined)
-                ? Number(team.exp)
-                : ((team && team.match13Exp !== null && team.match13Exp !== undefined) ? Number(team.match13Exp) : 0);
-            if (isNaN(expVal) || expVal === 0) {
-                expVal = Number(team?.match13_exp ?? 0);
+            // xP resolution
+            const rawxP = team?.xP ?? team?.exp ?? team?.match13xP ?? team?.match13Exp;
+            let xPVal = (rawxP !== null && rawxP !== undefined) ? Number(rawxP) : 0;
+            if (isNaN(xPVal) || xPVal === 0) {
+                xPVal = Number(team?.match13_xp ?? team?.match13_xP ?? team?.match13_exp ?? 0);
             }
 
             // Scouted points resolution
@@ -1697,15 +1698,16 @@ async function renderGraphView(target, config, snapshot, live) {
                 teamNumber,
                 label: `Team ${teamNumber}`,
                 epa: epaVal,
-                exp: expVal,
+                xP: xPVal,
                 opr: oprVal,
                 scouted: scoutedAvg
             };
         });
 
-        const sortField = st.datasource === "all"
-            ? (st.effectiveUseEpa ? "epa" : (st.effectiveUseExp ? "exp" : (st.effectiveUseOpr ? "opr" : "scouted")))
-            : st.datasource;
+        const dsSortKey = st.datasource === "exp" ? "xP" : st.datasource;
+        const sortField = dsSortKey === "all"
+            ? (st.effectiveUseEpa ? "epa" : (st.effectiveUsexP ? "xP" : (st.effectiveUseOpr ? "opr" : "scouted")))
+            : dsSortKey;
 
         data.sort((a, b) => {
             if (st.sort === "team_asc") return a.teamNumber - b.teamNumber;
@@ -1740,14 +1742,14 @@ async function renderGraphView(target, config, snapshot, live) {
                 plotly.react(container, [trace], layout, PLOTLY_CONFIG);
                 return;
             }
-            if (st.datasource === "exp" && st.effectiveUseExp) {
+            if ((st.datasource === "xP" || st.datasource === "exp") && st.effectiveUsexP) {
                 const trace = {
                     type: "bar",
                     orientation: "h",
-                    x: data.map(i => i.exp),
+                    x: data.map(i => i.xP),
                     y: labels,
                     marker: { color: theme.accent },
-                    text: data.map(i => Number(i.exp).toFixed(1)),
+                    text: data.map(i => Number(i.xP).toFixed(1)),
                     textposition: "auto",
                     hovertemplate: "<b>%{y}</b><br>Match 13 xP: %{x:.2f}<extra></extra>"
                 };
@@ -1804,12 +1806,12 @@ async function renderGraphView(target, config, snapshot, live) {
                         hovertemplate: "<b>%{x}</b><br>Statbotics EPA: %{y:.2f}<extra></extra>"
                     });
                 }
-                if (st.effectiveUseExp) {
+                if (st.effectiveUsexP) {
                     series.push({
                         type: "bar",
                         name: "Match 13 xP",
                         x: labels,
-                        y: data.map(i => i.exp),
+                        y: data.map(i => i.xP),
                         hovertemplate: "<b>%{x}</b><br>Match 13 xP: %{y:.2f}<extra></extra>"
                     });
                 }
@@ -1846,8 +1848,8 @@ async function renderGraphView(target, config, snapshot, live) {
             if ((st.datasource === "epa" || st.datasource === "all") && st.effectiveUseEpa) {
                 series.push({ type: "scatter", name: "Statbotics EPA", x: labels, y: data.map(i => i.epa), mode: "markers", marker: { size: 8 } });
             }
-            if ((st.datasource === "exp" || st.datasource === "all") && st.effectiveUseExp) {
-                series.push({ type: "scatter", name: "Match 13 xP", x: labels, y: data.map(i => i.exp), mode: "markers", marker: { size: 8 } });
+            if ((st.datasource === "xP" || st.datasource === "exp" || st.datasource === "all") && st.effectiveUsexP) {
+                series.push({ type: "scatter", name: "Match 13 xP", x: labels, y: data.map(i => i.xP), mode: "markers", marker: { size: 8 } });
             }
             if ((st.datasource === "opr" || st.datasource === "all") && st.effectiveUseOpr) {
                 series.push({ type: "scatter", name: st.isFtc ? "FTC Scout OPR" : "TBA OPR", x: labels, y: data.map(i => i.opr), mode: "markers", marker: { size: 8 } });
@@ -2026,6 +2028,7 @@ async function renderGraphView(target, config, snapshot, live) {
             state.is3D = toggle3D.checked;
             if (axis3DFields) axis3DFields.classList.toggle("hidden", !state.is3D);
             if (metricField) metricField.classList.toggle("hidden", state.is3D);
+            updateGraphTypeAvailability();
             generateGraphs();
         });
     }
@@ -2377,7 +2380,7 @@ function renderPredictorView(target, config, snapshot, live) {
         teams: (pred.redTeams || []).map(t => typeof t === 'object' ? t : { teamNumber: t, nickname: `Team ${t}`, averageScoutedScore: Math.round((pred.redPredictedScore || 100) / 3), scoutedMatchesCount: 0 }),
         totalScoutedScore: Number(pred.redPredictedScore || 0),
         totalEpa: Number(pred.redEpa || 0),
-        totalExp: Number(pred.redExp || 0),
+        totalxP: Number(pred.redxP ?? pred.redExp ?? 0),
         totalOpr: Number(pred.redOpr || 0)
     };
 
@@ -2385,7 +2388,7 @@ function renderPredictorView(target, config, snapshot, live) {
         teams: (pred.blueTeams || []).map(t => typeof t === 'object' ? t : { teamNumber: t, nickname: `Team ${t}`, averageScoutedScore: Math.round((pred.bluePredictedScore || 100) / 3), scoutedMatchesCount: 0 }),
         totalScoutedScore: Number(pred.bluePredictedScore || 0),
         totalEpa: Number(pred.blueEpa || 0),
-        totalExp: Number(pred.blueExp || 0),
+        totalxP: Number(pred.bluexP ?? pred.blueExp ?? 0),
         totalOpr: Number(pred.blueOpr || 0)
     };
 
@@ -2394,16 +2397,17 @@ function renderPredictorView(target, config, snapshot, live) {
     const blueScouted = Number(blue.totalScoutedScore || pred.bluePredictedScore || 0);
     const redEpa = Number(red.totalEpa || 0);
     const blueEpa = Number(blue.totalEpa || 0);
-    const redExp = Number(red.totalExp || 0);
-    const blueExp = Number(blue.totalExp || 0);
+    const redxP = Number(red.totalxP ?? red.totalExp ?? 0);
+    const bluexP = Number(blue.totalxP ?? blue.totalExp ?? 0);
     const redOpr = Number(red.totalOpr || 0);
     const blueOpr = Number(blue.totalOpr || 0);
 
     const effectiveUseEpa = !isFtc && Boolean(settings.useStatboticsEpa || (redEpa > 0 || blueEpa > 0) || pred.epaPrediction);
-    const effectiveUseExp = !isFtc && Boolean(settings.useMatch13Exp || (redExp > 0 || blueExp > 0) || pred.expPrediction);
+    const effectiveUsexP = !isFtc && Boolean((settings.useMatch13xP ?? settings.useMatch13Exp) || (redxP > 0 || bluexP > 0) || pred.xPPrediction || pred.expPrediction);
     const effectiveUseOpr = Boolean(settings.useTbaOpr || (redOpr > 0 || blueOpr > 0) || pred.oprPrediction);
 
-    let selectedSource = config.datasource || (snapshot && snapshot.datasource) || 'all';
+    const rawPredSource = config.datasource || (snapshot && snapshot.datasource) || 'all';
+    let selectedSource = rawPredSource === 'exp' ? 'xP' : rawPredSource;
     const matchLabel = pred.label || pred.matchKey || config.label || config.matchKey || 'Match Prediction';
 
     target.innerHTML = `
@@ -2411,7 +2415,7 @@ function renderPredictorView(target, config, snapshot, live) {
             <div class="row justify-between align-center wrap gap-12">
                 <div>
                     <h1 style="margin: 0 0 4px 0;">${matchLabel}</h1>
-                    <p class="notice" style="margin: 0;">${t('predictor.notice', 'Compare alliances and predict match outcomes using scouted data, EPA, EXP, and OPR.')}</p>
+                    <p class="notice" style="margin: 0;">${t('predictor.notice', 'Compare alliances and predict match outcomes using scouted data, EPA, xP, and OPR.')}</p>
                 </div>
                 <div class="field" style="margin: 0; min-width: 200px;">
                     <label for="shared-pred-datasource" style="margin-bottom: 4px; font-size: 0.8rem; text-transform: uppercase; color: var(--muted);">${t('predictor.data_source', 'Data Source')}</label>
@@ -2419,7 +2423,7 @@ function renderPredictorView(target, config, snapshot, live) {
                         <option value="all" ${selectedSource === 'all' ? 'selected' : ''}>${t('predictor.all_sources', 'All Sources')}</option>
                         <option value="scouted" ${selectedSource === 'scouted' ? 'selected' : ''}>${t('predictor.scouted_data', 'Scouted Data')}</option>
                         ${effectiveUseEpa ? `<option value="epa" ${selectedSource === 'epa' ? 'selected' : ''}>${t('predictor.statbotics_epa', 'Statbotics EPA')}</option>` : ''}
-                        ${effectiveUseExp ? `<option value="exp" ${selectedSource === 'exp' ? 'selected' : ''}>${t('alliance-selection.match13_exp', 'Match 13 xP')}</option>` : ''}
+                        ${effectiveUsexP ? `<option value="xP" ${selectedSource === 'xP' ? 'selected' : ''}>${t('alliance-selection.match13_xP', 'Match 13 xP')}</option>` : ''}
                         ${effectiveUseOpr ? `<option value="opr" ${selectedSource === 'opr' ? 'selected' : ''}>${isFtc ? t('predictor.ftcscout_opr', 'FTC Scout OPR') : t('predictor.tba_opr', 'TBA OPR')}</option>` : ''}
                     </select>
                 </div>
@@ -2460,16 +2464,16 @@ function renderPredictorView(target, config, snapshot, live) {
                             </div>
                         </div>
 
-                        <!-- EXP Bar -->
-                        <div class="comp-bar-container mb-16 ${effectiveUseExp ? '' : 'hidden'}" id="shared-exp-comp">
+                        <!-- xP Bar -->
+                        <div class="comp-bar-container mb-16 ${effectiveUsexP ? '' : 'hidden'}" id="shared-xP-comp">
                             <div class="comp-bar-label" style="display: flex; justify-content: space-between; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem;">
-                                <span style="color: #f87171;" id="lbl-pred-exp-red">Red: ${redExp.toFixed(1)}</span>
+                                <span style="color: #f87171;" id="lbl-pred-xP-red">Red: ${redxP.toFixed(1)}</span>
                                 <span style="font-weight: 700;">Match 13 xP</span>
-                                <span style="color: #60a5fa;" id="lbl-pred-exp-blue">Blue: ${blueExp.toFixed(1)}</span>
+                                <span style="color: #60a5fa;" id="lbl-pred-xP-blue">Blue: ${bluexP.toFixed(1)}</span>
                             </div>
                             <div class="comp-bar-track" style="height: 12px; border-radius: 6px; background: var(--surface-2, rgba(0,0,0,0.1)); border: 1px solid var(--border); display: flex; overflow: hidden;">
-                                <div id="bar-pred-exp-red" class="comp-bar-fill" style="height: 100%; background: linear-gradient(90deg, #f87171, #ef4444); transition: width 0.6s ease;"></div>
-                                <div id="bar-pred-exp-blue" class="comp-bar-fill" style="height: 100%; background: linear-gradient(90deg, #3b82f6, #60a5fa); transition: width 0.6s ease;"></div>
+                                <div id="bar-pred-xP-red" class="comp-bar-fill" style="height: 100%; background: linear-gradient(90deg, #f87171, #ef4444); transition: width 0.6s ease;"></div>
+                                <div id="bar-pred-xP-blue" class="comp-bar-fill" style="height: 100%; background: linear-gradient(90deg, #3b82f6, #60a5fa); transition: width 0.6s ease;"></div>
                             </div>
                         </div>
 
@@ -2524,10 +2528,10 @@ function renderPredictorView(target, config, snapshot, live) {
                     <div class="winner-subtext" id="spotlight-epa-subtext" style="font-size: 0.85rem; color: var(--muted);">-</div>
                 </div>
 
-                <div class="winner-spotlight card ${effectiveUseExp ? '' : 'hidden'}" id="spotlight-exp-card" style="padding: 20px; text-align: center;">
-                    <div class="winner-spotlight-title" style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 6px;">${t('predictor.exp_prediction', 'EXP Prediction')}</div>
-                    <div class="winner-name" id="spotlight-exp-winner" style="font-size: 1.6rem; font-weight: 800; margin-bottom: 6px;">-</div>
-                    <div class="winner-subtext" id="spotlight-exp-subtext" style="font-size: 0.85rem; color: var(--muted);">-</div>
+                <div class="winner-spotlight card ${effectiveUsexP ? '' : 'hidden'}" id="spotlight-xP-card" style="padding: 20px; text-align: center;">
+                    <div class="winner-spotlight-title" style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 6px;">${t('predictor.xP_prediction', 'xP Prediction')}</div>
+                    <div class="winner-name" id="spotlight-xP-winner" style="font-size: 1.6rem; font-weight: 800; margin-bottom: 6px;">-</div>
+                    <div class="winner-subtext" id="spotlight-xP-subtext" style="font-size: 0.85rem; color: var(--muted);">-</div>
                 </div>
 
                 <div class="winner-spotlight card ${effectiveUseOpr ? '' : 'hidden'}" id="spotlight-opr-card" style="padding: 20px; text-align: center;">
@@ -2605,8 +2609,9 @@ function renderPredictorView(target, config, snapshot, live) {
             if (tObj.epa !== null && tObj.epa !== undefined && effectiveUseEpa) {
                 pills += `<span style="font-size: 0.75rem; padding: 1px 6px; border-radius: 4px; background: var(--surface-3, rgba(255,255,255,0.06)); color: var(--muted);">EPA: ${Number(tObj.epa).toFixed(1)}</span>`;
             }
-            if (tObj.exp !== null && tObj.exp !== undefined && effectiveUseExp) {
-                pills += `<span style="font-size: 0.75rem; padding: 1px 6px; border-radius: 4px; background: var(--surface-3, rgba(255,255,255,0.06)); color: var(--muted);">EXP: ${Number(tObj.exp).toFixed(1)}</span>`;
+            const teamxPVal = tObj.xP ?? tObj.exp ?? tObj.match13xP ?? tObj.match13Exp;
+            if (teamxPVal !== null && teamxPVal !== undefined && effectiveUsexP) {
+                pills += `<span style="font-size: 0.75rem; padding: 1px 6px; border-radius: 4px; background: var(--surface-3, rgba(255,255,255,0.06)); color: var(--muted);">xP: ${Number(teamxPVal).toFixed(1)}</span>`;
             }
             if (tObj.opr !== null && tObj.opr !== undefined && effectiveUseOpr) {
                 pills += `<span style="font-size: 0.75rem; padding: 1px 6px; border-radius: 4px; background: var(--surface-3, rgba(255,255,255,0.06)); color: var(--muted);">OPR: ${Number(tObj.opr).toFixed(1)}</span>`;
@@ -2638,9 +2643,9 @@ function renderPredictorView(target, config, snapshot, live) {
             updateBar("bar-pred-epa-red", "bar-pred-epa-blue", redEpa, blueEpa);
             renderSpotlight("spotlight-epa-winner", "spotlight-epa-subtext", redEpa, blueEpa, "EPA");
         }
-        if (effectiveUseExp) {
-            updateBar("bar-pred-exp-red", "bar-pred-exp-blue", redExp, blueExp);
-            renderSpotlight("spotlight-exp-winner", "spotlight-exp-subtext", redExp, blueExp, "EXP");
+        if (effectiveUsexP) {
+            updateBar("bar-pred-xP-red", "bar-pred-xP-blue", redxP, bluexP);
+            renderSpotlight("spotlight-xP-winner", "spotlight-xP-subtext", redxP, bluexP, "xP");
         }
         if (effectiveUseOpr) {
             updateBar("bar-pred-opr-red", "bar-pred-opr-blue", redOpr, blueOpr);
@@ -2653,12 +2658,12 @@ function renderPredictorView(target, config, snapshot, live) {
         // Visibility based on selected datasource
         const scoutedComp = document.getElementById("shared-scouted-comp");
         const epaComp = document.getElementById("shared-epa-comp");
-        const expComp = document.getElementById("shared-exp-comp");
+        const xPComp = document.getElementById("shared-xP-comp");
         const oprComp = document.getElementById("shared-opr-comp");
 
         const scoutedCard = document.getElementById("spotlight-scouted-card");
         const epaCard = document.getElementById("spotlight-epa-card");
-        const expCard = document.getElementById("spotlight-exp-card");
+        const xPCard = document.getElementById("spotlight-xP-card");
         const oprCard = document.getElementById("spotlight-opr-card");
 
         if (selectedSource === "all") {
@@ -2666,8 +2671,8 @@ function renderPredictorView(target, config, snapshot, live) {
             if (scoutedCard) scoutedCard.classList.remove("hidden");
             if (epaComp) epaComp.classList.toggle("hidden", !effectiveUseEpa);
             if (epaCard) epaCard.classList.toggle("hidden", !effectiveUseEpa);
-            if (expComp) expComp.classList.toggle("hidden", !effectiveUseExp);
-            if (expCard) expCard.classList.toggle("hidden", !effectiveUseExp);
+            if (xPComp) xPComp.classList.toggle("hidden", !effectiveUsexP);
+            if (xPCard) xPCard.classList.toggle("hidden", !effectiveUsexP);
             if (oprComp) oprComp.classList.toggle("hidden", !effectiveUseOpr);
             if (oprCard) oprCard.classList.toggle("hidden", !effectiveUseOpr);
         } else if (selectedSource === "scouted") {
@@ -2675,8 +2680,8 @@ function renderPredictorView(target, config, snapshot, live) {
             if (scoutedCard) scoutedCard.classList.remove("hidden");
             if (epaComp) epaComp.classList.add("hidden");
             if (epaCard) epaCard.classList.add("hidden");
-            if (expComp) expComp.classList.add("hidden");
-            if (expCard) expCard.classList.add("hidden");
+            if (xPComp) xPComp.classList.add("hidden");
+            if (xPCard) xPCard.classList.add("hidden");
             if (oprComp) oprComp.classList.add("hidden");
             if (oprCard) oprCard.classList.add("hidden");
         } else if (selectedSource === "epa") {
@@ -2684,17 +2689,17 @@ function renderPredictorView(target, config, snapshot, live) {
             if (scoutedCard) scoutedCard.classList.add("hidden");
             if (epaComp) epaComp.classList.remove("hidden");
             if (epaCard) epaCard.classList.remove("hidden");
-            if (expComp) expComp.classList.add("hidden");
-            if (expCard) expCard.classList.add("hidden");
+            if (xPComp) xPComp.classList.add("hidden");
+            if (xPCard) xPCard.classList.add("hidden");
             if (oprComp) oprComp.classList.add("hidden");
             if (oprCard) oprCard.classList.add("hidden");
-        } else if (selectedSource === "exp") {
+        } else if (selectedSource === "xP" || selectedSource === "exp") {
             if (scoutedComp) scoutedComp.classList.add("hidden");
             if (scoutedCard) scoutedCard.classList.add("hidden");
             if (epaComp) epaComp.classList.add("hidden");
             if (epaCard) epaCard.classList.add("hidden");
-            if (expComp) expComp.classList.remove("hidden");
-            if (expCard) expCard.classList.remove("hidden");
+            if (xPComp) xPComp.classList.remove("hidden");
+            if (xPCard) xPCard.classList.remove("hidden");
             if (oprComp) oprComp.classList.add("hidden");
             if (oprCard) oprCard.classList.add("hidden");
         } else if (selectedSource === "opr") {
@@ -2702,8 +2707,8 @@ function renderPredictorView(target, config, snapshot, live) {
             if (scoutedCard) scoutedCard.classList.add("hidden");
             if (epaComp) epaComp.classList.add("hidden");
             if (epaCard) epaCard.classList.add("hidden");
-            if (expComp) expComp.classList.add("hidden");
-            if (expCard) expCard.classList.add("hidden");
+            if (xPComp) xPComp.classList.add("hidden");
+            if (xPCard) xPCard.classList.add("hidden");
             if (oprComp) oprComp.classList.remove("hidden");
             if (oprCard) oprCard.classList.remove("hidden");
         }

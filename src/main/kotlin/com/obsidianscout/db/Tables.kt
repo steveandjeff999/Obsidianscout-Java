@@ -226,7 +226,7 @@ object ApiTeams : UUIDTable("api_teams") {
     val country = varchar("country", 80).nullable()
     val opr = double("opr").nullable()
     val epa = double("epa").nullable()
-    val match13Exp = double("match13_exp").nullable()
+    val match13xP = double("match13_xp").nullable()
     val dataJson = text("data_json")
     val updatedAt = timestamp("updated_at")
 

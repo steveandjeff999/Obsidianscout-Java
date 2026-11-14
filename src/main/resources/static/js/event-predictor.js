@@ -68,7 +68,7 @@ async function loadEvents() {
         }
 
         const effectiveUseEpa = !isFtc && appSettings.useStatboticsEpa;
-        const effectiveUseExp = !isFtc && appSettings.useMatch13Exp;
+        const effectiveUsexP = !isFtc && (appSettings.useMatch13xP ?? appSettings.useMatch13Exp);
         const effectiveUseOpr = appSettings.useTbaOpr;
 
         const datasourceSelect = document.getElementById("datasource-select");
@@ -77,9 +77,9 @@ async function loadEvents() {
                 const optEpa = datasourceSelect.querySelector('option[value="epa"]');
                 if (optEpa) optEpa.remove();
             }
-            if (!effectiveUseExp) {
-                const optExp = datasourceSelect.querySelector('option[value="exp"]');
-                if (optExp) optExp.remove();
+            if (!effectiveUsexP) {
+                const optxP = datasourceSelect.querySelector('option[value="xP"]');
+                if (optxP) optxP.remove();
             }
             if (!effectiveUseOpr) {
                 const optOpr = datasourceSelect.querySelector('option[value="opr"]');
@@ -88,7 +88,7 @@ async function loadEvents() {
                 const optOpr = datasourceSelect.querySelector('option[value="opr"]');
                 if (optOpr) optOpr.textContent = t('predictor.ftcscout_opr', "FTC Scout OPR");
             }
-            const activeCount = (effectiveUseEpa ? 1 : 0) + (effectiveUseExp ? 1 : 0) + (effectiveUseOpr ? 1 : 0);
+            const activeCount = (effectiveUseEpa ? 1 : 0) + (effectiveUsexP ? 1 : 0) + (effectiveUseOpr ? 1 : 0);
             const optAll = datasourceSelect.querySelector('option[value="all"]');
             if (activeCount === 0) {
                 if (optAll) optAll.remove();
@@ -103,10 +103,10 @@ async function loadEvents() {
         if (modalEpaComp) modalEpaComp.style.display = effectiveUseEpa ? "" : "none";
         if (modalEpaCard) modalEpaCard.style.display = effectiveUseEpa ? "" : "none";
 
-        const modalExpComp = document.getElementById("modal-exp-comparison");
-        const modalExpCard = document.getElementById("modal-spotlight-exp-card");
-        if (modalExpComp) modalExpComp.style.display = effectiveUseExp ? "" : "none";
-        if (modalExpCard) modalExpCard.style.display = effectiveUseExp ? "" : "none";
+        const modalxPComp = document.getElementById("modal-xP-comparison");
+        const modalxPCard = document.getElementById("modal-spotlight-xP-card");
+        if (modalxPComp) modalxPComp.style.display = effectiveUsexP ? "" : "none";
+        if (modalxPCard) modalxPCard.style.display = effectiveUsexP ? "" : "none";
 
         const modalOprComp = document.getElementById("modal-opr-comparison");
         const modalOprCard = document.getElementById("modal-spotlight-opr-card");
@@ -292,7 +292,7 @@ function renderPredictionsList() {
                 ? Obsidianscout.getProgram() === "FTC"
                 : (appSettings && appSettings.program === "FTC");
             const effectiveUseEpa = !isFtc && appSettings && appSettings.useStatboticsEpa;
-            const effectiveUseExp = !isFtc && appSettings && appSettings.useMatch13Exp;
+            const effectiveUsexP = !isFtc && appSettings && (appSettings.useMatch13xP ?? appSettings.useMatch13Exp);
             const effectiveUseOpr = appSettings && appSettings.useTbaOpr;
 
             const redScouted = match.redAlliance.totalScoutedScore;
@@ -309,11 +309,11 @@ function renderPredictionsList() {
                 else if (blueEpa > redEpa) blueVotes++;
             }
 
-            const redExp = match.redAlliance.totalExp;
-            const blueExp = match.blueAlliance.totalExp;
-            if (effectiveUseExp && (redExp > 0 || blueExp > 0)) {
-                if (redExp > blueExp) redVotes++;
-                else if (blueExp > redExp) blueVotes++;
+            const redxP = match.redAlliance.totalxP ?? match.redAlliance.totalExp ?? 0;
+            const bluexP = match.blueAlliance.totalxP ?? match.blueAlliance.totalExp ?? 0;
+            if (effectiveUsexP && (redxP > 0 || bluexP > 0)) {
+                if (redxP > bluexP) redVotes++;
+                else if (bluexP > redxP) blueVotes++;
             }
 
             const redOpr = match.redAlliance.totalOpr;
@@ -345,12 +345,12 @@ function renderPredictionsList() {
                     `;
                 }
 
-                let expRowHtml = "";
-                if (effectiveUseExp) {
-                    expRowHtml = `
+                let xPRowHtml = "";
+                if (effectiveUsexP) {
+                    xPRowHtml = `
                         <div class="score-row" style="font-size: 0.75rem;">
-                            <span style="color: #10b981; font-weight: 500;">EXP:</span>
-                            <span style="font-weight: 600; color: #e2e8f0;">R ${redExp.toFixed(1)} - B ${blueExp.toFixed(1)}</span>
+                            <span style="color: #10b981; font-weight: 500;">xP:</span>
+                            <span style="font-weight: 600; color: #e2e8f0;">R ${redxP.toFixed(1)} - B ${bluexP.toFixed(1)}</span>
                         </div>
                     `;
                 }
@@ -372,7 +372,7 @@ function renderPredictionsList() {
                             <span style="font-weight: 600; color: #e2e8f0;">R ${redScouted.toFixed(1)} - B ${blueScouted.toFixed(1)}</span>
                         </div>
                         ${epaRowHtml}
-                        ${expRowHtml}
+                        ${xPRowHtml}
                         ${oprRowHtml}
                     </div>
                 `;
@@ -390,10 +390,10 @@ function renderPredictionsList() {
                 redScore = match.redAlliance.totalEpa;
                 blueScore = match.blueAlliance.totalEpa;
                 unit = "EPA";
-            } else if (model === "exp") {
-                redScore = match.redAlliance.totalExp;
-                blueScore = match.blueAlliance.totalExp;
-                unit = "EXP";
+            } else if (model === "xP" || model === "exp") {
+                redScore = match.redAlliance.totalxP ?? match.redAlliance.totalExp;
+                blueScore = match.blueAlliance.totalxP ?? match.blueAlliance.totalExp;
+                unit = "xP";
             } else if (model === "opr") {
                 redScore = match.redAlliance.totalOpr;
                 blueScore = match.blueAlliance.totalOpr;
@@ -416,7 +416,7 @@ function renderPredictionsList() {
 
                 const redClass = redScore >= blueScore ? "win" : "";
                 const blueClass = blueScore >= redScore ? "win" : "";
-                const winProbHtml = (model === "exp" && match.match13Pred && match.match13Pred.winProb !== null && match.match13Pred.winProb !== undefined)
+                const winProbHtml = ((model === "xP" || model === "exp") && match.match13Pred && match.match13Pred.winProb !== null && match.match13Pred.winProb !== undefined)
                     ? `<div class="score-row" style="font-size: 0.72rem; color: #10b981; border-top: 1px dashed rgba(255,255,255,0.1); margin-top: 4px; padding-top: 2px;">
                         <span>Win Prob:</span>
                         <span>${(match.match13Pred.winProb * 100).toFixed(1)}% Red / ${((1 - match.match13Pred.winProb) * 100).toFixed(1)}% Blue</span>
@@ -488,7 +488,7 @@ function renderModalPrediction(data) {
         ? Obsidianscout.getProgram() === "FTC"
         : (appSettings && appSettings.program === "FTC");
     const effectiveUseEpa = !isFtc && appSettings && appSettings.useStatboticsEpa;
-    const effectiveUseExp = !isFtc && appSettings && appSettings.useMatch13Exp;
+    const effectiveUsexP = !isFtc && appSettings && (appSettings.useMatch13xP ?? appSettings.useMatch13Exp);
     const effectiveUseOpr = appSettings && appSettings.useTbaOpr;
 
     // Scouted Score Comparison Bar
@@ -516,21 +516,21 @@ function renderModalPrediction(data) {
         renderModalSpotlight("modal-spotlight-epa-winner", "modal-spotlight-epa-subtext", redEpa, blueEpa, "EPA");
     }
 
-    // EXP Comparison Bar & Card
-    const expComp = document.getElementById("modal-exp-comparison");
-    const expCard = document.getElementById("modal-spotlight-exp-card");
-    if (!effectiveUseExp) {
-        if (expComp) expComp.style.display = "none";
-        if (expCard) expCard.style.display = "none";
+    // xP Comparison Bar & Card
+    const xPComp = document.getElementById("modal-xP-comparison");
+    const xPCard = document.getElementById("modal-spotlight-xP-card");
+    if (!effectiveUsexP) {
+        if (xPComp) xPComp.style.display = "none";
+        if (xPCard) xPCard.style.display = "none";
     } else {
-        if (expComp) expComp.style.display = "";
-        if (expCard) expCard.style.display = "";
-        const redExp = red.totalExp;
-        const blueExp = blue.totalExp;
-        document.getElementById("modal-lbl-exp-red").textContent = `Red: ${redExp.toFixed(1)}`;
-        document.getElementById("modal-lbl-exp-blue").textContent = `Blue: ${blueExp.toFixed(1)}`;
-        updateModalBar("modal-bar-exp-red", "modal-bar-exp-blue", redExp, blueExp);
-        renderModalSpotlight("modal-spotlight-exp-winner", "modal-spotlight-exp-subtext", redExp, blueExp, "EXP");
+        if (xPComp) xPComp.style.display = "";
+        if (xPCard) xPCard.style.display = "";
+        const redxP = red.totalxP ?? red.totalExp ?? 0;
+        const bluexP = blue.totalxP ?? blue.totalExp ?? 0;
+        document.getElementById("modal-lbl-xP-red").textContent = `Red: ${redxP.toFixed(1)}`;
+        document.getElementById("modal-lbl-xP-blue").textContent = `Blue: ${bluexP.toFixed(1)}`;
+        updateModalBar("modal-bar-xP-red", "modal-bar-xP-blue", redxP, bluexP);
+        renderModalSpotlight("modal-spotlight-xP-winner", "modal-spotlight-xP-subtext", redxP, bluexP, "xP");
     }
 
     // OPR Comparison Bar & Card
@@ -560,8 +560,8 @@ function renderModalPrediction(data) {
     document.getElementById("modal-blue-total-scouted").textContent = `${blueScouted.toFixed(1)} pts`;
 
     // Render team lists
-    renderModalTeamList("modal-red-team-list", red.teams, effectiveUseEpa, effectiveUseExp, effectiveUseOpr);
-    renderModalTeamList("modal-blue-team-list", blue.teams, effectiveUseEpa, effectiveUseExp, effectiveUseOpr);
+    renderModalTeamList("modal-red-team-list", red.teams, effectiveUseEpa, effectiveUsexP, effectiveUseOpr);
+    renderModalTeamList("modal-blue-team-list", blue.teams, effectiveUseEpa, effectiveUsexP, effectiveUseOpr);
 }
 
 function updateModalBar(redBarId, blueBarId, redVal, blueVal) {
@@ -612,7 +612,7 @@ function renderModalSpotlight(winnerId, subtextId, redVal, blueVal, label) {
     }
 }
 
-function renderModalTeamList(listId, teams, effectiveUseEpa, effectiveUseExp, effectiveUseOpr) {
+function renderModalTeamList(listId, teams, effectiveUseEpa, effectiveUsexP, effectiveUseOpr) {
     const list = document.getElementById(listId);
     if (!list) return;
     list.innerHTML = "";
@@ -629,8 +629,9 @@ function renderModalTeamList(listId, teams, effectiveUseEpa, effectiveUseExp, ef
         if (t.epa !== null && effectiveUseEpa) {
             metricsHtml += `<span class="metric-pill">EPA: ${t.epa.toFixed(1)}</span>`;
         }
-        if (t.exp !== null && effectiveUseExp) {
-            metricsHtml += `<span class="metric-pill">EXP: ${t.exp.toFixed(1)}</span>`;
+        const xPVal = t.xP ?? t.exp;
+        if (xPVal !== null && xPVal !== undefined && effectiveUsexP) {
+            metricsHtml += `<span class="metric-pill">xP: ${xPVal.toFixed(1)}</span>`;
         }
         if (t.opr !== null && effectiveUseOpr) {
             metricsHtml += `<span class="metric-pill">OPR: ${t.opr.toFixed(1)}</span>`;

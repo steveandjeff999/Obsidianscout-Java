@@ -26,7 +26,7 @@ const avgOf = (ctx, team, metric) => {
 /** Expected contribution: scouted total, else EPA, else xP. */
 const strengthOf = (ctx, team) => avgOf(ctx, team, totalMetric(ctx))
     ?? avgOf(ctx, team, ctx.metrics.find((m) => m.id === "ext:epa"))
-    ?? avgOf(ctx, team, ctx.metrics.find((m) => m.id === "ext:exp"))
+    ?? avgOf(ctx, team, ctx.metrics.find((m) => m.id === "ext:xP" || m.id === "ext:exp"))
     ?? 0;
 const winProbability = (forScore, againstScore) => Math.round(100 / (1 + Math.exp(-(forScore - againstScore) / 15)));
 const outcome = (m, color) => {

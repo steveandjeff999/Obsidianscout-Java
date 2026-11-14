@@ -40,7 +40,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const programIsFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === "function")
             ? Obsidianscout.getProgram() === "FTC"
             : state.settings.program === "FTC";
-        if (sourceSelect && !programIsFtc && state.settings.useMatch13Exp) {
+        if (sourceSelect && !programIsFtc && (state.settings.useMatch13xP ?? state.settings.useMatch13Exp)) {
             sourceSelect.classList.remove("hidden");
         }
 
@@ -166,7 +166,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (useMatch13 && !state.currentEventKey) {
             resultsContainer.innerHTML = `
                 <div class="card" style="text-align: center; color: var(--muted); padding: 48px 16px;">
-                    ${t("compare.exp_needs_event", "Pick an event to compare Match 13 xP.")}
+                    ${t("compare.xP_needs_event", "Pick an event to compare Match 13 xP.")}
                 </div>
             `;
             return;
@@ -207,7 +207,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             ? Obsidianscout.getProgram() === "FTC" 
             : (state.settings && state.settings.program === "FTC");
         const effectiveUseEpa = !isFtc && state.settings?.useStatboticsEpa;
-        const effectiveUseExp = !isFtc && state.settings?.useMatch13Exp;
+        const effectiveUsexP = !isFtc && (state.settings?.useMatch13xP ?? state.settings?.useMatch13Exp);
         const effectiveUseOpr = state.settings?.useTbaOpr;
 
         selectedTeams.forEach(tNum => {
@@ -223,8 +223,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             const epaBadge = (effectiveUseEpa && tData.epa != null)
                 ? `<span style="font-size: 0.75rem; background: rgba(56,189,248,0.15); color: #38bdf8; padding: 2px 6px; border-radius: 4px; margin-right: 4px;">EPA ${tData.epa.toFixed(1)}</span>`
                 : "";
-            const expBadge = (effectiveUseExp && tData.exp != null)
-                ? `<span style="font-size: 0.75rem; background: rgba(16,185,129,0.15); color: #10b981; padding: 2px 6px; border-radius: 4px; margin-right: 4px;">EXP ${tData.exp.toFixed(1)}</span>`
+            const xPBadge = (effectiveUsexP && (tData.xP ?? tData.exp) != null)
+                ? `<span style="font-size: 0.75rem; background: rgba(16,185,129,0.15); color: #10b981; padding: 2px 6px; border-radius: 4px; margin-right: 4px;">xP ${Number(tData.xP ?? tData.exp).toFixed(1)}</span>`
                 : "";
             const oprBadge = (effectiveUseOpr && tData.opr != null)
                 ? `<span style="font-size: 0.75rem; background: rgba(168,85,247,0.15); color: #c084fc; padding: 2px 6px; border-radius: 4px;">OPR ${tData.opr.toFixed(1)}</span>`
@@ -233,7 +233,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             card.innerHTML = `
                 <div class="team-hero-num">${tNum}</div>
                 <div class="team-hero-name">${Obsidianscout.escapeHtml(tData.nickname || teamObj.nickname || teamObj.name || `Team ${tNum}`)}</div>
-                ${(epaBadge || expBadge || oprBadge) ? `<div style="margin-top: 6px;">${epaBadge}${expBadge}${oprBadge}</div>` : ""}
+                ${(epaBadge || xPBadge || oprBadge) ? `<div style="margin-top: 6px;">${epaBadge}${xPBadge}${oprBadge}</div>` : ""}
                 ${countBadge}
             `;
             heroRow.appendChild(card);
@@ -247,7 +247,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             emptyCard.style.color = "var(--muted)";
             emptyCard.style.padding = "32px 16px";
             emptyCard.textContent = isMatch13
-                ? (compResponse.note || t("compare.exp_no_data", "No Match 13 match data for these teams at this event."))
+                ? (compResponse.note || t("compare.xP_no_data", "No Match 13 match data for these teams at this event."))
                 : t("compare.no_data", "No scouting data available for these teams at this event.");
             resultsContainer.appendChild(emptyCard);
             return;

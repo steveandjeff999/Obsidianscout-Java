@@ -14613,7 +14613,7 @@
     "allPublicFields": true
   },
   {
-    "name": "com.obsidianscout.routes.Match13TeamExpDetail$$serializer",
+    "name": "com.obsidianscout.routes.Match13TeamxPDetail$$serializer",
     "allDeclaredConstructors": true,
     "allPublicConstructors": true,
     "allDeclaredMethods": true,
@@ -14622,7 +14622,7 @@
     "allPublicFields": true
   },
   {
-    "name": "com.obsidianscout.routes.Match13TeamExpDetail$Companion",
+    "name": "com.obsidianscout.routes.Match13TeamxPDetail$Companion",
     "allDeclaredConstructors": true,
     "allPublicConstructors": true,
     "allDeclaredMethods": true,
@@ -14631,7 +14631,7 @@
     "allPublicFields": true
   },
   {
-    "name": "com.obsidianscout.routes.Match13TeamExpDetail",
+    "name": "com.obsidianscout.routes.Match13TeamxPDetail",
     "allDeclaredConstructors": true,
     "allPublicConstructors": true,
     "allDeclaredMethods": true,

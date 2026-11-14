@@ -101,10 +101,10 @@
     function setupMetricSelect() {
         const select = document.getElementById("metric-select");
         const useEpa = !isFtc() && settings.useStatboticsEpa;
-        const useExp = !isFtc() && settings.useMatch13Exp;
+        const usexP = !isFtc() && (settings.useMatch13xP ?? settings.useMatch13Exp);
         const useOpr = settings.useTbaOpr;
         if (!useEpa) select.querySelector('option[value="epa"]')?.remove();
-        if (!useExp) select.querySelector('option[value="exp"]')?.remove();
+        if (!usexP) select.querySelector('option[value="xP"]')?.remove();
         if (!useOpr) select.querySelector('option[value="opr"]')?.remove();
         else if (isFtc()) {
             const opr = select.querySelector('option[value="opr"]');
@@ -330,7 +330,7 @@
         };
         add(team.averagePoints, 1.0);
         if (!isFtc() && settings.useStatboticsEpa) add(team.epa, 0.8);
-        if (!isFtc() && settings.useMatch13Exp) add(team.exp, 0.8);
+        if (!isFtc() && (settings.useMatch13xP ?? settings.useMatch13Exp)) add(team.xP ?? team.exp, 0.8);
         if (settings.useTbaOpr) add(team.opr, 0.6);
         return den > 0 ? num / den : null;
     }
@@ -340,7 +340,8 @@
         switch (selectedMetric) {
             case "scouted": return finiteOrNull(team.averagePoints);
             case "epa": return finiteOrNull(team.epa);
-            case "exp": return finiteOrNull(team.exp);
+            case "xP":
+            case "exp": return finiteOrNull(team.xP ?? team.exp);
             case "opr": return finiteOrNull(team.opr);
             default: return getWeightedScore(team);
         }

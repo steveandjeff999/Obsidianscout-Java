@@ -18,7 +18,7 @@ import { evaluate, fmtTeamPage, metricOrDefault, r1, t, toTeamNumbers, unknownTe
 const EXTERNAL_SOURCES = {
     epa: { id: "ext:epa", label: "EPA", setting: "useStatboticsEpa", source: "Statbotics EPA" },
     opr: { id: "ext:opr", label: "OPR", setting: "useTbaOpr", source: "TBA / FTC Scout OPR" },
-    xp: { id: "ext:exp", label: "xP", setting: "useMatch13Exp", source: "Match 13 xP" }
+    xp: { id: "ext:xP", label: "xP", setting: "useMatch13xP", source: "Match 13 xP" }
 };
 
 function externalMetricTool(kind) {
@@ -83,8 +83,8 @@ export const TOOLS = {
             const sched = s.matchesScheduled ?? 0;
             const shown = ctx.metrics.filter((m) => s.metrics[m.id] && s.metrics[m.id].avg !== null && s.metrics[m.id].avg !== undefined);
             const epaN = s.metrics["ext:epa"]?.n;
-            const expN = s.metrics["ext:exp"]?.n;
-            const seasonN = epaN || expN || undefined;
+            const xPN = s.metrics["ext:xP"]?.n ?? s.metrics["ext:exp"]?.n;
+            const seasonN = epaN || xPN || undefined;
 
             const facts = {
                 team,
@@ -274,9 +274,10 @@ export const TOOLS = {
                 rows = rows.map((m) => [m.match, m.value]);
             } else {
                 const epaM = ctx.metrics.find((m) => m.id === "ext:epa");
-                const expM = ctx.metrics.find((m) => m.id === "ext:exp");
+                const xPM = ctx.metrics.find((m) => m.id === "ext:xP" || m.id === "ext:exp");
                 const hasEpa = matches.some((p) => p.values && p.values["ext:epa"] !== undefined && p.values["ext:epa"] !== null);
-                const hasExp = matches.some((p) => p.values && p.values["ext:exp"] !== undefined && p.values["ext:exp"] !== null);
+                const xPMetricVal = (p) => p.values && (p.values["ext:xP"] ?? p.values["ext:exp"]);
+                const hasxP = matches.some((p) => xPMetricVal(p) !== undefined && xPMetricVal(p) !== null);
 
                 rows = matches.map((p) => ({
                     match: p.matchNumber ? `Q${p.matchNumber}` : (p.matchKey || "?"),
@@ -285,7 +286,7 @@ export const TOOLS = {
                     teleop: p.values && p.values[teleM.id] !== undefined && p.values[teleM.id] !== null ? r1(p.values[teleM.id]) : "-",
                     endgame: p.values && p.values[endM.id] !== undefined && p.values[endM.id] !== null ? r1(p.values[endM.id]) : "-",
                     epa: hasEpa ? (p.values && p.values["ext:epa"] !== undefined && p.values["ext:epa"] !== null ? r1(p.values["ext:epa"]) : "-") : undefined,
-                    exp: hasExp ? (p.values && p.values["ext:exp"] !== undefined && p.values["ext:exp"] !== null ? r1(p.values["ext:exp"]) : "-") : undefined,
+                    xP: hasxP ? (xPMetricVal(p) !== undefined && xPMetricVal(p) !== null ? r1(xPMetricVal(p)) : "-") : undefined,
                     notes: p.notes || undefined
                 }));
 
@@ -299,8 +300,8 @@ export const TOOLS = {
                 if (hasEpa) {
                     seriesList.push({ name: "EPA", y: matches.map((p) => p.values["ext:epa"] || 0), x: matches.map((p) => p.matchNumber ? `Q${p.matchNumber}` : "?") });
                 }
-                if (hasExp) {
-                    seriesList.push({ name: "xP", y: matches.map((p) => p.values["ext:exp"] || 0), x: matches.map((p) => p.matchNumber ? `Q${p.matchNumber}` : "?") });
+                if (hasxP) {
+                    seriesList.push({ name: "xP", y: matches.map((p) => xPMetricVal(p) || 0), x: matches.map((p) => p.matchNumber ? `Q${p.matchNumber}` : "?") });
                 }
 
                 chart = {
@@ -313,11 +314,11 @@ export const TOOLS = {
 
                 columns = [t("ai.col.match", "Match"), totM.label, autoM.label, teleM.label, endM.label];
                 if (hasEpa) columns.push("EPA");
-                if (hasExp) columns.push("xP");
+                if (hasxP) columns.push("xP");
                 rows = rows.map((m) => {
                     const row = [m.match, m.total, m.auto, m.teleop, m.endgame];
                     if (hasEpa) row.push(m.epa);
-                    if (hasExp) row.push(m.exp);
+                    if (hasxP) row.push(m.xP);
                     return row;
                 });
             }
@@ -325,7 +326,7 @@ export const TOOLS = {
             const played = s.matchesPlayed ?? matches.length;
             const scouted = s.matchesScouted ?? 0;
             const sched = s.matchesScheduled ?? matches.length;
-            const seasonN = s.metrics["ext:epa"]?.n || s.metrics["ext:exp"]?.n || undefined;
+            const seasonN = s.metrics["ext:epa"]?.n || s.metrics["ext:xP"]?.n || s.metrics["ext:exp"]?.n || undefined;
 
             return {
                 facts: {
@@ -405,7 +406,7 @@ export const TOOLS = {
             const totM = ctx.metrics.find((m) => m.id === "score_total") || { id: "score_total", label: "Scouted Total" };
             const epaM = ctx.metrics.find((m) => m.id === "ext:epa");
             const oprM = ctx.metrics.find((m) => m.id === "ext:opr");
-            const expM = ctx.metrics.find((m) => m.id === "ext:exp");
+            const xPM = ctx.metrics.find((m) => m.id === "ext:xP" || m.id === "ext:exp");
 
             const rowsData = targetTeams.map((team, idx) => {
                 const s = ctx.stats.get(team);
@@ -416,7 +417,7 @@ export const TOOLS = {
                 const endAvg = endM ? s?.metrics[endM.id]?.avg : undefined;
                 const epaVal = epaM ? s?.metrics[epaM.id]?.avg : undefined;
                 const oprVal = oprM ? s?.metrics[oprM.id]?.avg : undefined;
-                const expVal = expM ? s?.metrics[expM.id]?.avg : undefined;
+                const xPVal = xPM ? s?.metrics[xPM.id]?.avg : undefined;
 
                 return {
                     rank: idx + 1,
@@ -429,7 +430,7 @@ export const TOOLS = {
                     endgame: endAvg !== undefined && endAvg !== null ? r1(endAvg) : "-",
                     epa: epaVal !== undefined && epaVal !== null ? r1(epaVal) : "-",
                     opr: oprVal !== undefined && oprVal !== null ? r1(oprVal) : "-",
-                    xp: expVal !== undefined && expVal !== null ? r1(expVal) : "-"
+                    xp: xPVal !== undefined && xPVal !== null ? r1(xPVal) : "-"
                 };
             });
 
@@ -1375,7 +1376,7 @@ export const TOOLS = {
                     country: tm.country || "",
                     matches_scouted: s ? s.matchesScouted : 0,
                     epa: tm.epa ?? (s && s.metrics["ext:epa"] ? s.metrics["ext:epa"].avg : null),
-                    xp: tm.exp ?? tm.match13Exp ?? (s && s.metrics["ext:exp"] ? s.metrics["ext:exp"].avg : null),
+                    xp: tm.xP ?? tm.exp ?? tm.match13xP ?? tm.match13Exp ?? (s && (s.metrics["ext:xP"] || s.metrics["ext:exp"]) ? (s.metrics["ext:xP"] || s.metrics["ext:exp"]).avg : null),
                     rank: tm.rank ?? (s ? s.rank : null)
                 };
             });
@@ -1438,11 +1439,11 @@ export const TOOLS = {
                 const blueTeams = (m.blueTeams || []).map(Data.teamNumberFromKey).filter(Boolean);
                 const redExp = m.predictedRedScore ?? r1(redTeams.reduce((sum, t) => {
                     const s = ctx.stats.get(t);
-                    return sum + (s?.metrics["ext:epa"]?.avg ?? s?.metrics["ext:exp"]?.avg ?? s?.metrics.score_total?.avg ?? 0);
+                    return sum + (s?.metrics["ext:epa"]?.avg ?? s?.metrics["ext:xP"]?.avg ?? s?.metrics["ext:exp"]?.avg ?? s?.metrics.score_total?.avg ?? 0);
                 }, 0));
                 const blueExp = m.predictedBlueScore ?? r1(blueTeams.reduce((sum, t) => {
                     const s = ctx.stats.get(t);
-                    return sum + (s?.metrics["ext:epa"]?.avg ?? s?.metrics["ext:exp"]?.avg ?? s?.metrics.score_total?.avg ?? 0);
+                    return sum + (s?.metrics["ext:epa"]?.avg ?? s?.metrics["ext:xP"]?.avg ?? s?.metrics["ext:exp"]?.avg ?? s?.metrics.score_total?.avg ?? 0);
                 }, 0));
                 const diff = redExp - blueExp;
                 const redProb = m.winProb ?? (1 / (1 + Math.exp(-diff / 15)));
