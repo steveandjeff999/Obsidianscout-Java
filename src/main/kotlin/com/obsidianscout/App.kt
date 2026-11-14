@@ -377,6 +377,30 @@ fun Application.module(appConfig: AppConfig) {
         }
     }
 
+    // Cross-site WebSocket hijacking guard. Upgrades are GETs, so the CSRF check below never sees them, and the browser
+    // attaches the session cookie to any page's socket. Browsers always send Origin on a WebSocket handshake; native
+    // clients (the mobile app, cluster peers) send none and are let through to the socket's own auth.
+    intercept(io.ktor.server.application.ApplicationCallPipeline.Plugins) {
+        if (call.request.headers["Upgrade"]?.equals("websocket", ignoreCase = true) != true) return@intercept
+        val origin = call.request.headers["Origin"] ?: return@intercept
+        val hosts = buildList {
+            call.request.headers["Host"]?.let { add(it) }
+            // Our own proxies (cloudflared, the built-in HTTPS proxy, cluster peers) may report the public host here.
+            if (com.obsidianscout.auth.isTrustedProxyAddress(call.request.local.remoteAddress)) {
+                call.request.headers["X-Forwarded-Host"]?.split(",")?.firstOrNull()?.trim()?.let { add(it) }
+            }
+        }
+        if (hosts.none { sameHost(origin, it) }) {
+            com.obsidianscout.security.SecurityEvents.emit(
+                call, com.obsidianscout.security.SecurityEventType.CSRF_FAILURE,
+                details = "Cross-origin WebSocket rejected on ${call.request.path()} (origin $origin)"
+            )
+            call.attributes.put(com.obsidianscout.security.SecurityMonitor.Recorded, true)
+            call.respond(HttpStatusCode.Forbidden, ErrorResponse("Cross-origin WebSocket rejected"))
+            finish()
+        }
+    }
+
     // Pipeline Interceptor for Security Headers, Anti-CSRF Token, and Cache Controls
     intercept(io.ktor.server.application.ApplicationCallPipeline.Plugins) {
         val path = call.request.path()

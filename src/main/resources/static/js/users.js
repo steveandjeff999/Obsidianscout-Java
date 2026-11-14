@@ -608,23 +608,24 @@ async function loadUsers(me, openModal, append = false) {
                 || (user.role !== "SUPERADMIN" && Number(user.teamNumber) === Number(me.teamNumber)
                     && !(me.role === "CUSTOM" && user.role === "ADMIN"));
 
-            const emailDisplay = user.email || `<span style="color: var(--muted); font-style: italic;">None</span>`;
+            const esc = Obsidianscout.escapeHtml;
+            const emailDisplay = user.email ? esc(user.email) : `<span style="color: var(--muted); font-style: italic;">None</span>`;
             const lastLoginDisplay = user.lastLogin 
                 ? new Date(user.lastLogin).toLocaleString() 
                 : `<span style="color: var(--muted); font-style: italic;">${t("users.never", "Never")}</span>`;
 
             const row = document.createElement("tr");
-            const teamDisplay = Obsidianscout.isSuperAdmin(me.role) ? `[${user.program}] ${user.teamNumber}` : user.teamNumber;
+            const teamDisplay = esc(Obsidianscout.isSuperAdmin(me.role) ? `[${user.program}] ${user.teamNumber}` : user.teamNumber);
             row.innerHTML = `
-                <td>${user.username}</td>
+                <td>${esc(user.username)}</td>
                 <td>${emailDisplay}</td>
                 <td>${teamDisplay}</td>
                 <td>${roleLabel}</td>
                 <td>${new Date(user.createdAt).toLocaleDateString()}</td>
                 <td>${lastLoginDisplay}</td>
                 <td>
-                    ${canEdit ? `<button class="edit-btn" data-action="edit" data-id="${user.id}">Edit</button>` : ""}
-                    ${canEdit ? `<button class="delete-btn" data-action="delete" data-id="${user.id}" style="margin-left: 8px;">Delete</button>` : ""}
+                    ${canEdit ? `<button class="edit-btn" data-action="edit" data-id="${esc(user.id)}">Edit</button>` : ""}
+                    ${canEdit ? `<button class="delete-btn" data-action="delete" data-id="${esc(user.id)}" style="margin-left: 8px;">Delete</button>` : ""}
                 </td>
             `;
 
@@ -647,7 +648,7 @@ async function loadUsers(me, openModal, append = false) {
         console.error("Failed to load users:", error);
         if (!append) {
             tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 24px;">
-                <div class="retry-error-text" style="margin-bottom: 12px;">Failed to load users: ${error.message}</div>
+                <div class="retry-error-text" style="margin-bottom: 12px;">Failed to load users: ${Obsidianscout.escapeHtml(error.message)}</div>
                 <button class="retry-btn" type="button" id="retry-users-btn">Retry</button>
             </td></tr>`;
             const retryBtn = document.getElementById("retry-users-btn");

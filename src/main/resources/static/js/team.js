@@ -76,7 +76,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Handle Back Button
     document.getElementById("back-btn").addEventListener("click", () => {
         if (currentEventKey) {
-            window.location.href = `/teams?eventKey=${currentEventKey}`;
+            window.location.href = `/teams?eventKey=${encodeURIComponent(currentEventKey)}`;
         } else {
             window.location.href = "/teams";
         }
@@ -282,7 +282,9 @@ function renderHeader() {
     if (currentEventKey) {
         const eventPill = document.createElement("span");
         eventPill.className = "meta-pill";
-        eventPill.innerHTML = `<strong>Event:</strong> ${currentEventKey.toUpperCase()}`;
+        const eventLabel = document.createElement("strong");
+        eventLabel.textContent = "Event:";
+        eventPill.append(eventLabel, ` ${currentEventKey.toUpperCase()}`);
         pillsEl.appendChild(eventPill);
     }
 

@@ -1485,6 +1485,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 return;
             }
 
+            const esc = Obsidianscout.escapeHtml;
             dataKeys.forEach(k => {
                 const isMatched = !modalSchema.unmatchedDataKeys.includes(k);
                 const tr = document.createElement("tr");
@@ -1494,11 +1495,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                 let targetOpts = `<option value="">-- Target Field --</option>`;
                 configFields.forEach(f => {
                     const sel = f.id === k ? "selected" : "";
-                    targetOpts += `<option value="${f.id}" ${sel}>${f.label} (${f.id})</option>`;
+                    targetOpts += `<option value="${esc(f.id)}" ${sel}>${esc(f.label)} (${esc(f.id)})</option>`;
                 });
 
                 tr.innerHTML = `
-                    <td style="padding: 6px;"><span class="${isMatched ? 'matched-key-badge' : 'legacy-key-badge'}" style="font-size: 11px; padding: 2px 6px;">${k}</span></td>
+                    <td style="padding: 6px;"><span class="${isMatched ? 'matched-key-badge' : 'legacy-key-badge'}" style="font-size: 11px; padding: 2px 6px;">${esc(k)}</span></td>
                     <td style="padding: 6px;">
                         <select class="input modal-map-action" style="padding: 4px 6px; font-size: 12px; width: 100%;">
                             <option value="map" ${isMatched ? "selected" : ""}>Map</option>
@@ -1534,8 +1535,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                     if (!f) return;
                     const d = document.createElement("div");
                     d.innerHTML = `
-                        <label style="font-size: 11px; color: var(--muted); margin-bottom: 2px; display: block;">${f.label} (${f.id})</label>
-                        <input type="text" class="input modal-default-input" data-field-key="${f.id}" data-field-type="${f.type}" placeholder="Default value..." style="padding: 4px 8px; font-size: 12px; width: 100%;">
+                        <label style="font-size: 11px; color: var(--muted); margin-bottom: 2px; display: block;">${esc(f.label)} (${esc(f.id)})</label>
+                        <input type="text" class="input modal-default-input" data-field-key="${esc(f.id)}" data-field-type="${esc(f.type)}" placeholder="Default value..." style="padding: 4px 8px; font-size: 12px; width: 100%;">
                     `;
                     d.querySelector("input").addEventListener("input", fetchModalPreview);
                     newFieldsList.appendChild(d);

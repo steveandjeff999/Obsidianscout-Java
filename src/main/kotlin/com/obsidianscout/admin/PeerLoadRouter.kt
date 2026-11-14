@@ -1,5 +1,6 @@
 package com.obsidianscout.admin
 
+import com.obsidianscout.auth.clientIp
 import com.obsidianscout.config.AppConfig
 import com.obsidianscout.config.AppConfigLoader
 import com.obsidianscout.config.JsonSupport
@@ -117,7 +118,14 @@ object PeerLoadRouter {
         "keep-alive",
         "proxy-connection",
         "http2-settings",
-        "accept-encoding"
+        "accept-encoding",
+        // Client-identity headers: the peer gets the resolved client IP from us instead, never the client's own values.
+        "x-forwarded-for",
+        "x-real-ip",
+        "cf-connecting-ip",
+        "true-client-ip",
+        "forwarded",
+        "x-forwarded-by-peer"
     )
 
     private val HOP_BY_HOP_RESPONSE_HEADERS = setOf(
@@ -211,8 +219,7 @@ object PeerLoadRouter {
             try {
                 val t0 = System.currentTimeMillis()
                 val targetProbeUrl = "http://${peer.ip}:${peer.appPort}/api/cluster/load"
-                val req = HttpRequest.newBuilder()
-                    .uri(URI.create(targetProbeUrl))
+                val req = ClusterManagementService.buildSignedClusterRequest(targetProbeUrl, "GET")
                     .timeout(Duration.ofSeconds(4))
                     .GET()
                     .build()
@@ -449,9 +456,8 @@ object PeerLoadRouter {
         }
 
         val localIp = ClusterManagementService.getLocalTailscaleIp()
-        val clientIp = call.request.headers["CF-Connecting-IP"]
-            ?: call.request.headers["X-Forwarded-For"]?.split(",")?.firstOrNull()?.trim()
-            ?: call.request.local.remoteHost
+        // clientIp() only honours forwarding headers from our own proxies; the raw headers are client-controlled.
+        val clientIp = call.clientIp()
         val proto = call.request.headers["X-Forwarded-Proto"] ?: "http"
         val host = call.request.headers["X-Forwarded-Host"] ?: call.request.headers["Host"] ?: "localhost"
 

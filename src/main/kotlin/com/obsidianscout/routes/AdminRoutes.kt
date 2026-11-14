@@ -170,6 +170,8 @@ fun Route.adminRoutes() {
                     )
                 }
                 get("/load") {
+                    // Peers probe this with a signed request; it exposes the node's Tailscale IP and resource usage.
+                    call.requireSuperAdminOrClusterAuth()
                     val localLoad = com.obsidianscout.admin.PeerLoadRouter.getLocalNodeLoad()
                     call.respond(localLoad)
                 }

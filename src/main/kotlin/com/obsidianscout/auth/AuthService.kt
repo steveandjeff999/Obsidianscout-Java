@@ -211,6 +211,7 @@ object AuthService {
         }
         validateUsername(username)
         validatePassword(password)
+        validateEmail(email)
         if (teamNumber <= 0) {
             throw ApiException(HttpStatusCode.BadRequest, "A valid team number is required")
         }
@@ -410,6 +411,7 @@ object AuthService {
         }
         validateUsername(username)
         validatePassword(password)
+        validateEmail(email)
 
         // Only SUPERADMIN can create another SUPERADMIN
         if (role == UserRole.SUPERADMIN && callerSession.role != UserRole.SUPERADMIN) {
@@ -534,6 +536,7 @@ object AuthService {
         val targetUuid = runCatching { UUID.fromString(targetUserId) }.getOrElse {
             throw ApiException(HttpStatusCode.BadRequest, "Invalid user ID format")
         }
+        validateEmail(newEmail)
         if (newProfilePicture != null && !clearProfilePicture) validateProfilePicture(newProfilePicture)
         val newHash = newPasswordHash
         // The picture goes to the blob store first (it must not happen inside the transaction); the row keeps a reference.
@@ -1214,6 +1217,17 @@ object AuthService {
         }
         if (trimmed.contains("..") || trimmed.any { it in FORBIDDEN_USERNAME_CHARS || it.isISOControl() }) {
             throw ApiException(HttpStatusCode.BadRequest, "Username cannot contain '..' or any of: / \\ : * ? \" < > | `")
+        }
+    }
+
+    private val EMAIL_PATTERN = Regex("""^[^\s@<>"'`]+@[^\s@<>"'`]+\.[^\s@<>"'`]+$""")
+
+    /** Blank means "no email". Anything else must look like an address, so it can't carry markup into the UI. */
+    fun validateEmail(email: String?) {
+        val trimmed = email?.trim()
+        if (trimmed.isNullOrEmpty()) return
+        if (trimmed.length > 254 || !EMAIL_PATTERN.matches(trimmed)) {
+            throw ApiException(HttpStatusCode.BadRequest, "Enter a valid email address")
         }
     }
 

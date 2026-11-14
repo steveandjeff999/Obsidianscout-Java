@@ -441,7 +441,7 @@ object ClusterManagementService {
             }
         }
 
-    private fun buildSignedClusterRequest(urlStr: String, method: String, bodyBytes: ByteArray = ByteArray(0)): HttpRequest.Builder {
+    internal fun buildSignedClusterRequest(urlStr: String, method: String, bodyBytes: ByteArray = ByteArray(0)): HttpRequest.Builder {
         val uri = URI.create(urlStr)
         val host = uri.host ?: throw IllegalArgumentException("Cluster request URL missing host")
         if (!com.obsidianscout.auth.isTrustedProxyAddress(host)) {
