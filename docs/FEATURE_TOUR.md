@@ -305,11 +305,11 @@ Plan who scouts what. Create single assignments or use the bulk match wizard, pl
 
 ![Scout Assignments](/assets/images/docs/assignments.webp)
 
-### Scouter Report (`/scouter-report`)
+### Scout Report (`/scouter-report`)
 
 Per-scout activity for a chosen period: match, pit and qualitative entries, matches covered, assignment completion and late or missed assignments. It can export to CSV.
 
-![Scouter Report](/assets/images/docs/scouter-report.webp)
+![Scout Report](/assets/images/docs/scouter-report.webp)
 
 ### Settings (`/config`)
 

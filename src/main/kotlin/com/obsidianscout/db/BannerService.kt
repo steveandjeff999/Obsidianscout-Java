@@ -60,6 +60,23 @@ object BannerService {
         )
     }
 
+    fun createDatabaseFullBanner(program: String = "FRC"): BannerDto {
+        return BannerDto(
+            id = "system-database-full",
+            teamNumber = 0,
+            program = program,
+            message = "Server Database Full: The server's database or disk has run out of space. New writes cannot be saved until an administrator frees up storage.",
+            bannerType = "danger",
+            isDismissible = false,
+            isExpandable = true,
+            expandableMessage = "The server encountered a database/disk-full error while writing data. Existing data remains readable, and any scouting entries submitted while the database is full are saved locally on your device for later upload. Administrators should free up space in Storage Manager (/storage-manager) or on the host disk.",
+            showOnLogin = true,
+            isActive = true,
+            createdAt = Instant.now().toString(),
+            updatedAt = Instant.now().toString()
+        )
+    }
+
     fun getActive(teamNumber: Int, program: String = "FRC"): List<BannerDto> = try {
         val list = readTransaction {
             Banners.selectAll().where { 
@@ -70,12 +87,18 @@ object BannerService {
         if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
             list.add(0, createQuorumLossBanner(program))
         }
+        if (DatabaseFactory.isDatabaseFull) {
+            list.add(0, createDatabaseFullBanner(program))
+        }
         list
     } catch (_: Throwable) {
-        if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
-            listOf(createQuorumLossBanner(program))
-        } else {
-            emptyList()
+        buildList {
+            if (DatabaseFactory.isDatabaseFull) {
+                add(createDatabaseFullBanner(program))
+            }
+            if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
+                add(createQuorumLossBanner(program))
+            }
         }
     }
 
@@ -89,12 +112,18 @@ object BannerService {
         if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
             list.add(0, createQuorumLossBanner(program))
         }
+        if (DatabaseFactory.isDatabaseFull) {
+            list.add(0, createDatabaseFullBanner(program))
+        }
         list
     } catch (_: Throwable) {
-        if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
-            listOf(createQuorumLossBanner(program))
-        } else {
-            emptyList()
+        buildList {
+            if (DatabaseFactory.isDatabaseFull) {
+                add(createDatabaseFullBanner(program))
+            }
+            if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
+                add(createQuorumLossBanner(program))
+            }
         }
     }
 

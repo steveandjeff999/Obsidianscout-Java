@@ -237,6 +237,10 @@ fun Route.bannerRoutes() {
                     val active = mutableListOf<BannerDto>()
                     val orchestrator = com.obsidianscout.db.orchestration.CockroachOrchestrator
 
+                    if (com.obsidianscout.db.DatabaseFactory.isDatabaseFull) {
+                        active.add(com.obsidianscout.db.BannerService.createDatabaseFullBanner(session.program))
+                    }
+
                     if (orchestrator.isQuorumLost) {
                         active.add(
                             BannerDto(
@@ -256,6 +260,7 @@ fun Route.bannerRoutes() {
 
                     try {
                         val dbBanners = com.obsidianscout.db.BannerService.getActive(session.teamNumber, session.program)
+                            .filterNot { b -> active.any { it.id == b.id } }
                         active.addAll(dbBanners)
 
                         // If user is an admin on an affected team with an active alliance, validate the alliance configuration

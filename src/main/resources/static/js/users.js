@@ -50,7 +50,7 @@ const CUSTOM_GRANTABLE_PAGES = [
     { id: "assignments", label: "Scouting Assignments (Admin)" },
     { id: "admin-settings", label: "Admin Settings" },
     { id: "users", label: "Users" },
-    { id: "scouter-report", label: "Scouter Report" },
+    { id: "scouter-report", label: "Scout Report" },
     { id: "banners", label: "Banners" }
 ];
 

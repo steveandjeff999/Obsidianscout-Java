@@ -686,6 +686,25 @@ fun Application.module(appConfig: AppConfig) {
                 return@exception
             }
 
+            if (DatabaseFactory.isDatabaseFullException(cause)) {
+                DatabaseFactory.markDatabaseFull(cause.message)
+                call.application.environment.log.error("Database/disk full encountered on request ${call.request.path()}: ${cause.message}", cause)
+                try {
+                    com.obsidianscout.admin.ServerErrorAlertService.dispatchServerErrorAlert(call, cause)
+                } catch (_: Throwable) {}
+                try {
+                    if (call.request.path().startsWith("/api")) {
+                        call.respond(
+                            HttpStatusCode.InsufficientStorage,
+                            ErrorResponse("Server database is full. Please free up storage space and try again.")
+                        )
+                    } else {
+                        call.respondStaticHtml("500.html", HttpStatusCode.InsufficientStorage)
+                    }
+                } catch (_: Throwable) {}
+                return@exception
+            }
+
             call.application.environment.log.error("Unhandled error", cause)
             try {
                 com.obsidianscout.admin.ServerErrorAlertService.dispatchServerErrorAlert(call, cause)

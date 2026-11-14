@@ -142,6 +142,7 @@ export async function loadAndRenderBanners() {
             if (!document.hidden) loadAndRenderBanners();
         }, 60000);
         onInvalidate(["banners"], () => loadAndRenderBanners());
+        window.addEventListener("obsidianscout:database-full", () => loadAndRenderBanners());
     }
 
     try {

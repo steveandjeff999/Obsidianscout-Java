@@ -98,6 +98,12 @@ object DatabaseFactory {
     @Volatile
     var isReady = false
     @Volatile
+    var isDatabaseFull: Boolean = false
+        private set
+    @Volatile
+    var databaseFullDetails: String? = null
+        private set
+    @Volatile
     var isCockroach: Boolean = false
     @Volatile
     var isPostgresCompatible: Boolean = false
@@ -171,6 +177,50 @@ object DatabaseFactory {
         }
     }
 
+    fun markDatabaseFull(details: String? = null) {
+        val wasFull = isDatabaseFull
+        isDatabaseFull = true
+        if (!details.isNullOrBlank()) {
+            databaseFullDetails = details
+        }
+        if (!wasFull) {
+            consoleLog.error("[Database] Server database/disk is full: ${details ?: "No additional details"}")
+        }
+    }
+
+    fun clearDatabaseFull() {
+        if (isDatabaseFull) {
+            isDatabaseFull = false
+            databaseFullDetails = null
+            consoleLog.info("[Database] Server database/disk space restored; clearing database-full state.")
+        }
+    }
+
+    fun isDatabaseFullException(cause: Throwable): Boolean {
+        var curr: Throwable? = cause
+        while (curr != null) {
+            if (curr is java.sql.SQLException) {
+                // SQLite SQLITE_FULL = 13; PostgreSQL / CockroachDB disk_full = 53100
+                if (curr.errorCode == 13 || curr.sqlState == "53100") {
+                    return true
+                }
+            }
+            val msg = curr.message?.lowercase() ?: ""
+            if (msg.contains("sqlite_full") ||
+                msg.contains("database or disk is full") ||
+                msg.contains("no space left on device") ||
+                msg.contains("disk full") ||
+                msg.contains("out of disk space") ||
+                msg.contains("exceeded disk quota") ||
+                msg.contains("storage quota exceeded")
+            ) {
+                return true
+            }
+            curr = curr.cause
+        }
+        return false
+    }
+
     fun close() {
         try {
             val ds = activeDataSource
@@ -199,6 +249,7 @@ object DatabaseFactory {
 
     fun init(config: DatabaseConfig, runMigration: Boolean = true, isCockroach: Boolean = false) {
         close()
+        clearDatabaseFull()
         val engineType = config.type.lowercase()
         val isCockroachEngine = isCockroach || engineType == "cockroach"
         this.isCockroach = isCockroachEngine
@@ -1905,9 +1956,14 @@ fun <T> writeTransactionWithRetry(
             val result = transaction(db = targetDb) {
                 statement()
             }
+            DatabaseFactory.clearDatabaseFull()
             postCommitActions.forEach { runCatching { it() } }
             return result
         } catch (e: Throwable) {
+            if (DatabaseFactory.isDatabaseFullException(e)) {
+                DatabaseFactory.markDatabaseFull(e.message)
+                throw e
+            }
             val msg = e.message?.lowercase() ?: ""
             val isBusyOrLocked = msg.contains("sqlite_busy") ||
                     msg.contains("sqlite_locked") ||

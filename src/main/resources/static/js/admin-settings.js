@@ -108,7 +108,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         { id: "contact", label: "Contact" },
         { id: "admin-settings", label: "Admin Settings" },
         { id: "users", label: "Users" },
-        { id: "scouter-report", label: "Scouter Report" },
+        { id: "scouter-report", label: "Scout Report" },
         { id: "banners", label: "Banners" }
     ];
 

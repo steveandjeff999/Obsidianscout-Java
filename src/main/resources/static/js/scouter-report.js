@@ -237,7 +237,7 @@ function render() {
 
     const label = scopeLabel(report);
     meta.textContent = `${t("scouter-report.team", "Team")} ${report.teamNumber} · ${label} · ${t("scouter-report.generated", "Generated")} ${formatDate(report.generatedAt)}${report.includePrescout ? ` · ${t("scouter-report.with_prescout", "includes prescout")}` : ""}`;
-    printHeading.textContent = `${t("scouter-report.title", "Scouter Report")} - ${label}`;
+    printHeading.textContent = `${t("scouter-report.title", "Scout Report")} - ${label}`;
 
     const hideInactive = document.getElementById("hide-inactive").checked;
     const search = document.getElementById("search-input").value.trim().toLowerCase();

@@ -622,6 +622,9 @@ export async function request(path, options = {}) {
                 err.ipBlocked = true;
                 announceIpBlocked(data);
             }
+            if (response.status === 507 && typeof window !== "undefined") {
+                window.dispatchEvent(new CustomEvent("obsidianscout:database-full"));
+            }
             // Bad gateway / unavailable / gateway timeout: the request most likely never reached the app.
             if (response.status >= 502 && response.status <= 504) err.network = true;
             throw err;
