@@ -23,6 +23,10 @@ object RedisClusterCoordinator {
     private const val RENEW_INTERVAL_MS = 5_000L
     private const val DEAD_MAN_TIMEOUT_MS = 8_000L
     private const val DEFAULT_PORT = 6379
+    private const val REPLICA_MIN_BACKOFF_MS = 10_000L
+    private const val REPLICA_MAX_BACKOFF_MS = 10 * 60_000L
+    /** A replica that stays up this long is healthy, so earlier failures stop counting. */
+    private const val REPLICA_STABLE_MS = 60_000L
 
     private lateinit var appConfig: AppConfig
     private lateinit var orchestrator: RedisOrchestrator
@@ -51,6 +55,9 @@ object RedisClusterCoordinator {
     @Volatile private var lastRenewalTimestampMs: Long = 0L
     @Volatile private var warnedNoTailnet: Boolean = false
     @Volatile private var loopJob: Job? = null
+    @Volatile private var replicaStartedAtMs: Long = 0L
+    @Volatile private var replicaFailures: Int = 0
+    @Volatile private var nextReplicaAttemptMs: Long = 0L
     private val reloadMutex = kotlinx.coroutines.sync.Mutex()
 
     fun getEffectivePassword(): String {
@@ -66,6 +73,7 @@ object RedisClusterCoordinator {
         val config = bootConfig.copy(redis = com.obsidianscout.config.AppConfigLoader.load().redis)
         this.appConfig = config
         this.orchestrator = RedisOrchestrator(config)
+        resetReplicaBackoff()
         this.canHostRedis = orchestrator.detectHostCapability(getEffectivePassword())
         log.info("[RedisClusterCoordinator] Host capability verified: canHost={}", canHostRedis)
 
@@ -108,8 +116,11 @@ object RedisClusterCoordinator {
             try {
                 coordinate()
                 checkDeadManSwitch()
-            } catch (e: Exception) {
-                log.warn("[RedisClusterCoordinator] Coordination tick error: {}", e.message)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                // Redis is an optional cache: nothing that goes wrong here may end the loop or the server.
+                log.warn("[RedisClusterCoordinator] Coordination tick error: {}", e.toString())
             }
             delay(RENEW_INTERVAL_MS)
         }
@@ -185,15 +196,8 @@ object RedisClusterCoordinator {
                 }
 
                 // Standby Warm Replica: If capable and not running, launch a replica on a free dynamic port
-                if (canHostRedis && onTailnet && !orchestrator.isAlive() && !orchestrator.isExternalRunning && activeEndpoint != null) {
-                    val parts = activeEndpoint!!.split(":")
-                    val masterHost = parts[0]
-                    val masterPort = parts.getOrNull(1)?.toIntOrNull() ?: DEFAULT_PORT
-
-                    val replicaPort = findAvailablePort(DEFAULT_PORT + 1)
-                    localPort = replicaPort
-                    // Pass myIp so replica binds to Tailscale IP, ready for immediate promotion without restart
-                    orchestrator.startReplica(myIp, replicaPort, masterHost, masterPort, getEffectivePassword())
+                if (canHostRedis && onTailnet && !orchestrator.isExternalRunning && activeEndpoint != null) {
+                    maintainStandbyReplica(myIp)
                 }
             }
             ClusterLease.Result.UNAVAILABLE -> {
@@ -203,9 +207,65 @@ object RedisClusterCoordinator {
         }
     }
 
+    /**
+     * Keeps the warm standby replica running, backing off when it keeps dying. A replica that could not stay up
+     * used to be relaunched on every tick (about every 8s, thousands of times a day), and each launch spawns
+     * several wsl/netsh processes, which wore the host and WSL down until the server itself died.
+     */
+    private fun maintainStandbyReplica(myIp: String) {
+        val now = System.currentTimeMillis()
+        if (orchestrator.isAlive()) {
+            if (replicaStartedAtMs != 0L && replicaFailures > 0 && now - replicaStartedAtMs >= REPLICA_STABLE_MS) {
+                log.info("[RedisClusterCoordinator] Standby Redis replica has stayed up; clearing {} earlier failure(s).", replicaFailures)
+                replicaFailures = 0
+            }
+            return
+        }
+
+        if (replicaStartedAtMs != 0L) {
+            // A replica launched earlier has died (or never came up).
+            val livedMs = now - replicaStartedAtMs
+            replicaStartedAtMs = 0L
+            if (livedMs >= REPLICA_STABLE_MS) replicaFailures = 0
+            replicaFailures++
+            val backoffMs = replicaBackoffMs(replicaFailures)
+            nextReplicaAttemptMs = now + backoffMs
+            log.warn(
+                "[RedisClusterCoordinator] Standby Redis replica stopped after {}s ({} failure(s) in a row). Retrying in {}s. {}",
+                livedMs / 1000, replicaFailures, backoffMs / 1000, orchestrator.describeLastExit()
+            )
+            // Clean up its port proxy and any leftover process now rather than leaving them until the retry.
+            runCatching { orchestrator.stop() }
+        }
+
+        if (now < nextReplicaAttemptMs) return
+
+        val parts = activeEndpoint!!.split(":")
+        val masterHost = parts[0]
+        val masterPort = parts.getOrNull(1)?.toIntOrNull() ?: DEFAULT_PORT
+        val replicaPort = findAvailablePort(DEFAULT_PORT + 1)
+        localPort = replicaPort
+        replicaStartedAtMs = now
+        // Pass myIp so replica binds to Tailscale IP, ready for immediate promotion without restart
+        orchestrator.startReplica(myIp, replicaPort, masterHost, masterPort, getEffectivePassword())
+    }
+
+    /** 10s, 20s, 40s ... capped at [REPLICA_MAX_BACKOFF_MS]. */
+    private fun replicaBackoffMs(failures: Int): Long {
+        val shift = (failures - 1).coerceIn(0, 16)
+        return (REPLICA_MIN_BACKOFF_MS shl shift).coerceAtMost(REPLICA_MAX_BACKOFF_MS)
+    }
+
+    private fun resetReplicaBackoff() {
+        replicaStartedAtMs = 0L
+        replicaFailures = 0
+        nextReplicaAttemptMs = 0L
+    }
+
     private fun becomeHost(myIp: String, port: Int) {
         log.info("[RedisClusterCoordinator] Node elected REDIS HOST on endpoint {}:{}", myIp, port)
         isHost = true
+        resetReplicaBackoff()
         activeEndpoint = "$myIp:$port"
         val assessment = RedisMemoryAutoSizer.calculateOptimalMaxMemory(appConfig.redis)
         val pwd = getEffectivePassword()

@@ -9,6 +9,10 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
     companion object {
         private const val INSTALL_TIMEOUT_SECONDS = 600L
         private const val NO_PACKAGE_MANAGER = 3
+        /** How long a freshly launched WSL Redis gets to fail before it counts as started. */
+        private const val EARLY_EXIT_WAIT_MS = 2_000L
+        private const val BACKEND_RECHECK_MS = 10 * 60_000L
+        private const val MAX_LOG_BYTES = 5L * 1024 * 1024
 
         /** Installs redis-server with whatever package manager the distro has; exits [NO_PACKAGE_MANAGER] if none. */
         private const val WSL_INSTALL_SCRIPT =
@@ -38,6 +42,7 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
     private val localBinaryFile = File(rootDir, binaryName)
     private var resolvedBinaryPath: String? = null
     private var process: Process? = null
+    @Volatile private var lastLogFile: File? = null
     private var isDockerContainer: Boolean = false
     private var isWslProcess: Boolean = false
     private var wslPort: Int = 0
@@ -138,6 +143,8 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
             }
 
             val logFile = File(rootDir, "redis.log")
+            capLogFile(logFile)
+            lastLogFile = logFile
             process = ProcessBuilder(cmd)
                 .directory(rootDir)
                 .redirectOutput(ProcessBuilder.Redirect.appendTo(logFile))
@@ -178,6 +185,8 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
             }
 
             val logFile = File(rootDir, "redis-replica.log")
+            capLogFile(logFile)
+            lastLogFile = logFile
             process = ProcessBuilder(cmd)
                 .directory(rootDir)
                 .redirectOutput(ProcessBuilder.Redirect.appendTo(logFile))
@@ -232,7 +241,43 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
         isExternalRunning = false
     }
 
-    fun isAlive(): Boolean = (process?.isAlive ?: false) || isDockerContainer
+    /**
+     * Whether the Redis this orchestrator launched is still up. For WSL, wsl.exe exiting does not always mean
+     * Redis stopped (and vice versa), so a Redis answering on the loopback port counts too.
+     */
+    fun isAlive(): Boolean =
+        (process?.isAlive ?: false) || isDockerContainer || (isWslProcess && isLoopbackPortOpen(wslPort))
+
+    private fun isLoopbackPortOpen(port: Int): Boolean = port > 0 && runCatching {
+        java.net.Socket().use { s ->
+            s.connect(java.net.InetSocketAddress("127.0.0.1", port), 300)
+            true
+        }
+    }.getOrDefault(false)
+
+    /** Exit code and the end of the log of the last launched Redis process, for the restart-backoff warning. */
+    fun describeLastExit(): String {
+        val p = process
+        val code = when {
+            p == null -> "no process"
+            p.isAlive -> "still running"
+            else -> "exit code ${p.exitValue()}"
+        }
+        val tail = lastLogFile?.let { tailOf(it, 15) }.orEmpty().trim()
+        return if (tail.isEmpty()) code else "$code. Last log lines from ${lastLogFile?.absolutePath}:\n$tail"
+    }
+
+    private fun tailOf(file: File, lines: Int): String = runCatching {
+        if (!file.exists()) return@runCatching ""
+        java.io.RandomAccessFile(file, "r").use { raf ->
+            val len = raf.length()
+            val start = maxOf(0L, len - 8192)
+            val buf = ByteArray((len - start).toInt())
+            raf.seek(start)
+            raf.readFully(buf)
+            String(buf, Charsets.UTF_8).lines().filter { it.isNotBlank() }.takeLast(lines).joinToString("\n")
+        }
+    }.getOrDefault("")
 
     private fun testBinaryExecution(path: String): Boolean = runCatching {
         val p = ProcessBuilder(path, "--version").start()
@@ -333,23 +378,41 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
         return pingNoPass
     }
 
+    private enum class WindowsBackend { DOCKER, WSL }
+
+    @Volatile private var windowsBackend: WindowsBackend? = null
+    @Volatile private var windowsBackendCheckedAtMs: Long = 0L
+
+    /**
+     * Docker or WSL, whichever can run Redis. `docker info` and the WSL probe each start processes and can take
+     * many seconds, so the answer is reused for [BACKEND_RECHECK_MS] (or until a launch fails) instead of
+     * being re-probed on every launch.
+     */
+    private fun resolveWindowsBackend(): WindowsBackend? {
+        val now = System.currentTimeMillis()
+        if (windowsBackendCheckedAtMs != 0L && now - windowsBackendCheckedAtMs < BACKEND_RECHECK_MS) return windowsBackend
+        windowsBackend = when {
+            isDockerAvailable() -> WindowsBackend.DOCKER
+            isWslRedisInstalled() -> WindowsBackend.WSL
+            else -> null
+        }
+        windowsBackendCheckedAtMs = now
+        return windowsBackend
+    }
+
     private fun startWindowsMaster(tailscaleIp: String, port: Int, maxMemoryBytes: Long, password: String) {
-        if (isDockerAvailable()) {
-            startDockerMaster(tailscaleIp, port, maxMemoryBytes, password)
-        } else if (isWslRedisInstalled()) {
-            startWslMaster(tailscaleIp, port, maxMemoryBytes, password)
-        } else {
-            log.error("[RedisOrchestrator] Windows host cannot host Redis without Docker or WSL.")
+        when (resolveWindowsBackend()) {
+            WindowsBackend.DOCKER -> startDockerMaster(tailscaleIp, port, maxMemoryBytes, password)
+            WindowsBackend.WSL -> startWslMaster(tailscaleIp, port, maxMemoryBytes, password)
+            null -> log.error("[RedisOrchestrator] Windows host cannot host Redis without Docker or WSL.")
         }
     }
 
     private fun startWindowsReplica(tailscaleIp: String, replicaPort: Int, masterHost: String, masterPort: Int, password: String) {
-        if (isDockerAvailable()) {
-            startDockerReplica(tailscaleIp, replicaPort, masterHost, masterPort, password)
-        } else if (isWslRedisInstalled()) {
-            startWslReplica(tailscaleIp, replicaPort, masterHost, masterPort, password)
-        } else {
-            log.error("[RedisOrchestrator] Windows host cannot run replica without Docker or WSL.")
+        when (resolveWindowsBackend()) {
+            WindowsBackend.DOCKER -> startDockerReplica(tailscaleIp, replicaPort, masterHost, masterPort, password)
+            WindowsBackend.WSL -> startWslReplica(tailscaleIp, replicaPort, masterHost, masterPort, password)
+            null -> log.error("[RedisOrchestrator] Windows host cannot run replica without Docker or WSL.")
         }
     }
 
@@ -362,8 +425,9 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
         if (password.isNotBlank()) {
             args.addAll(listOf("--requirepass", password))
         }
-        startWslRedis(tailscaleIp, port, args, "redis.log")
-        log.info("[RedisOrchestrator] Started WSL Redis Master on {}:{} (maxmemory: {}MB)", tailscaleIp, port, maxMemoryBytes / (1024 * 1024))
+        if (startWslRedis(tailscaleIp, port, args, "redis.log")) {
+            log.info("[RedisOrchestrator] Started WSL Redis Master on {}:{} (maxmemory: {}MB)", tailscaleIp, port, maxMemoryBytes / (1024 * 1024))
+        }
     }
 
     private fun startWslReplica(tailscaleIp: String, replicaPort: Int, masterHost: String, masterPort: Int, password: String) {
@@ -374,8 +438,9 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
         if (password.isNotBlank()) {
             args.addAll(listOf("--requirepass", password, "--masterauth", password))
         }
-        startWslRedis(tailscaleIp, replicaPort, args, "redis-replica.log")
-        log.info("[RedisOrchestrator] Started WSL Redis Replica on {}:{} replicating {}:{}", tailscaleIp, replicaPort, masterHost, masterPort)
+        if (startWslRedis(tailscaleIp, replicaPort, args, "redis-replica.log")) {
+            log.info("[RedisOrchestrator] Started WSL Redis Replica on {}:{} replicating {}:{}", tailscaleIp, replicaPort, masterHost, masterPort)
+        }
     }
 
     /**
@@ -383,23 +448,42 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
      * forwards to Windows loopback) and a portproxy rule on the Tailscale IP alone hands peers to it.
      * Nothing listens on the LAN, and the proxied clients arrive from loopback so protected mode lets them in.
      */
-    private fun startWslRedis(tailscaleIp: String, port: Int, args: List<String>, logName: String) {
+    private fun startWslRedis(tailscaleIp: String, port: Int, args: List<String>, logName: String): Boolean {
         rootDir.mkdirs()
         // A Redis left over from a crash would still hold the port inside WSL.
         stopWslRedis(port)
         val cmd = listOf("wsl", "-e", "redis-server", "--bind", "127.0.0.1", "--protected-mode", "yes", "--save", "", "--appendonly", "no") + args
         val logFile = File(rootDir, logName)
+        capLogFile(logFile)
+        lastLogFile = logFile
         process = ProcessBuilder(cmd)
             .directory(rootDir)
             .redirectOutput(ProcessBuilder.Redirect.appendTo(logFile))
             .redirectError(ProcessBuilder.Redirect.appendTo(logFile))
+            // Redis never reads stdin; NUL keeps wsl.exe off an open pipe to this process.
+            .redirectInput(ProcessBuilder.Redirect.from(File("NUL")))
             .start()
         isWslProcess = true
         wslPort = port
+
+        // A Redis that cannot start (port taken inside WSL, bad argument, broken distro) exits within a moment.
+        // Catch that here so it is logged with its reason instead of silently relaunched on the next tick.
+        val exitedEarly = runCatching { process!!.waitFor(EARLY_EXIT_WAIT_MS, java.util.concurrent.TimeUnit.MILLISECONDS) }.getOrDefault(false)
+        if (exitedEarly && !isLoopbackPortOpen(port)) {
+            log.error("[RedisOrchestrator] WSL Redis on port {} exited right after launch ({}).", port, describeLastExit())
+            windowsBackendCheckedAtMs = 0L // re-check WSL/Docker before the next launch
+            return false
+        }
         if (tailscaleIp != "127.0.0.1") {
             wslProxyIp = tailscaleIp
             setupWindowsPortproxy(tailscaleIp, port)
         }
+        return true
+    }
+
+    /** Restart loops used to append to these logs without limit; start over once one passes [MAX_LOG_BYTES]. */
+    private fun capLogFile(file: File) {
+        runCatching { if (file.length() > MAX_LOG_BYTES) file.writeText("") }
     }
 
     /** Killing wsl.exe does not reliably stop the Linux process, so stop it inside WSL by its listen address. */
