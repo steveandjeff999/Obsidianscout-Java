@@ -5,6 +5,7 @@ out/
 .idea/
 *.iml
 *.log
+logs/
 data/
 .cockroach/cockroach.exe
 .update_tmp/

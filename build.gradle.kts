@@ -178,6 +178,8 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
     from(file("scripts/install-graal.sh")) { into(".") }
     from(file("scripts/install-graal.bat")) { into(".") }
     from(file("scripts/install-graal.ps1")) { into(".") }
+    from(file("scripts/log-viewer.bat")) { into(".") }
+    from(file("scripts/log-viewer.ps1")) { into(".") }
 
     into(rootProject.layout.buildDirectory.dir("bundle"))
     
@@ -249,6 +251,10 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "    !JAVA_EXEC! !JAVA_OPTS! -jar obsidianscout-server.jar\r\n" +
             ")\r\n" +
             "set EXIT_CODE=%ERRORLEVEL%\r\n" +
+            // The next start copies this into logs\ (see ConsoleLogFile), so a crash's exit code is on record.
+            // Redirection first: "echo 3>file" would treat a one-digit code as a stream number.
+            "if not exist logs mkdir logs\r\n" +
+            ">logs\\last-exit-code.txt echo !EXIT_CODE!\r\n" +
             "if \"%EXIT_CODE%\"==\"3\" echo 1 > .oom_occurred\r\n" +
             "if \"%EXIT_CODE%\"==\"137\" echo 1 > .oom_occurred\r\n" +
             // ping, not timeout: timeout returns at once without a console (service wrappers, Task Scheduler),
@@ -418,6 +424,7 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "        \"\$JAVA_EXEC\" \$JAVA_OPTS -jar obsidianscout-server.jar\n" +
             "        EXIT_CODE=\$?\n" +
             "    fi\n" +
+            "    mkdir -p logs 2>/dev/null && echo \"\$EXIT_CODE\" > logs/last-exit-code.txt\n" +
             "    if [ \$EXIT_CODE -eq 3 ] || [ \$EXIT_CODE -eq 137 ]; then\n" +
             "        touch .oom_occurred\n" +
             "    fi\n" +
@@ -792,6 +799,8 @@ val nativeBundleTasks = nativeArchs.map { arch ->
         from(file("scripts/install-graal.sh")) { into(".") }
         from(file("scripts/install-graal.bat")) { into(".") }
         from(file("scripts/install-graal.ps1")) { into(".") }
+        from(file("scripts/log-viewer.bat")) { into(".") }
+        from(file("scripts/log-viewer.ps1")) { into(".") }
 
         into(rootProject.layout.buildDirectory.dir("bundle-native/$arch"))
 
@@ -843,6 +852,9 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "echo [ObsidianScout Native] Starting server ($arch native binary)...\r\n" +
                 "%EXEC_CMD%\r\n" +
                 "set EXIT_CODE=%ERRORLEVEL%\r\n" +
+                // For the next start's log (see run.bat above).
+                "if not exist logs mkdir logs\r\n" +
+                ">logs\\last-exit-code.txt echo !EXIT_CODE!\r\n" +
                 // ping, not timeout: timeout returns at once without a console (see run.bat above).
                 "ping -n 4 127.0.0.1 >nul 2>&1\r\n" +
                 "if exist .update_pending (\r\n" +
@@ -956,6 +968,7 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "    echo \"[ObsidianScout Native] Starting server ($arch native binary)...\"\n" +
                 "    \$EXEC_CMD\n" +
                 "    EXIT_CODE=\$?\n" +
+                "    mkdir -p logs 2>/dev/null && echo \"\$EXIT_CODE\" > logs/last-exit-code.txt\n" +
                 "    sleep 3\n" +
                 "    if [ -f .update_pending ]; then\n" +
                 "        echo \"[Updater] Faulty installation detected! Exited code \$EXIT_CODE while update was pending.\"\n" +

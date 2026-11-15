@@ -121,6 +121,8 @@ fun main(args: Array<String>) {
         }
     }
 
+    // First, so everything printed from here on (a failed startup included) is kept in logs/.
+    com.obsidianscout.utils.ConsoleLogFile.install()
     com.obsidianscout.utils.AsyncConsoleLogging.install()
 
     Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
@@ -169,7 +171,8 @@ fun main(args: Array<String>) {
 
     Security.addProvider(BouncyCastleProvider())
     val appConfig = AppConfigLoader.load()
-    
+    com.obsidianscout.utils.ConsoleLogFile.note("VERSION ${appConfig.current_version}")
+
     if (appConfig.server.https.enabled) {
         val keyStore = loadOrCreateKeyStore(appConfig)
         com.obsidianscout.utils.ProxyServer.start(appConfig, keyStore)
