@@ -1897,6 +1897,7 @@
   "pitdata.csv.team_number": "Número de equipo",
   "pitdata.csv.updated": "Actualizado",
   "pitdata.export_csv": "Exportar CSV",
+  "data.export_powerbi": "Exportar para Power BI (Excel)",
   "pitdata.needs_pit": "Necesita pit scouting",
   "pitdata.no_pit_entry": "No se ha enviado ninguna entrada de pit para este equipo en el evento seleccionado.",
   "pitdata.no_team_selected": "Ningún equipo seleccionado",

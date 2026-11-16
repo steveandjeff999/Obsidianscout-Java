@@ -311,6 +311,11 @@ function initControls(state) {
 
     exportButton.addEventListener("click", () => exportCsv(state));
 
+    const powerBiButton = document.getElementById("export-powerbi");
+    if (powerBiButton) {
+        powerBiButton.addEventListener("click", () => exportPowerBi(state));
+    }
+
     const shareButton = document.getElementById("btn-share-data");
     if (shareButton) {
         shareButton.addEventListener("click", async () => {
@@ -892,6 +897,83 @@ function exportCsv(state) {
     link.download = `all-scouting-data-${state.filters.eventKey || "all"}.csv`;
     link.click();
     URL.revokeObjectURL(url);
+}
+
+/**
+ * Power BI export of the filtered rows: one row per entry, one column per field.
+ * Each form's fields get their own prefixed columns ("Match - ...", "Pit - ...", "Qual - ...")
+ * so fields that share an id across forms stay separate.
+ */
+function exportPowerBi(state) {
+    const PBI = window.ObsidianscoutPowerBI;
+    if (!PBI) return;
+    const rows = getFilteredAndSortedRows(state);
+
+    const columns = [
+        { name: "Entry ID", type: "text" },
+        { name: "Type", type: "text" },
+        { name: "Event Key", type: "text" },
+        { name: "Prescout", type: "boolean" },
+        { name: "Match Key", type: "text" },
+        { name: "Match Number", type: "number" },
+        { name: "Team Number", type: "number" },
+        { name: "Team Key", type: "text" },
+        { name: "Team Name", type: "text" },
+        { name: "Scouted By", type: "text" },
+        { name: "Scouting Team", type: "number" },
+        { name: "Created At", type: "datetime" },
+        { name: "Match Played At", type: "datetime" },
+        { name: "Has Discrepancy", type: "boolean" }
+    ];
+
+    const sections = [
+        { type: "Match", key: "match", prefix: "Match" },
+        { type: "Pit", key: "pit", prefix: "Pit" },
+        { type: "Qualitative", key: "qualitative", prefix: "Qual" }
+    ];
+    const valueGetters = [];
+    sections.forEach((section) => {
+        const config = state.configs[section.key];
+        const fields = PBI.exportableFields(config && config.fields, RESERVED_FIELDS);
+        const isMatch = section.key === "match";
+        fields.forEach((field) => {
+            columns.push({ name: `${section.prefix} - ${PBI.localize(field.label || field.id)}`, type: PBI.fieldColumnType(field) });
+            valueGetters.push((row) => row.type === section.type ? PBI.fieldValue(field, row.data ? row.data[field.id] : undefined) : null);
+            if (isMatch && PBI.fieldScores(field)) {
+                columns.push({ name: `${section.prefix} - ${PBI.localize(field.label || field.id)} Points`, type: "number" });
+                valueGetters.push((row) => row.type === section.type && row.data ? calculateFieldPoints(field, row.data[field.id]) : null);
+            }
+        });
+        if (isMatch && fields.some((f) => PBI.fieldScores(f))) {
+            columns.push({ name: "Match - Total Score", type: "number" });
+            valueGetters.push((row) => {
+                if (row.type !== section.type || !row.data) return null;
+                return fields.reduce((sum, f) => sum + calculateFieldPoints(f, row.data[f.id]), 0);
+            });
+        }
+    });
+
+    const tableRows = rows.map((row) => {
+        const teamObj = state.teamsByNumber.get(row.targetTeamNumber) || null;
+        return [
+            row.originalId,
+            row.type,
+            row.isPrescout ? row.rawEventKey : row.eventKey,
+            !!row.isPrescout,
+            row.matchKey,
+            row.matchNumber,
+            row.targetTeamNumber,
+            teamObj ? teamObj.teamKey : "",
+            teamObj ? (teamObj.nickname || teamObj.name || "") : "",
+            Obsidianscout.formatScouter(row),
+            row.ownerTeamNumber,
+            row.createdAt,
+            row.matchPlayedTime,
+            !!row.hasDiscrepancy
+        ].concat(valueGetters.map((get) => get(row)));
+    });
+
+    PBI.download(`all-scouting-data-${state.filters.eventKey || "all"}`, columns, tableRows, "AllScoutingData");
 }
 
 function csvCell(value) {

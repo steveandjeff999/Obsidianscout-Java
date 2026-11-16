@@ -81,6 +81,7 @@
                 </div>
                 <div class="row gap-12 wrap mt-18 align-center">
                     <button id="export-match-csv" class="btn ghost" type="button" data-i18n="pitdata.export_csv">Export CSV</button>
+                    <button id="export-match-powerbi" class="btn ghost" type="button" data-i18n="data.export_powerbi" title="Excel workbook (.xlsx) with one column per field: in Power BI use Get data, Excel workbook">Export for Power BI (Excel)</button>
                     <button id="reset-filters" class="btn ghost" type="button" data-i18n="all-data.reset_filters">Reset Filters</button>
                     <div style="flex-grow: 1;"></div>
                     <span id="match-filter-status" class="badge" data-i18n="all-data.showing_all_entries">Showing all entries</span>
@@ -123,6 +124,7 @@
     </div>
 
     <script type="module" src="/js/common.js"></script>
+    <script defer src="/js/powerbi-export.js"></script>
     <script defer src="/js/match-data.js"></script>
 </body>
 </html>

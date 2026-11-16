@@ -218,6 +218,7 @@ const ASSETS = [
     '/js/utilities/load-profile.js',
     '/js/shared-links.js',
     '/js/all-data.js',
+    '/js/powerbi-export.js',
     '/js/cache-manager.js',
     '/js/qual-data.js',
     '/js/users.js',

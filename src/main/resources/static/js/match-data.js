@@ -134,6 +134,8 @@ function normalizeEntries(matchEntries, config) {
             isPrescout: e.isPrescout || false,
             matchNumber: e.matchNumber,
             matchKey: e.matchKey,
+            username: e.username || e.scoutName || null,
+            scoutName: e.username || e.scoutName || null,
             createdAt: e.createdAt,
             matchPlayedTime: e.matchPlayedTime || null,
             data: e.data,
@@ -282,6 +284,11 @@ function initControls(state) {
 
     if (exportBtn) {
         exportBtn.addEventListener("click", () => exportCsv(state));
+    }
+
+    const powerBiBtn = document.getElementById("export-match-powerbi");
+    if (powerBiBtn) {
+        powerBiBtn.addEventListener("click", () => exportPowerBi(state));
     }
 }
 
@@ -827,6 +834,65 @@ function exportCsv(state) {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+}
+
+/** Power BI export of the filtered match entries: one row per entry, a column per field plus its points. */
+function exportPowerBi(state) {
+    const PBI = window.ObsidianscoutPowerBI;
+    if (!PBI) return;
+    const rows = getFilteredAndSortedRows(state);
+    const fields = PBI.exportableFields(state.config && state.config.fields, RESERVED_FIELDS);
+
+    const columns = [
+        { name: "Entry ID", type: "text" },
+        { name: "Event Key", type: "text" },
+        { name: "Prescout", type: "boolean" },
+        { name: "Match Key", type: "text" },
+        { name: "Match Number", type: "number" },
+        { name: "Team Number", type: "number" },
+        { name: "Team Key", type: "text" },
+        { name: "Team Name", type: "text" },
+        { name: "Scouted By", type: "text" },
+        { name: "Scouting Team", type: "number" },
+        { name: "Created At", type: "datetime" },
+        { name: "Match Played At", type: "datetime" },
+        { name: "Total Score", type: "number" },
+        { name: "Completeness %", type: "number" },
+        { name: "Has Discrepancy", type: "boolean" }
+    ];
+    const valueGetters = [];
+    fields.forEach((field) => {
+        const label = PBI.localize(field.label || field.id);
+        columns.push({ name: label, type: PBI.fieldColumnType(field) });
+        valueGetters.push((row) => PBI.fieldValue(field, row.data ? row.data[field.id] : undefined));
+        if (PBI.fieldScores(field)) {
+            columns.push({ name: `${label} Points`, type: "number" });
+            valueGetters.push((row) => row.data ? calculateFieldPoints(field, row.data[field.id]) : null);
+        }
+    });
+
+    const tableRows = rows.map((row) => {
+        const teamObj = state.teamsByNumber.get(row.targetTeamNumber) || null;
+        return [
+            row.originalId,
+            row.isPrescout ? row.rawEventKey : row.eventKey,
+            !!row.isPrescout,
+            row.matchKey,
+            row.matchNumber,
+            row.targetTeamNumber,
+            teamObj ? teamObj.teamKey : "",
+            teamObj ? (teamObj.nickname || teamObj.name || "") : "",
+            Obsidianscout.formatScouter(row),
+            row.ownerTeamNumber,
+            row.createdAt,
+            row.matchPlayedTime,
+            row.totalScore,
+            row.completenessPct,
+            !!row.hasDiscrepancy
+        ].concat(valueGetters.map((get) => get(row)));
+    });
+
+    PBI.download(`match-scouting-data-${state.filters.eventKey || "all"}`, columns, tableRows, "MatchData");
 }
 
 function csvEscape(value) {

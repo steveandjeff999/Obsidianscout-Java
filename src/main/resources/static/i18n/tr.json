@@ -1897,6 +1897,7 @@
   "pitdata.csv.team_number": "Team Number",
   "pitdata.csv.updated": "Updated",
   "pitdata.export_csv": "CSV olarak dışa aktar",
+  "data.export_powerbi": "Power BI için dışa aktar (Excel)",
   "pitdata.needs_pit": "Pit scouting gerekli",
   "pitdata.no_pit_entry": "Seçilen etkinlik için bu takım adına pit girdisi gönderilmedi.",
   "pitdata.no_team_selected": "Hiçbir takım seçilmedi",

@@ -229,6 +229,11 @@ function initControls(state, ui) {
         renderEntrySection(state, ui);
     });
 
+    const powerBiButton = document.getElementById("qual-export-powerbi");
+    if (powerBiButton) {
+        powerBiButton.addEventListener("click", () => exportPowerBi(state));
+    }
+
     ui.resetFilters.addEventListener("click", async () => {
         state.selectedEvent = "all";
         state.teamQuery = "";
@@ -627,6 +632,60 @@ function renderEntryDetail(state, ui, entry) {
             ui.entryDetail.appendChild(groupNode);
         }
     });
+}
+
+/**
+ * Power BI export of the qualitative entries matching the current event, team search and
+ * pending filters: one row per entry, a column per field, plus the composite score.
+ */
+function exportPowerBi(state) {
+    const PBI = window.ObsidianscoutPowerBI;
+    if (!PBI) return;
+    const query = state.teamQuery.trim().toLowerCase();
+    const entries = sortEntries(filteredEntries(state).filter((entry) => {
+        if (!query) return true;
+        return teamLabel(state, entry.targetTeamNumber).toLowerCase().includes(query);
+    }), state);
+    const composite = metricById(state, "__composite__");
+    const fields = state.fields;
+
+    const columns = [
+        { name: "Entry ID", type: "text" },
+        { name: "Event Key", type: "text" },
+        { name: "Prescout", type: "boolean" },
+        { name: "Match Key", type: "text" },
+        { name: "Match Number", type: "number" },
+        { name: "Team Number", type: "number" },
+        { name: "Team Key", type: "text" },
+        { name: "Team Name", type: "text" },
+        { name: "Scouted By", type: "text" },
+        { name: "Scouting Team", type: "number" },
+        { name: "Created At", type: "datetime" },
+        { name: "Pending Sync", type: "boolean" },
+        { name: "Composite Score", type: "number" }
+    ].concat(fields.map((field) => ({ name: PBI.localize(field.label || field.id), type: PBI.fieldColumnType(field) })));
+
+    const tableRows = entries.map((entry) => {
+        const numeric = entry.targetTeamNumber === null || entry.targetTeamNumber === undefined ? null : Number(entry.targetTeamNumber);
+        const team = numeric === null ? null : state.teamsByNumber.get(numeric);
+        return [
+            entry.id,
+            entry.isPrescout ? entry.rawEventKey : entry.eventKey,
+            !!entry.isPrescout,
+            entry.matchKey,
+            entry.matchNumber,
+            numeric,
+            team ? team.teamKey : "",
+            team ? (team.nickname || team.name || "") : "",
+            entry.pending ? "" : Obsidianscout.formatScouter(entry),
+            entry.ownerTeamNumber,
+            entry.createdAt,
+            !!entry.pending,
+            metricValue(composite, entry)
+        ].concat(fields.map((field) => PBI.fieldValue(field, entry.data ? entry.data[field.id] : undefined)));
+    });
+
+    PBI.download(`qualitative-data-${state.selectedEvent || "all"}`, columns, tableRows, "QualitativeData");
 }
 
 function rebuildRankings(state) {

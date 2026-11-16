@@ -133,6 +133,10 @@ function initControls(state) {
     teamSearch.addEventListener("input", () => renderTable(state));
     missingOnly.addEventListener("change", () => renderTable(state));
     exportButton.addEventListener("click", () => exportCsv(state));
+    const powerBiButton = document.getElementById("export-pit-powerbi");
+    if (powerBiButton) {
+        powerBiButton.addEventListener("click", () => exportPowerBi(state));
+    }
 }
 
 async function loadTeamsForEvent(state) {
@@ -589,6 +593,55 @@ function exportCsv(state) {
     link.download = `pit-data-${state.eventKey || "all"}.csv`;
     link.click();
     URL.revokeObjectURL(url);
+}
+
+/**
+ * Power BI export of the visible pit table: one row per team (latest pit entry),
+ * including teams not scouted yet so coverage can be measured.
+ */
+function exportPowerBi(state) {
+    const PBI = window.ObsidianscoutPowerBI;
+    if (!PBI) return;
+    const rows = filteredRows(state);
+    const fields = state.fields;
+
+    const columns = [
+        { name: "Team Number", type: "number" },
+        { name: "Team Key", type: "text" },
+        { name: "Team Name", type: "text" },
+        { name: "City", type: "text" },
+        { name: "State/Province", type: "text" },
+        { name: "Country", type: "text" },
+        { name: "Scouted", type: "boolean" },
+        { name: "Entry ID", type: "text" },
+        { name: "Event Key", type: "text" },
+        { name: "Prescout", type: "boolean" },
+        { name: "Scouted By", type: "text" },
+        { name: "Scouting Team", type: "number" },
+        { name: "Updated At", type: "datetime" }
+    ].concat(fields.map((field) => ({ name: PBI.localize(field.label || field.id), type: PBI.fieldColumnType(field) })));
+
+    const tableRows = rows.map((row) => {
+        const team = row.team || {};
+        const entry = row.entry;
+        return [
+            row.teamNumber,
+            team.teamKey || "",
+            team.nickname || team.name || "",
+            team.city || "",
+            team.state || team.stateProv || "",
+            team.country || "",
+            !!entry,
+            entry ? entry.id : null,
+            entry ? (entry.isPrescout ? entry.rawEventKey : entry.eventKey) : null,
+            entry ? !!entry.isPrescout : null,
+            entry ? Obsidianscout.formatScouter(entry) : null,
+            entry ? entry.ownerTeamNumber : null,
+            entry ? entry.createdAt : null
+        ].concat(fields.map((field) => entry && entry.data ? PBI.fieldValue(field, entry.data[field.id]) : null));
+    });
+
+    PBI.download(`pit-data-${state.eventKey || "all"}`, columns, tableRows, "PitData");
 }
 
 function csvCell(value) {

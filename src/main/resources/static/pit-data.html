@@ -77,6 +77,7 @@
                 </div>
                 <div class="row gap-12 wrap mt-18">
                     <button id="export-pit-csv" class="btn ghost" type="button" data-i18n="pitdata.export_csv">Export CSV</button>
+                    <button id="export-pit-powerbi" class="btn ghost" type="button" data-i18n="data.export_powerbi" title="Excel workbook (.xlsx) with one column per field: in Power BI use Get data, Excel workbook">Export for Power BI (Excel)</button>
                     <span id="pit-filter-status" class="badge" data-i18n="pit-data.showing_all_teams">Showing all teams</span>
                 </div>
             </div>
@@ -116,6 +117,7 @@
     </div>
 
     <script type="module" src="/js/common.js"></script>
+    <script defer src="/js/powerbi-export.js"></script>
     <script defer src="/js/pit-data.js"></script>
 </body>
 </html>

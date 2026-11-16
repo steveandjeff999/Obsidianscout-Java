@@ -1897,6 +1897,7 @@
   "pitdata.csv.team_number": "Team Number",
   "pitdata.csv.updated": "Updated",
   "pitdata.export_csv": "ייצא CSV",
+  "data.export_powerbi": "ייצוא ל-Power BI (Excel)",
   "pitdata.needs_pit": "נדרש pit scouting",
   "pitdata.no_pit_entry": "לא הוגשה כניסת פיט עבור קבוצה זו באירוע הנבחר.",
   "pitdata.no_team_selected": "לא נבחרה קבוצה",

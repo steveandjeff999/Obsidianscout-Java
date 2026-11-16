@@ -89,6 +89,7 @@
                 <div class="row gap-12 wrap mt-18">
                     <button id="reset-filters" class="btn ghost" type="button" data-i18n="all-data.reset_filters">Reset Filters</button>
                     <button id="export-csv" class="btn ghost" type="button" data-i18n="pitdata.export_csv">Export CSV</button>
+                    <button id="export-powerbi" class="btn ghost" type="button" data-i18n="data.export_powerbi" title="Excel workbook (.xlsx) with one column per field: in Power BI use Get data, Excel workbook">Export for Power BI (Excel)</button>
                     <button id="btn-share-data" data-private class="btn ghost" type="button" title="Share filtered scouting data">
                         <span class="material-symbols-outlined">share</span> <span>Share</span>
                     </button>
@@ -131,6 +132,7 @@
     </div>
 
     <script type="module" src="/js/common.js"></script>
+    <script defer src="/js/powerbi-export.js"></script>
     <script defer src="/js/all-data.js"></script>
 </body>
 </html>
