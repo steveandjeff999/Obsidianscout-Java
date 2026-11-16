@@ -241,7 +241,7 @@ body.theme-dark .retry-container {
     background-color: var(--accent, #0b8f88);
     color: white;
     border: none;
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     cursor: pointer;
     font-weight: 700;
     font-size: 14px;
@@ -370,7 +370,7 @@ body.theme-dark .venue-tz-badge::before {
     font-weight: 700;
     line-height: 1;
     padding: 3px 7px;
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     color: #c4302b;
     background: rgba(196, 48, 43, 0.1);
     border: 1px solid rgba(196, 48, 43, 0.25);

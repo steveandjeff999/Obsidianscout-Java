@@ -1,21 +1,22 @@
 /* ==========================================================================
-   Design tokens. Neutral greys with one violet accent.
-   Corners: --radius for containers, --radius-sm for controls. A theme preset's
-   corner setting overrides both (see js/layout/theme.js).
+   Design tokens. Warm greys in light mode, neutral greys in dark mode, one violet accent.
+   Corners: --radius for containers, --radius-sm for controls, --radius-pill for
+   chips and badges (small, so dots and thin bars stay round). A theme preset's
+   corner setting overrides all three (see js/layout/theme.js).
    ========================================================================== */
 
 :root {
-    --ink: #18181d;
-    --muted: #6b6b76;
+    --ink: #1b1a17;
+    --muted: #6e6b64;
     --surface: #ffffff;
-    --surface-2: #f6f6f8;
-    --surface-3: #eeeef2;
+    --surface-2: #f7f6f2;
+    --surface-3: #efede7;
     --accent: #5b4ec7;
     --accent-2: #7065a2;
     --accent-3: #7d71dc;
     --accent-glow: transparent;
-    --border: #dedee4;
-    --border-subtle: #ebebef;
+    --border: #e2dfd8;
+    --border-subtle: #ecebe5;
     --border-focus: #5b4ec7;
     --shadow-sm: 0 1px 2px rgba(20, 20, 30, 0.05);
     --shadow:
@@ -23,10 +24,13 @@
         0 1px 2px rgba(20, 20, 30, 0.04);
     --shadow-hover:
         0 4px 12px -1px rgba(20, 20, 30, 0.08);
-    --radius: 10px;
-    --radius-sm: 6px;
-    --radius-pill: 9999px;
-    --bg: #f3f3f6;
+    --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    --font-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+    --radius: 6px;
+    --radius-sm: 4px;
+    --radius-pill: 5px;
+    --bg: #f5f4f0;
     --primary: var(--accent);
     --on-primary: #ffffff;
     --ink-muted: var(--muted);
@@ -53,22 +57,22 @@
 }
 
 body.theme-dark {
-    --ink: #ececf0;
-    --muted: #9a9aa6;
-    --surface: #141418;
-    --surface-2: #1b1b20;
-    --surface-3: #24242a;
+    --ink: #ececf1;
+    --muted: #9b9ba6;
+    --surface: #16161a;
+    --surface-2: #1c1c21;
+    --surface-3: #25252b;
     --accent: #8b7cf6;
     --accent-2: #a39bd6;
     --accent-3: #b3a8fa;
     --accent-glow: transparent;
-    --border: rgba(255, 255, 255, 0.09);
+    --border: rgba(255, 255, 255, 0.085);
     --border-subtle: rgba(255, 255, 255, 0.05);
     --border-focus: #8b7cf6;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
     --shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.6);
-    --bg: #0c0c0f;
+    --bg: #0e0e11;
     --danger: #f07171;
     --danger-surface: rgba(240, 113, 113, 0.12);
     --success: #3fc28f;

@@ -1,0 +1,2150 @@
+/* ==========================================================================
+   Page layouts
+   Each block is scoped to one page through body[data-page]. These restyle the
+   existing markup only (ids and classes the page scripts use are untouched),
+   so a page can be reverted by deleting its block.
+   ========================================================================== */
+
+/* Shared bits several pages use */
+.dashboard-section-header h2 svg,
+.dashboard-filter-title svg {
+    display: none;
+}
+
+/* ============================== Dashboard ============================== */
+body[data-page="dashboard"] .dashboard-hero-main {
+    align-items: flex-end;
+    gap: 24px;
+}
+
+body[data-page="dashboard"] .dashboard-hero-greeting {
+    font-family: var(--font-serif);
+    font-size: clamp(2.2rem, 3.4vw, 3.1rem);
+    font-weight: 500;
+    letter-spacing: -0.025em;
+    line-height: 1.05;
+    margin: 0 0 12px;
+}
+
+/* Team, program, role and event as one quiet line instead of four badges */
+body[data-page="dashboard"] .dashboard-hero-meta {
+    gap: 0;
+}
+
+body[data-page="dashboard"] .dashboard-badge {
+    background: none;
+    border: none;
+    padding: 0;
+    border-radius: 0;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--muted);
+}
+
+body[data-page="dashboard"] .dashboard-badge + .dashboard-badge::before {
+    content: "/";
+    margin: 0 10px;
+    color: var(--border);
+}
+
+body[data-page="dashboard"] .dashboard-badge.badge-program {
+    color: var(--accent);
+}
+
+body[data-page="dashboard"] .dash-btn-primary,
+body[data-page="dashboard"] .dash-btn-secondary {
+    border-radius: var(--radius-sm);
+    padding: 10px 16px;
+    font-size: 14px;
+    box-shadow: none;
+}
+
+body[data-page="dashboard"] .dash-btn-secondary {
+    background: var(--surface);
+}
+
+body[data-page="dashboard"] .dashboard-filter-bar {
+    margin-top: 36px;
+}
+
+body[data-page="dashboard"] .dashboard-filter-title {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    letter-spacing: 0;
+}
+
+/* Six numbers on one band, like a scoreboard, instead of six cards */
+body[data-page="dashboard"] .dashboard-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-top: 10px;
+}
+
+body[data-page="dashboard"] .dashboard-kpi-card {
+    background: transparent;
+    border: none;
+    border-left: 1px solid var(--border);
+    border-radius: 0;
+    box-shadow: none;
+    padding: 18px 20px 20px;
+    min-height: 0;
+    transform: none;
+    transition: background-color 0.15s ease;
+}
+
+body[data-page="dashboard"] .dashboard-kpi-card:first-child {
+    border-left: none;
+}
+
+body[data-page="dashboard"] .dashboard-kpi-card:hover {
+    background: var(--surface-2);
+    transform: none;
+    box-shadow: none;
+}
+
+body[data-page="dashboard"] .dashboard-kpi-icon,
+body[data-page="dashboard"] .dashboard-kpi-arrow {
+    display: none;
+}
+
+body[data-page="dashboard"] .dashboard-kpi-title {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    text-transform: none;
+    letter-spacing: 0;
+    margin: 0;
+}
+
+body[data-page="dashboard"] .dashboard-kpi-value {
+    font-family: var(--font-sans);
+    font-variant-numeric: tabular-nums;
+    font-size: 42px;
+    font-weight: 300;
+    letter-spacing: -0.035em;
+    line-height: 1;
+    margin: 14px 0 8px;
+    color: var(--ink);
+}
+
+body[data-page="dashboard"] .dashboard-kpi-card:hover .dashboard-kpi-value {
+    color: var(--accent);
+}
+
+body[data-page="dashboard"] .dashboard-kpi-subtext {
+    font-size: 12.5px;
+    color: var(--muted);
+}
+
+/* Content cards */
+body[data-page="dashboard"] .dashboard-content-grid {
+    margin-top: 28px;
+    gap: 20px;
+}
+
+body[data-page="dashboard"] .dashboard-col {
+    gap: 20px;
+}
+
+body[data-page="dashboard"] .dashboard-section-header {
+    align-items: baseline;
+    margin-bottom: 4px;
+}
+
+body[data-page="dashboard"] .dashboard-section-header h2 {
+    font-family: var(--font-serif);
+    font-size: 1.4rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+}
+
+body[data-page="dashboard"] .event-link-pill {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--accent);
+    font-size: 13.5px;
+    font-weight: 500;
+}
+
+body[data-page="dashboard"] .event-link-pill:hover {
+    background: none;
+    text-decoration: underline;
+}
+
+body[data-page="dashboard"] .event-details-grid {
+    background: none;
+    border: none;
+    border-top: 1px solid var(--border);
+    border-radius: 0;
+    padding: 16px 0 0;
+    gap: 16px 24px;
+}
+
+body[data-page="dashboard"] .event-detail-label {
+    font-size: 12.5px;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--muted);
+}
+
+body[data-page="dashboard"] .event-detail-value {
+    font-size: 14.5px;
+    font-weight: 500;
+}
+
+body[data-page="dashboard"] #summary-year,
+body[data-page="dashboard"] #summary-event {
+    font-family: var(--font-mono);
+}
+
+body[data-page="dashboard"] .event-links-row a {
+    border-radius: var(--radius-sm);
+}
+
+body[data-page="dashboard"] .dash-sync-status-box {
+    background: none;
+    border: none;
+    border-left: 2px solid var(--success);
+    border-radius: 0;
+    padding: 2px 0 2px 12px;
+}
+
+body[data-page="dashboard"] .dash-sync-indicator {
+    display: none;
+}
+
+body[data-page="dashboard"] .dash-matches-empty {
+    background: none;
+    border: 1px dashed var(--border);
+}
+
+body[data-page="dashboard"] .dash-tile {
+    background: none;
+    border: 1px solid var(--border);
+    box-shadow: none;
+}
+
+body[data-page="dashboard"] .dash-tile:hover {
+    border-color: var(--accent);
+    background: var(--surface-2);
+}
+
+@media (max-width: 1180px) {
+    body[data-page="dashboard"] .dashboard-metrics-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    body[data-page="dashboard"] .dashboard-kpi-card:nth-child(3n + 1) {
+        border-left: none;
+    }
+
+    body[data-page="dashboard"] .dashboard-kpi-card:nth-child(n + 4) {
+        border-top: 1px solid var(--border);
+    }
+}
+
+@media (max-width: 640px) {
+    body[data-page="dashboard"] .dashboard-metrics-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    body[data-page="dashboard"] .dashboard-kpi-card {
+        border-left: 1px solid var(--border);
+        border-top: none;
+        padding: 14px 16px;
+    }
+
+    body[data-page="dashboard"] .dashboard-kpi-card:nth-child(odd) {
+        border-left: none;
+    }
+
+    body[data-page="dashboard"] .dashboard-kpi-card:nth-child(n + 3) {
+        border-top: 1px solid var(--border);
+    }
+
+    body[data-page="dashboard"] .dashboard-kpi-value {
+        font-size: 30px;
+    }
+}
+
+/* Number bands: a row of stats sharing one frame. The 1px gap over a border-coloured
+   background draws the dividers, so it works for any count and for hidden cells. */
+body[data-page="team"] .team-stats-grid,
+body[data-page="team"] .team-phase-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+/* ================================ Team ================================= */
+body[data-page="team"] .team-header-card {
+    background: none;
+    color: var(--ink);
+    border: none;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    box-shadow: none;
+    padding: 6px 0 22px;
+    margin-bottom: 24px;
+}
+
+body[data-page="team"] .team-header-card::after {
+    display: none;
+}
+
+body[data-page="team"] .team-header-card h1 {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 20px;
+    margin: 0 0 8px;
+    color: var(--ink);
+}
+
+body[data-page="team"] .team-hero-num {
+    font-family: var(--font-mono);
+    font-size: clamp(3rem, 6vw, 4.6rem);
+    font-weight: 500;
+    letter-spacing: -0.05em;
+    line-height: 0.95;
+    color: var(--accent);
+}
+
+body[data-page="team"] .team-hero-name {
+    font-family: var(--font-serif);
+    font-size: clamp(1.8rem, 3vw, 2.6rem);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+}
+
+body[data-page="team"] .team-header-card p {
+    color: var(--muted);
+    font-size: 15px;
+    opacity: 1;
+    margin: 0 0 10px;
+}
+
+body[data-page="team"] .team-header-card .team-meta-info {
+    gap: 4px 18px;
+}
+
+body[data-page="team"] .team-header-card .meta-pill {
+    background: none;
+    border: none;
+    padding: 0;
+    border-radius: 0;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 400;
+}
+
+body[data-page="team"] .team-header-card .meta-pill strong {
+    font-weight: 500;
+    color: var(--ink);
+}
+
+body[data-page="team"] .team-stat-card,
+body[data-page="team"] .phase-card {
+    background: var(--surface);
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 16px 20px 18px;
+}
+
+body[data-page="team"] .team-stat-card .stat-label,
+body[data-page="team"] .phase-label {
+    font-size: 13px;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--muted);
+}
+
+body[data-page="team"] .team-stat-card .stat-val,
+body[data-page="team"] .phase-val {
+    font-family: var(--font-sans);
+    font-variant-numeric: tabular-nums;
+    font-size: 36px;
+    font-weight: 300;
+    letter-spacing: -0.035em;
+    margin-top: 10px;
+    color: var(--ink) !important;
+}
+
+/* Phase colours survive as a short rule above each value */
+body[data-page="team"] .phase-card::before {
+    content: "";
+    display: block;
+    width: 22px;
+    height: 3px;
+    border-radius: 2px;
+    margin-bottom: 12px;
+    background: var(--muted);
+}
+
+body[data-page="team"] .phase-auto::before { background: #3b82f6; }
+body[data-page="team"] .phase-teleop::before { background: var(--accent); }
+body[data-page="team"] .phase-endgame::before { background: #10b981; }
+body[data-page="team"] .phase-max::before { background: #f59e0b; }
+
+body[data-page="team"] .team-tabs {
+    margin-top: 32px;
+}
+
+body[data-page="team"] .team-tab-btn {
+    font-weight: 500;
+}
+
+body[data-page="team"] .team-chart-wrapper {
+    background: none;
+    border: none;
+    border-top: 1px solid var(--border);
+    border-radius: 0;
+}
+
+/* ============================== Predictor ============================== */
+body[data-page="predictor"] .alliance-card {
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: var(--radius);
+    box-shadow: none;
+    background: var(--surface);
+    overflow: hidden;
+    position: relative;
+    padding-top: 28px;
+}
+
+body[data-page="predictor"] .alliance-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 6px;
+}
+
+body[data-page="predictor"] .alliance-card.red-alliance::before { background: #e5484d; }
+body[data-page="predictor"] .alliance-card.blue-alliance::before { background: #3b82f6; }
+
+body[data-page="predictor"] .alliance-card:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+body[data-page="predictor"] .alliance-title {
+    font-family: var(--font-serif);
+    font-weight: 500;
+    font-size: 1.75rem;
+    letter-spacing: -0.015em;
+}
+
+body[data-page="predictor"] .team-number-badge {
+    background: none !important;
+    padding: 0;
+    font-family: var(--font-mono);
+    font-size: 22px;
+    font-weight: 500;
+    letter-spacing: -0.03em;
+}
+
+body[data-page="predictor"] .red-alliance .team-number-badge { color: #d93a3f; }
+body[data-page="predictor"] .blue-alliance .team-number-badge { color: #2f6fe0; }
+body.theme-dark[data-page="predictor"] .red-alliance .team-number-badge { color: #ff6b70; }
+body.theme-dark[data-page="predictor"] .blue-alliance .team-number-badge { color: #6ea2ff; }
+
+body[data-page="predictor"] .pill-tag {
+    font-variant-numeric: tabular-nums;
+    background: none;
+    border: 1px solid currentColor;
+}
+
+body[data-page="predictor"] .winner-spotlight {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: none;
+    text-align: left;
+    padding: 24px 26px;
+}
+
+body[data-page="predictor"] .winner-spotlight-title {
+    font-size: 13px;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--muted);
+}
+
+body[data-page="predictor"] .winner-name {
+    font-family: var(--font-serif);
+    font-weight: 500;
+    font-size: clamp(2rem, 2.8vw, 2.6rem);
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    margin: 6px 0 8px;
+}
+
+body[data-page="predictor"] .comp-bar-track {
+    height: 10px;
+    border-radius: 5px;
+}
+
+body[data-page="predictor"] .comp-bar-label {
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+}
+
+/* ========================== Alliance selection ========================= */
+body[data-page="alliance-selection"] .alliance-card {
+    border: 1px solid var(--border);
+    box-shadow: none;
+    background: var(--surface);
+    padding: 18px 20px 8px;
+}
+
+body[data-page="alliance-selection"] .alliance-card:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
+body[data-page="alliance-selection"] .alliance-card-header {
+    border-bottom: none;
+    padding-bottom: 6px;
+    margin-bottom: 4px;
+}
+
+body[data-page="alliance-selection"] .alliance-card-header > span {
+    font-family: var(--font-serif);
+    font-weight: 500;
+    font-size: 1.4rem;
+    letter-spacing: -0.01em;
+}
+
+body[data-page="alliance-selection"] .slot-container {
+    gap: 0;
+}
+
+body[data-page="alliance-selection"] .slot-row {
+    background: none;
+    border: none;
+    border-top: 1px solid var(--border-subtle);
+    border-radius: 0;
+    padding: 11px 2px;
+}
+
+body[data-page="alliance-selection"] .slot-row:hover {
+    background: var(--surface-2);
+}
+
+body[data-page="alliance-selection"] .slot-label {
+    font-size: 13px;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--muted);
+}
+
+body[data-page="alliance-selection"] .slot-team-display {
+    font-family: var(--font-mono);
+    font-weight: 500;
+}
+
+body[data-page="alliance-selection"] .slot-team-display.empty {
+    font-family: var(--font-sans);
+    font-style: normal;
+    font-weight: 400;
+    color: var(--muted);
+    opacity: 0.75;
+}
+
+body[data-page="alliance-selection"] .recs-list-card,
+body[data-page="alliance-selection"] .sticky-panel .card {
+    box-shadow: none;
+}
+
+body[data-page="alliance-selection"] .rec-item {
+    background: none;
+    border: none;
+    border-top: 1px solid var(--border-subtle);
+    border-radius: 0;
+    padding: 12px 4px;
+}
+
+body[data-page="alliance-selection"] .rec-item:hover {
+    background: var(--surface-2);
+    transform: none;
+}
+
+body[data-page="alliance-selection"] .rec-rank {
+    font-family: var(--font-mono);
+    color: var(--muted);
+    font-weight: 400;
+}
+
+body[data-page="alliance-selection"] .rec-team-number {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+}
+
+body[data-page="alliance-selection"] .rec-score-badge {
+    font-variant-numeric: tabular-nums;
+    background: none;
+    font-weight: 500;
+}
+
+/* ============================ Match planning =========================== */
+body[data-page="match-planning"] .ds-column {
+    background: none;
+    border: none;
+    box-shadow: none;
+}
+
+body[data-page="match-planning"] .ds-column-header {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+body[data-page="match-planning"] .ds-slot-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left-width: 3px;
+    box-shadow: none;
+}
+
+body[data-page="match-planning"] .ds-blue .ds-slot-card { border-left-color: #3b82f6; }
+body[data-page="match-planning"] .ds-red .ds-slot-card { border-left-color: #e5484d; }
+
+body[data-page="match-planning"] .ds-slot-tag {
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 500;
+}
+
+body[data-page="match-planning"] .ds-slot-team,
+body[data-page="match-planning"] .marker-number {
+    font-family: var(--font-mono);
+    letter-spacing: -0.03em;
+}
+
+body[data-page="match-planning"] .breakdown-stat-card {
+    background: none;
+    border: none;
+    border-top: 1px solid var(--border);
+    border-radius: 0;
+}
+
+body[data-page="match-planning"] .breakdown-stat-label {
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 500;
+}
+
+body[data-page="match-planning"] .breakdown-stat-val {
+    font-variant-numeric: tabular-nums;
+    font-weight: 400;
+    font-size: 26px;
+    letter-spacing: -0.03em;
+}
+
+body[data-page="match-planning"] .card-team-number {
+    font-family: var(--font-mono);
+    letter-spacing: -0.03em;
+}
+
+body[data-page="match-planning"] .card-team-nickname {
+    font-family: var(--font-sans);
+    letter-spacing: 0;
+}
+
+/* ========================== Scouting forms ============================
+   Match, qualitative, pit and prescout forms share this. Built for thumbs:
+   a segmented phase switch, big counter buttons, and each section in its
+   own panel so a scout can see where one part of the match ends. */
+:is(body[data-page="scout"], body[data-page="qual-scout"], body[data-page="pit-scout"], body[data-page="prescout-scout"]) .tab-row {
+    display: inline-flex;
+    gap: 0;
+    padding: 3px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius-sm) + 3px);
+    margin: 8px 0 22px;
+    width: fit-content;
+}
+
+:is(body[data-page="scout"], body[data-page="qual-scout"], body[data-page="pit-scout"], body[data-page="prescout-scout"]) .tab-row .tab {
+    border: none;
+    background: none;
+    padding: 9px 22px;
+    font-size: 14.5px;
+    color: var(--muted);
+}
+
+:is(body[data-page="scout"], body[data-page="qual-scout"], body[data-page="pit-scout"], body[data-page="prescout-scout"]) .tab-row .tab:hover {
+    color: var(--ink);
+}
+
+:is(body[data-page="scout"], body[data-page="qual-scout"], body[data-page="pit-scout"], body[data-page="prescout-scout"]) .tab-row .tab.active {
+    background: var(--accent);
+    color: var(--on-primary);
+    font-weight: 600;
+}
+
+:is(body[data-page="scout"], body[data-page="qual-scout"], body[data-page="pit-scout"], body[data-page="prescout-scout"]) .form-section {
+    background: none;
+    border: none;
+    border-top: 1px solid var(--border);
+    border-radius: 0;
+    padding: 22px 0 0;
+    margin: 18px 0 4px;
+}
+
+:is(body[data-page="scout"], body[data-page="qual-scout"], body[data-page="pit-scout"], body[data-page="prescout-scout"]) .form-section:first-child {
+    border-top: none;
+    padding-top: 0;
+    margin-top: 0;
+}
+
+:is(body[data-page="scout"], body[data-page="qual-scout"], body[data-page="pit-scout"], body[data-page="prescout-scout"]) .form-section > h3,
+:is(body[data-page="scout"], body[data-page="qual-scout"], body[data-page="pit-scout"], body[data-page="prescout-scout"]) .form-section > h2 {
+    font-family: var(--font-serif);
+    font-size: 1.5rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    border: none;
+    padding: 0;
+    margin: 0 0 14px;
+}
+
+/* Counters: [-5] [-1]  12  [+1] [+5] */
+:is(body[data-page="scout"], body[data-page="prescout-scout"]) .counter {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+:is(body[data-page="scout"], body[data-page="prescout-scout"]) .counter button {
+    width: 52px;
+    height: 48px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    font-family: var(--font-mono);
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--ink);
+}
+
+:is(body[data-page="scout"], body[data-page="prescout-scout"]) .counter .btn-counter-plus {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-primary);
+    width: 64px;
+}
+
+:is(body[data-page="scout"], body[data-page="prescout-scout"]) .counter .btn-counter-double {
+    width: 44px;
+    color: var(--muted);
+    font-size: 14px;
+}
+
+:is(body[data-page="scout"], body[data-page="prescout-scout"]) .counter input {
+    width: 76px;
+    height: 48px;
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 22px;
+    font-weight: 500;
+    border-radius: var(--radius-sm);
+}
+
+/* Points preview as a number band */
+:is(body[data-page="scout"], body[data-page="prescout-scout"]) #points-preview {
+    background: none;
+    border: none;
+    padding: 0;
+    margin-top: 8px;
+}
+
+:is(body[data-page="scout"], body[data-page="prescout-scout"]) #points-preview > h3 {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    margin: 0 0 8px;
+}
+
+:is(body[data-page="scout"], body[data-page="prescout-scout"]) #points-preview > .notice {
+    display: none;
+}
+
+:is(body[data-page="scout"], body[data-page="prescout-scout"]) #points-preview .metrics {
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+:is(body[data-page="scout"], body[data-page="prescout-scout"]) #points-preview .metrics > div {
+    background: var(--surface);
+    padding: 14px 18px 16px;
+}
+
+:is(body[data-page="scout"], body[data-page="prescout-scout"]) #points-preview h4 {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    margin: 0;
+}
+
+:is(body[data-page="scout"], body[data-page="prescout-scout"]) #points-preview .metric-value {
+    font-size: 34px;
+    margin-top: 6px;
+}
+
+:is(body[data-page="scout"], body[data-page="prescout-scout"]) #points-preview .metrics > div:last-child .metric-value {
+    color: var(--accent);
+    font-weight: 400;
+}
+
+@media (max-width: 640px) {
+    :is(body[data-page="scout"], body[data-page="qual-scout"], body[data-page="pit-scout"], body[data-page="prescout-scout"]) .tab-row {
+        display: flex;
+        width: auto;
+    }
+
+    :is(body[data-page="scout"], body[data-page="qual-scout"], body[data-page="pit-scout"], body[data-page="prescout-scout"]) .tab-row .tab {
+        flex: 1;
+        padding: 11px 8px;
+    }
+
+    :is(body[data-page="scout"], body[data-page="prescout-scout"]) #points-preview .metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    :is(body[data-page="scout"], body[data-page="qual-scout"], body[data-page="pit-scout"], body[data-page="prescout-scout"]) .form-section {
+        padding: 16px 14px 6px;
+    }
+}
+
+/* ======================================================================
+   Number bands, shared by the data pages below. Each page then adjusts
+   its own band (what is emphasised, how wide cells are, what sits beside).
+   ====================================================================== */
+:is(body[data-page="all-data"], body[data-page="match-data"], body[data-page="pit-data"], body[data-page="qual-data"]) .card:has(h1) .metrics,
+body[data-page="analytics"] #analytics-grid,
+body[data-page="match-predictions"] .prediction-kpis,
+body[data-page="prediction-leaderboard"] .prediction-kpis,
+body[data-page="scouter-report"] .report-kpis,
+body[data-page="data-validation"] .metrics-grid,
+body[data-page="config-migration"] .stats-grid,
+body[data-page="cache-manager"] .stats-grid {
+    display: grid;
+    gap: 1px !important;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    padding: 0;
+}
+
+:is(body[data-page="all-data"], body[data-page="match-data"], body[data-page="pit-data"], body[data-page="qual-data"]) .card:has(h1) .metrics > div,
+body[data-page="analytics"] #analytics-grid > .card,
+body[data-page="match-predictions"] .prediction-kpi,
+body[data-page="prediction-leaderboard"] .prediction-kpi,
+body[data-page="scouter-report"] .report-kpi,
+body[data-page="data-validation"] .metric-card,
+body[data-page="config-migration"] .stat-card,
+body[data-page="cache-manager"] .stat-card {
+    background: var(--surface) !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 16px 20px 18px !important;
+    margin: 0 !important;
+    min-height: 0;
+    text-align: left !important;
+}
+
+/* labels */
+:is(body[data-page="all-data"], body[data-page="match-data"], body[data-page="pit-data"], body[data-page="qual-data"]) .card:has(h1) .metrics h4,
+body[data-page="analytics"] .metric-title,
+:is(body[data-page="match-predictions"], body[data-page="prediction-leaderboard"]) .prediction-kpi-title,
+body[data-page="scouter-report"] .report-kpi-title,
+body[data-page="data-validation"] .metric-title,
+body[data-page="config-migration"] .stat-label,
+body[data-page="cache-manager"] .stat-card :is(.stat-label, span:last-child) {
+    font-family: var(--font-sans) !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+    color: var(--muted) !important;
+    margin: 0 !important;
+}
+
+/* values */
+:is(body[data-page="all-data"], body[data-page="match-data"], body[data-page="pit-data"], body[data-page="qual-data"]) .card:has(h1) .metric-value,
+body[data-page="analytics"] .metric-value,
+:is(body[data-page="match-predictions"], body[data-page="prediction-leaderboard"]) .prediction-kpi-value,
+body[data-page="scouter-report"] .report-kpi-value,
+body[data-page="data-validation"] .metric-value,
+body[data-page="config-migration"] .stat-value,
+body[data-page="cache-manager"] .stat-card :is(.stat-value, div:first-child) {
+    display: block;
+    font-family: var(--font-sans) !important;
+    font-variant-numeric: tabular-nums;
+    font-size: 36px !important;
+    font-weight: 300 !important;
+    letter-spacing: -0.035em !important;
+    line-height: 1.05 !important;
+    color: var(--ink) !important;
+    margin: 8px 0 4px !important;
+}
+
+:is(body[data-page="match-predictions"], body[data-page="prediction-leaderboard"]) .prediction-kpi-sub,
+body[data-page="scouter-report"] .report-kpi-sub,
+body[data-page="data-validation"] .metric-subtext {
+    font-size: 12.5px;
+    color: var(--muted);
+}
+
+/* ---- All data: four counts, the total leads ---- */
+body[data-page="all-data"] .card:has(h1) .metrics {
+    grid-template-columns: 1.4fr 1fr 1fr 1fr;
+    margin-top: 6px;
+}
+
+body[data-page="all-data"] .card:has(h1) .metrics > div:first-child .metric-value {
+    font-size: 48px !important;
+    color: var(--accent) !important;
+}
+
+/* ---- Match data: average score leads, last update is small print ---- */
+body[data-page="match-data"] .card:has(h1) .metrics {
+    grid-template-columns: 1fr 1fr 1.3fr 1.2fr;
+}
+
+body[data-page="match-data"] #match-avg-score {
+    color: var(--accent) !important;
+}
+
+:is(body[data-page="match-data"], body[data-page="pit-data"], body[data-page="qual-data"]) .card:has(h1) .metrics .metric-value.text-compact {
+    font-size: 15px !important;
+    font-weight: 500 !important;
+    letter-spacing: 0 !important;
+    margin-top: 14px !important;
+}
+
+/* ---- Pit data: coverage is the headline ---- */
+body[data-page="pit-data"] .card:has(h1) .metrics {
+    grid-template-columns: 1fr 1fr 1.6fr 1.2fr;
+}
+
+body[data-page="pit-data"] #pit-coverage {
+    font-size: 48px !important;
+    color: var(--accent) !important;
+}
+
+/* ---- Qualitative data: the ranking metric is a sentence, not a number ---- */
+body[data-page="qual-data"] .card:has(h1) .metrics {
+    grid-template-columns: 1fr 1fr 2fr 1.2fr;
+}
+
+body[data-page="qual-data"] #qual-metric-summary {
+    font-size: 16px !important;
+    font-weight: 500 !important;
+    letter-spacing: 0 !important;
+    line-height: 1.4 !important;
+    margin-top: 12px !important;
+}
+
+/* Filter panels on the data pages sit flatter than content cards */
+:is(body[data-page="all-data"], body[data-page="match-data"], body[data-page="pit-data"], body[data-page="qual-data"]) [id$="-dynamic-container"] > .card:first-child {
+    background: var(--surface-2);
+    border-style: dashed;
+}
+
+:is(body[data-page="all-data"], body[data-page="match-data"], body[data-page="pit-data"], body[data-page="qual-data"]) .badge {
+    font-variant-numeric: tabular-nums;
+}
+
+:is(body[data-page="all-data"], body[data-page="match-data"], body[data-page="pit-data"], body[data-page="qual-data"]) .pit-detail {
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+}
+
+/* ---- Analytics: widget wall. Numbers in a tight grid, charts span wide ---- */
+body[data-page="analytics"] #analytics-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    margin-top: 24px;
+    /* widgets are separate tiles here: a short last row must not show filler */
+    background: none;
+    border: none;
+    gap: 12px !important;
+    overflow: visible;
+}
+
+body[data-page="analytics"] #analytics-grid > .card {
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius) !important;
+}
+
+body[data-page="analytics"] #analytics-grid > .metric-card-wide {
+    grid-column: span 2;
+}
+
+body[data-page="analytics"] .bar-row {
+    font-size: 13px;
+}
+
+body[data-page="analytics"] .bar-chart [class*="fill"],
+body[data-page="analytics"] .bar-chart [class*="bar-inner"] {
+    border-radius: 3px;
+}
+
+/* ---- Graphs: the counts are context, so they shrink to one quiet line ---- */
+body[data-page="graphs"] #graphs-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 32px;
+    margin-top: 2px;
+}
+
+body[data-page="graphs"] #graphs-summary > .card {
+    display: flex;
+    flex-direction: row-reverse;
+    align-items: baseline;
+    gap: 8px;
+    background: none;
+    border: none;
+    padding: 0;
+}
+
+body[data-page="graphs"] #graphs-summary h3 {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--muted);
+    margin: 0;
+}
+
+body[data-page="graphs"] #graphs-summary .metric-value {
+    font-size: 22px;
+    font-weight: 500;
+    margin: 0;
+    color: var(--ink);
+}
+
+body[data-page="graphs"] .graphs-panel-header h2,
+body[data-page="graphs"] .graphs-panel-header h3 {
+    font-family: var(--font-serif);
+    font-weight: 500;
+}
+
+/* ---- Match predictions: picks band, then the match list ---- */
+body[data-page="match-predictions"] .prediction-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-top: 20px;
+}
+
+body[data-page="match-predictions"] .prediction-kpi:last-child .prediction-kpi-value {
+    color: var(--accent) !important;
+}
+
+/* ---- Prediction leaderboard: the leader gets the wide cell ---- */
+body[data-page="prediction-leaderboard"] .prediction-kpis {
+    grid-template-columns: 1.6fr 1fr 1fr 1fr;
+    margin-top: 20px;
+}
+
+body[data-page="prediction-leaderboard"] .prediction-kpi:first-child .prediction-kpi-value {
+    font-family: var(--font-serif) !important;
+    font-weight: 500 !important;
+    font-size: 30px !important;
+    letter-spacing: -0.015em !important;
+}
+
+/* ---- Scout report: seven figures, top scout spans two cells ---- */
+body[data-page="scouter-report"] .report-kpis {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin-top: 20px;
+}
+
+body[data-page="scouter-report"] .report-kpi:last-child {
+    grid-column: span 2;
+}
+
+body[data-page="scouter-report"] .report-kpi:last-child .report-kpi-value {
+    font-family: var(--font-serif) !important;
+    font-weight: 500 !important;
+    font-size: 26px !important;
+    letter-spacing: -0.01em !important;
+    overflow-wrap: anywhere;
+}
+
+body[data-page="scouter-report"] .report-meta {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 10px;
+}
+
+/* ---- Data validation: anomaly counts keep their warning colours ---- */
+body[data-page="data-validation"] .metrics-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    margin-top: 18px;
+}
+
+body[data-page="data-validation"] #kpi-incomplete:not(:empty) { color: #c27a06 !important; }
+body[data-page="data-validation"] #kpi-match-anomalies,
+body[data-page="data-validation"] #kpi-team-anomalies { color: var(--danger) !important; }
+body[data-page="data-validation"] #kpi-fully-scouted { color: var(--success) !important; }
+
+body[data-page="data-validation"] .filter-row {
+    gap: 14px;
+}
+
+/* ---- Config migration: four facts about the schema ---- */
+body[data-page="config-migration"] .stats-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+body[data-page="config-migration"] .stat-card {
+    display: flex !important;
+    flex-direction: column-reverse;
+    justify-content: flex-end;
+}
+
+body[data-page="config-migration"] .mapping-table code,
+body[data-page="config-migration"] .mapping-table td:first-child span {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+}
+
+/* ---- Cache manager ---- */
+body[data-page="cache-manager"] .stats-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    margin-bottom: 18px;
+}
+
+body[data-page="cache-manager"] .stat-card {
+    display: flex !important;
+    flex-direction: column-reverse;
+    justify-content: flex-end;
+    align-items: flex-start !important;
+}
+
+body[data-page="cache-manager"] .tab-nav {
+    border-bottom: 1px solid var(--border);
+}
+
+@media (max-width: 900px) {
+    :is(body[data-page="all-data"], body[data-page="match-data"], body[data-page="pit-data"], body[data-page="qual-data"]) .card:has(h1) .metrics,
+    body[data-page="prediction-leaderboard"] .prediction-kpis,
+    body[data-page="scouter-report"] .report-kpis,
+    body[data-page="config-migration"] .stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    body[data-page="data-validation"] .metrics-grid,
+    body[data-page="cache-manager"] .stats-grid,
+    body[data-page="match-predictions"] .prediction-kpis {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    body[data-page="analytics"] #analytics-grid > .metric-card-wide {
+        grid-column: auto;
+    }
+}
+
+/* ======================= Schedules, lists, rankings ===================== */
+
+/* "Dark" buttons (Post, Create user, Create banner) are solid ink, so they
+   read as the main action and invert cleanly in dark mode. */
+.btn.dark,
+body.theme-dark .btn.dark {
+    background: var(--ink);
+    color: var(--bg);
+    border-color: var(--ink);
+}
+
+/* Team numbers across list pages */
+body[data-page="teams"] #teams-table td:first-child,
+body[data-page="rankings"] #rankings-table td:nth-child(2),
+body[data-page="projected-rankings"] #projection-table td:nth-child(2),
+body[data-page="pick-list"] :is(.pl-team-number, .pl-num, .team-num) {
+    font-family: var(--font-mono);
+    letter-spacing: -0.02em;
+}
+
+/* ---- Assignments: controls on the left, status chips as one band ---- */
+body[data-page="assignments"] .assignments-header-card .page-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+body[data-page="assignments"] .assignments-header-card > .row + .row {
+    align-items: flex-end !important;
+    border-top: 1px solid var(--border) !important;
+}
+
+body[data-page="assignments"] .assignments-header-card .field {
+    min-width: 260px;
+    height: auto !important;
+}
+
+body[data-page="assignments"] .assignments-header-card .field select {
+    height: auto !important;
+}
+
+body[data-page="assignments"] #refresh-btn {
+    height: auto !important;
+    min-height: 0 !important;
+    width: auto !important;
+    border-radius: var(--radius-sm) !important;
+    padding: 10px 16px !important;
+    align-self: flex-end;
+}
+
+body[data-page="assignments"] #stats-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(96px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    flex: 1 1 520px;
+}
+
+body[data-page="assignments"] .kpi-chip {
+    background: var(--surface) !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 12px 16px !important;
+    margin: 0 !important;
+}
+
+body[data-page="assignments"] .kpi-chip > :first-child {
+    font-size: 12.5px !important;
+    font-weight: 500 !important;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+    color: var(--muted) !important;
+}
+
+body[data-page="assignments"] .kpi-chip > :last-child {
+    font-size: 28px !important;
+    font-weight: 300 !important;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.03em;
+}
+
+body[data-page="assignments"] .kpi-chip.conflict {
+    box-shadow: inset 3px 0 0 var(--danger) !important;
+}
+
+body[data-page="assignments"] .asgn-tab-nav {
+    border-bottom: 1px solid var(--border);
+}
+
+body[data-page="assignments"] .matrix-table td,
+body[data-page="assignments"] .matrix-table th {
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---- My assignments: personal to-do list ---- */
+body[data-page="my-assignments"] .page-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+body[data-page="my-assignments"] #event-badge {
+    background: none !important;
+    border: none !important;
+    font-family: var(--font-mono);
+    color: var(--muted) !important;
+    padding: 0 !important;
+}
+
+body[data-page="my-assignments"] #refresh-btn {
+    height: auto !important;
+    width: auto !important;
+    border-radius: var(--radius-sm) !important;
+    padding: 9px 14px !important;
+}
+
+body[data-page="my-assignments"] .tab-nav {
+    border-bottom: 1px solid var(--border);
+}
+
+body[data-page="my-assignments"] .tab-btn span[id^="count-"] {
+    font-variant-numeric: tabular-nums;
+    color: inherit;
+    opacity: 0.75;
+    margin-left: 4px;
+}
+
+/* ---- Matches: alliance columns carry their colour ---- */
+body[data-page="matches"] #matches-table td:first-child a {
+    font-weight: 600;
+}
+
+body[data-page="matches"] #matches-table td:nth-child(3),
+body[data-page="matches"] #matches-table td:nth-child(4) {
+    font-family: var(--font-mono);
+    font-size: 13.5px;
+    letter-spacing: -0.01em;
+}
+
+body[data-page="matches"] #matches-table td:nth-child(3) { color: #c8373c; }
+body[data-page="matches"] #matches-table td:nth-child(4) { color: #2f66d0; }
+body.theme-dark[data-page="matches"] #matches-table td:nth-child(3) { color: #ff7a7e; }
+body.theme-dark[data-page="matches"] #matches-table td:nth-child(4) { color: #7aa7ff; }
+
+body[data-page="matches"] #matches-table th:nth-child(3) { box-shadow: inset 0 -2px 0 #e5484d; }
+body[data-page="matches"] #matches-table th:nth-child(4) { box-shadow: inset 0 -2px 0 #3b82f6; }
+
+/* ---- Events: one row per competition, the name leads ---- */
+body[data-page="events"] #events-table td:first-child {
+    font-family: var(--font-serif);
+    font-size: 17px;
+    font-weight: 500;
+}
+
+body[data-page="events"] #events-table td:nth-child(2) {
+    font-family: var(--font-mono);
+    color: var(--accent);
+}
+
+body[data-page="events"] #events-table td:nth-child(3) {
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+}
+
+/* ---- Teams: number, name, place ---- */
+body[data-page="teams"] #teams-table td:first-child a {
+    font-weight: 500;
+}
+
+body[data-page="teams"] #teams-table td:nth-child(2) {
+    font-weight: 500;
+}
+
+body[data-page="teams"] #teams-table td:nth-child(3) {
+    color: var(--muted);
+}
+
+/* ---- Rankings: a standings table; the podium stands out ---- */
+body[data-page="rankings"] #rankings-table td:first-child {
+    font-family: var(--font-serif);
+    font-size: 20px;
+    font-weight: 500;
+    width: 64px;
+    color: var(--muted);
+}
+
+body[data-page="rankings"] #rankings-table tbody tr:nth-child(-n + 3) td:first-child {
+    color: var(--accent);
+}
+
+body[data-page="rankings"] #rankings-table td:last-child {
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+}
+
+body[data-page="rankings"] .card:has(h1) .table-scroll,
+body[data-page="qual-rankings"] .card:has(h1) .table-scroll {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-top: 8px;
+}
+
+/* ---- Qualitative rankings ---- */
+body[data-page="qual-rankings"] h1 + .badge,
+body[data-page="qual-rankings"] #rankings-team-count-badge {
+    background: none !important;
+    border: none !important;
+    font-family: var(--font-mono);
+    color: var(--muted) !important;
+    font-size: 14px !important;
+}
+
+body[data-page="qual-rankings"] #qual-rankings-table td:nth-child(2) {
+    font-weight: 600;
+}
+
+/* ---- Projected rankings: a line under 8th place, where captains are decided ---- */
+body[data-page="projected-rankings"] #projection-table td:first-child {
+    font-family: var(--font-serif);
+    font-size: 19px;
+    font-weight: 500;
+    width: 70px;
+}
+
+body[data-page="projected-rankings"] #projection-table tbody tr:nth-child(8) td {
+    border-bottom: 2px solid var(--accent);
+}
+
+body[data-page="projected-rankings"] #projection-table td {
+    font-variant-numeric: tabular-nums;
+}
+
+body[data-page="projected-rankings"] #projection-card .table-scroll {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-top: 16px;
+}
+
+/* ---- Pick list: ranking is the hero column ---- */
+body[data-page="pick-list"] .pl-toolbar {
+    display: grid;
+    grid-template-columns: minmax(220px, 1.4fr) minmax(140px, 1fr) auto auto;
+    gap: 10px;
+    align-items: center;
+}
+
+body[data-page="pick-list"] .pl-list > * {
+    border-radius: 0;
+    background: none;
+    border: none;
+    border-top: 1px solid var(--border-subtle);
+}
+
+body[data-page="pick-list"] .pl-private-note {
+    font-size: 12.5px;
+    color: var(--muted);
+    font-weight: 400;
+}
+
+body[data-page="pick-list"] #ranking-list > * {
+    counter-increment: pick;
+}
+
+/* ---- Event predictor ---- */
+body[data-page="event-predictor"] #predictor-empty-state {
+    background: none;
+    border: 1px dashed var(--border);
+}
+
+body[data-page="event-predictor"] #predictor-empty-state h3 {
+    font-family: var(--font-serif);
+    font-weight: 500;
+    font-size: 1.4rem;
+}
+
+body[data-page="event-predictor"] .filter-row {
+    gap: 14px;
+}
+
+/* ---- QR scanner: camera left, queue right like a tray ---- */
+body[data-page="qr-scanner"] .scanner-video-card {
+    background: none;
+    border: none;
+    padding-left: 0;
+    padding-top: 4px;
+}
+
+body[data-page="qr-scanner"] .scanner-video-card h1 {
+    font-size: clamp(2rem, 2.6vw, 2.6rem);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+}
+
+body[data-page="qr-scanner"] .scanner-video-wrapper {
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: #0d0d0c;
+}
+
+body[data-page="qr-scanner"] .scanner-queue-card {
+    position: sticky;
+    top: 24px;
+    align-self: start;
+}
+
+body[data-page="qr-scanner"] .scanner-queue-header h2 {
+    font-weight: 500;
+}
+
+body[data-page="qr-scanner"] .import-dropzone {
+    background: var(--surface) !important;
+}
+
+/* ---- Event info: a noticeboard ---- */
+body[data-page="event-info"] .ei-composer {
+    max-width: 760px;
+}
+
+body[data-page="event-info"] .ei-composer h3 {
+    font-family: var(--font-serif);
+    font-size: 1.35rem;
+    font-weight: 500;
+}
+
+body[data-page="event-info"] .ei-feed {
+    max-width: 760px;
+}
+
+body[data-page="event-info"] .ei-feed > .card:not(.ei-empty) {
+    border-left: 3px solid var(--accent);
+}
+
+body[data-page="event-info"] .ei-empty {
+    background: none;
+    border: 1px dashed var(--border);
+    color: var(--muted);
+}
+
+body[data-page="event-info"] #ei-submit {
+    justify-self: start;
+    padding-left: 28px;
+    padding-right: 28px;
+}
+
+@media (max-width: 900px) {
+    /* five chips stay on one row; three columns would leave an empty cell */
+    body[data-page="assignments"] #stats-grid {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        flex-basis: 100%;
+    }
+
+    body[data-page="assignments"] .kpi-chip {
+        padding: 10px 10px !important;
+    }
+
+    body[data-page="assignments"] .kpi-chip > :last-child {
+        font-size: 22px !important;
+    }
+
+    body[data-page="pick-list"] .pl-toolbar {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    body[data-page="qr-scanner"] .scanner-queue-card {
+        position: static;
+    }
+}
+
+/* ================= Team admin, settings, tools, communication ============ */
+
+/* Feature-off notices (assistant, battery tracker, match checklist): a quiet
+   dashed placeholder rather than a full card, so the page doesn't look broken. */
+:is(#assistant-disabled, #battery-disabled, #checklist-disabled) {
+    background: none;
+    border: 1px dashed var(--border);
+    max-width: 640px;
+}
+
+:is(#assistant-disabled, #battery-disabled, #checklist-disabled) h2 {
+    font-size: 1.35rem;
+    font-weight: 500;
+}
+
+/* Forms that were stretched across a wide screen get a readable measure */
+body[data-page="users"] #user-form,
+body[data-page="banners"] #banner-form,
+body[data-page="settings"] #personal-panel,
+body[data-page="pit-scout"] #pit-scouting-form,
+body[data-page="prescout-pit"] #pit-scouting-form {
+    max-width: 880px;
+}
+
+/* ---- Users: create form as a two-column card, list below ---- */
+body[data-page="users"] #user-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    margin-top: 8px;
+}
+
+body[data-page="users"] #user-form > button {
+    grid-column: 1 / -1;
+    justify-self: start;
+    padding-left: 28px;
+    padding-right: 28px;
+}
+
+body[data-page="users"] #admin-panel h3 {
+    font-family: var(--font-serif);
+    font-size: 1.45rem;
+    font-weight: 500;
+    margin-top: 28px;
+}
+
+body[data-page="users"] .table td:first-child {
+    font-weight: 600;
+}
+
+/* ---- Banners: composer on the left with a live-ish preview feel ---- */
+body[data-page="banners"] #banner-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+}
+
+body[data-page="banners"] #banner-form > .field:first-child {
+    grid-column: 1 / -1;
+}
+
+body[data-page="banners"] #banner-form > button {
+    grid-column: 1 / -1;
+    justify-self: start;
+    width: auto;
+    padding-left: 28px;
+    padding-right: 28px;
+}
+
+body[data-page="banners"] #admin-panel h3 {
+    font-family: var(--font-serif);
+    font-size: 1.45rem;
+    font-weight: 500;
+}
+
+/* ---- Personal settings: profile up top, preferences in two columns ---- */
+body[data-page="settings"] #personal-panel > .form-grid:not([style]) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 22px;
+    padding: 20px 0;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    margin: 18px 0;
+}
+
+body[data-page="settings"] .card.soft {
+    background: var(--surface);
+    border: 1px solid var(--border);
+}
+
+body[data-page="settings"] .card.soft h2,
+body[data-page="settings"] .card.soft h3 {
+    font-family: var(--font-serif);
+    font-weight: 500;
+}
+
+/* ---- Admin settings: setting groups read as sections, not cards in cards ---- */
+body[data-page="admin-settings"] #settings-wrapper > .card.soft {
+    background: var(--surface) !important;
+    border: 1px solid var(--border) !important;
+}
+
+body[data-page="admin-settings"] #settings-wrapper > .card.soft:first-child,
+body[data-page="admin-settings"] #settings-wrapper > .card.soft:nth-child(2) {
+    display: inline-flex;
+    width: calc(50% - 10px);
+    vertical-align: top;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 150px;
+}
+
+body[data-page="admin-settings"] #settings-wrapper > .card.soft:first-child {
+    margin-right: 16px;
+}
+
+body[data-page="admin-settings"] #settings-wrapper > .card.soft :is(h2, h3) {
+    font-family: var(--font-serif);
+    font-weight: 500;
+}
+
+/* ---- Theme customizer ---- */
+body[data-page="theme-editor"] #admin-panel > a.btn {
+    padding: 6px 12px;
+    font-size: 13px;
+}
+
+body[data-page="theme-editor"] .card.soft {
+    background: var(--surface) !important;
+    border: 1px solid var(--border) !important;
+}
+
+body[data-page="theme-editor"] #theme-preview-box {
+    border-radius: var(--radius);
+}
+
+/* ---- Data sharing (backup): export and import as a pair ---- */
+body[data-page="backup"] #admin-panel .split > .card.soft {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    position: relative;
+    padding-top: 28px;
+}
+
+body[data-page="backup"] #admin-panel .split > .card.soft::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    border-radius: var(--radius) var(--radius) 0 0;
+    background: var(--accent);
+}
+
+body[data-page="backup"] #admin-panel .split > .card.soft:nth-child(2)::before {
+    background: var(--ink);
+}
+
+body[data-page="backup"] #admin-panel .split > .card.soft :is(h2, h3) {
+    font-family: var(--font-serif);
+    font-size: 1.45rem;
+    font-weight: 500;
+}
+
+/* ---- Schema history ---- */
+body[data-page="schema-history"] #revisions-list > .card.soft {
+    background: var(--surface) !important;
+    border: 1px solid var(--border) !important;
+}
+
+/* ---- Alliances (team data sharing) ---- */
+body[data-page="alliances"] .sharing-notice {
+    background: none !important;
+    border: none !important;
+    border-left: 2px solid var(--accent) !important;
+    border-radius: 0 !important;
+    padding: 2px 0 2px 14px !important;
+    max-width: 820px;
+    color: var(--muted);
+}
+
+body[data-page="alliances"] .section-header h2 {
+    font-family: var(--font-serif);
+    font-weight: 500;
+}
+
+body[data-page="alliances"] #alliance-count {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+
+body[data-page="alliances"] #alliances-grid > .card {
+    border-style: dashed;
+    background: none;
+}
+
+/* ---- Chat ---- */
+body[data-page="chat"] .chat-container {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--surface);
+}
+
+body[data-page="chat"] .chat-sidebar {
+    background: var(--surface-2);
+    border-right: 1px solid var(--border);
+}
+
+body[data-page="chat"] .chat-sidebar-header h2,
+body[data-page="chat"] .chat-sidebar-header h3 {
+    font-family: var(--font-serif);
+    font-weight: 500;
+}
+
+body[data-page="chat"] .ypp-banner {
+    background: var(--surface-2) !important;
+    color: var(--muted) !important;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+}
+
+body[data-page="chat"] .ypp-banner a {
+    color: var(--accent) !important;
+}
+
+body[data-page="chat"] .ypp-banner svg,
+body[data-page="chat"] .ypp-banner .material-symbols-outlined {
+    color: var(--accent) !important;
+}
+
+body[data-page="chat"] .chat-header :is(h2, h3) {
+    font-family: var(--font-serif);
+    font-weight: 500;
+}
+
+/* ---- Tutorials: a course catalogue ---- */
+body[data-page="tutorials"] .tutorial-hero-card {
+    background: none;
+    border: none;
+    padding-left: 0;
+}
+
+body[data-page="tutorials"] .tutorial-hero-card h1 {
+    font-size: clamp(2rem, 2.6vw, 2.6rem);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+}
+
+body[data-page="tutorials"] .tutorial-progress-container {
+    background: var(--surface) !important;
+    border: 1px solid var(--border);
+    box-shadow: none !important;
+}
+
+body[data-page="tutorials"] .tutorial-filter-bar {
+    background: none;
+    border: none;
+    padding: 0;
+}
+
+body[data-page="tutorials"] .tutorial-card {
+    border: 1px solid var(--border);
+    box-shadow: none;
+    background: var(--surface);
+    transition: border-color 0.15s ease;
+}
+
+body[data-page="tutorials"] .tutorial-card:hover {
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+    transform: none;
+    box-shadow: none;
+}
+
+body[data-page="tutorials"] .tutorial-card-body :is(h3, h4) {
+    font-family: var(--font-serif);
+    font-size: 1.2rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+}
+
+/* ---- Assistant ---- */
+body[data-page="assistant"] .assistant-hero {
+    background: none;
+    border: none;
+    padding-left: 0;
+}
+
+body[data-page="assistant"] .assistant-hero h1 {
+    font-size: clamp(2rem, 2.6vw, 2.6rem);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+}
+
+/* ---- Battery tracker and match checklist toolbars ---- */
+body[data-page="battery-tracker"] .battery-toolbar h1,
+body[data-page="match-checklist"] .checklist-toolbar h1 {
+    font-size: clamp(2rem, 2.6vw, 2.6rem);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+}
+
+/* ---- Compare: three team pickers side by side, like a lineup ---- */
+body[data-page="compare"] .team-select-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+}
+
+body[data-page="compare"] .team-select-card:nth-child(2) { border-top-color: var(--ink); }
+body[data-page="compare"] .team-select-card:nth-child(3) { border-top-color: #10b981; }
+
+body[data-page="compare"] #compare-results-container .table td:first-child {
+    color: var(--muted);
+}
+
+body[data-page="compare"] #compare-results-container .table td:not(:first-child) {
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+}
+
+/* ---- Shared links ---- */
+body[data-page="shared-links"] #shares-stats-bar {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+body[data-page="shared-links"] #shares-stats-bar > .card {
+    background: var(--surface);
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 16px 20px 18px;
+}
+
+body[data-page="shared-links"] .metric-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+/* ---- Prescouting hub: three doors ---- */
+body[data-page="prescout"] .split > .card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+body[data-page="prescout"] .split > .card h2 {
+    font-size: 1.5rem;
+    font-weight: 500;
+}
+
+body[data-page="prescout"] .split > .card .btn {
+    margin-top: auto;
+    align-self: flex-start;
+}
+
+/* ---- Pit scouting and prescout forms: two-column fields where short ---- */
+:is(body[data-page="pit-scout"], body[data-page="prescout-pit"], body[data-page="prescout-qual"]) .tab-row {
+    display: inline-flex;
+    gap: 0;
+    padding: 3px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius-sm) + 3px);
+    width: fit-content;
+}
+
+:is(body[data-page="pit-scout"], body[data-page="prescout-pit"]) #pit-scouting-form textarea {
+    min-height: 96px;
+}
+
+/* ---- Qualitative scouting: target picker reads as alliance chips ---- */
+body[data-page="qual-scout"] [class*="target"] .btn,
+body[data-page="qual-scout"] [class*="target"] button {
+    border-radius: var(--radius-sm);
+}
+
+@media (max-width: 900px) {
+    body[data-page="users"] #user-form,
+    body[data-page="banners"] #banner-form,
+    body[data-page="settings"] #personal-panel > .form-grid:not([style]),
+    body[data-page="shared-links"] #shares-stats-bar {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    body[data-page="admin-settings"] #settings-wrapper > .card.soft:first-child,
+    body[data-page="admin-settings"] #settings-wrapper > .card.soft:nth-child(2) {
+        display: flex;
+        width: auto;
+        margin-right: 0;
+    }
+}
+
+/* ========================== Public and sign-in pages ===================== */
+
+/* ---- Sign in / reset password: the pitch on the left, the form on the right ---- */
+:is(body[data-page="login"], body[data-page="reset-password"]) .login-shell {
+    padding-top: 9vh;
+}
+
+:is(body[data-page="login"], body[data-page="reset-password"]) .login-hero {
+    gap: 64px;
+}
+
+:is(body[data-page="login"], body[data-page="reset-password"]) .brand {
+    text-transform: none;
+    letter-spacing: -0.01em;
+    font-family: var(--font-serif);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--accent);
+}
+
+:is(body[data-page="login"], body[data-page="reset-password"]) .login-hero h1 {
+    font-size: clamp(2.4rem, 4.2vw, 3.6rem);
+    font-weight: 500;
+    letter-spacing: -0.03em;
+    line-height: 1.02;
+    margin: 6px 0 16px;
+}
+
+:is(body[data-page="login"], body[data-page="reset-password"]) .login-hero .card.soft {
+    background: none;
+    border: none;
+    border-left: 2px solid var(--accent);
+    border-radius: 0;
+    padding: 2px 0 2px 14px;
+    box-shadow: none;
+    color: var(--muted);
+}
+
+:is(body[data-page="login"], body[data-page="reset-password"]) .auth-card {
+    border-top: 1px solid var(--border);
+    padding: 28px;
+    box-shadow: 0 1px 0 var(--border), 0 18px 40px -24px rgba(20, 20, 30, 0.25);
+}
+
+/* Sign in / Create account as a segmented switch */
+body[data-page="login"] .auth-card .tab-row {
+    gap: 0;
+    padding: 3px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius-sm) + 3px);
+}
+
+body[data-page="login"] .auth-card .tab {
+    border: none;
+    background: none;
+}
+
+body[data-page="login"] .auth-card .tab.active {
+    background: var(--surface);
+    color: var(--ink);
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(20, 20, 30, 0.08);
+}
+
+/* ---- Public data: a directory of shared events ---- */
+body[data-page="public-data"] .public-data-shell > .card {
+    background: none;
+    border: none;
+    box-shadow: none;
+    padding: 12px 0 0;
+}
+
+body[data-page="public-data"] .public-data-shell h1 {
+    font-size: clamp(2.2rem, 3.4vw, 3rem);
+    font-weight: 500;
+    letter-spacing: -0.025em;
+}
+
+body[data-page="public-data"] .public-data-brand {
+    font-family: var(--font-serif);
+    font-size: 18px;
+    font-weight: 600;
+}
+
+body[data-page="public-data"] .public-group {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+body[data-page="public-data"] .public-group-sub,
+body[data-page="public-data"] .public-row-head {
+    font-variant-numeric: tabular-nums;
+}
+
+body[data-page="public-data"] .public-row-title {
+    font-family: var(--font-serif);
+    font-size: 17px;
+    font-weight: 500;
+}
+
+body[data-page="public-data"] .public-count {
+    background: none !important;
+    border: 1px solid var(--border);
+    font-variant-numeric: tabular-nums;
+}
+
+body[data-page="public-data"] .public-action {
+    padding: 5px 10px;
+    font-size: 13px;
+    border-radius: var(--radius-sm);
+}
+
+body[data-page="public-data"] .public-action:not(.disabled):hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* ---- Docs and contact share the landing page's header ---- */
+:is(body[data-page="docs"], body[data-page="contact"]) .card:has(h1),
+:is(body[data-page="docs"], body[data-page="contact"]) h1 {
+    letter-spacing: -0.025em;
+}
+
+/* ---- Error pages ---- */
+.error-card .error-code {
+    font-family: var(--font-serif);
+    font-weight: 600;
+    letter-spacing: -0.04em;
+}
+
+/* ======================================================================
+   Scroll lists fill their card.
+   A list with a fixed max-height stops short when the card beside it is
+   taller. In these layouts the list grows to the card's full height and
+   scrolls inside it; flex-basis 0 means a long list never makes its card
+   taller than the row, and min-height keeps a short row usable.
+   ====================================================================== */
+.split > .card:has(> .table-scroll) {
+    display: flex;
+    flex-direction: column;
+}
+
+.split > .card > .table-scroll {
+    flex: 1 1 0;
+    min-height: 420px;
+    max-height: none;
+}
+
+/* Graphs: team picker */
+body[data-page="graphs"] .graphs-panel:has(.team-list-scroll) {
+    display: flex;
+    flex-direction: column;
+}
+
+body[data-page="graphs"] .graphs-panel .team-list-scroll {
+    flex: 1 1 0;
+    min-height: 320px;
+    max-height: none;
+}
+
+/* Pick list: the unranked column runs as tall as the ranking beside it */
+@media (min-width: 1280px) {
+    body[data-page="pick-list"] .page-container {
+        align-items: stretch;
+    }
+
+    body[data-page="pick-list"] .page-container > .card:first-child {
+        align-self: start;
+    }
+
+    body[data-page="pick-list"] .side-column > .card:first-child {
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+    }
+
+    body[data-page="pick-list"] #unranked-list {
+        flex: 1 1 0;
+        min-height: 360px;
+        max-height: none;
+    }
+}
+

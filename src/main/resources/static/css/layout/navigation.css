@@ -316,7 +316,7 @@ body.theme-dark .sidebar-toggle {
 }
 
 body.theme-dark .sidebar-link.active {
-    background: rgba(47, 104, 246, 0.15);
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
     color: var(--accent);
     font-weight: 600;
     box-shadow: none;

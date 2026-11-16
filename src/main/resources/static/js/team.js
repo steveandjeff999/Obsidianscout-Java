@@ -271,7 +271,15 @@ function renderHeader() {
     const locEl = document.getElementById("team-location");
     const pillsEl = document.getElementById("team-meta-pills");
 
-    titleEl.textContent = `Team ${t.teamNumber} | ${t.nickname || t.name || `Team ${t.teamNumber}`}`;
+    // Number and name are separate spans so the number can be set large in the mono face.
+    const numEl = document.createElement("span");
+    numEl.className = "team-hero-num";
+    numEl.textContent = String(t.teamNumber);
+    const nameEl = document.createElement("span");
+    nameEl.className = "team-hero-name";
+    nameEl.textContent = t.nickname || t.name || `Team ${t.teamNumber}`;
+    titleEl.replaceChildren(numEl, nameEl);
+    document.title = `ObsidianScout | Team ${t.teamNumber} ${nameEl.textContent}`;
 
     const locationStr = [t.city, t.state, t.country].filter(Boolean).join(", ");
     locEl.textContent = locationStr || "Location unknown";

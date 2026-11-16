@@ -217,7 +217,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             card.className = "team-hero-card";
 
             const countBadge = (tData.matchesScouted !== undefined)
-                ? `<div style="font-size: 0.8rem; margin-top: 8px; color: var(--muted);"><span style="background: var(--surface-3, rgba(255,255,255,0.06)); padding: 2px 8px; border-radius: 999px;">${tData.matchesScouted} ${isMatch13 ? t("compare.matches_with_xp", "matches with xP") : "matches"}</span></div>`
+                ? `<div style="font-size: 0.8rem; margin-top: 8px; color: var(--muted);"><span style="background: var(--surface-3, rgba(255,255,255,0.06)); padding: 2px 8px; border-radius: var(--radius-pill);">${tData.matchesScouted} ${isMatch13 ? t("compare.matches_with_xp", "matches with xP") : "matches"}</span></div>`
                 : "";
 
             const epaBadge = (effectiveUseEpa && tData.epa != null)

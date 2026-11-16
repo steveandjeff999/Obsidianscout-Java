@@ -781,7 +781,7 @@
             .collab-avatar-chip.me { opacity:.6; }
             [data-collab-key].collab-focused { box-shadow:0 0 0 2px rgba(243,156,18,.55); }
             .collab-focus-badges { display:flex; gap:4px; margin:-4px 0 6px; }
-            .collab-focus-badge { font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; background:rgba(243,156,18,.15); color:#d68910; }
+            .collab-focus-badge { font-size:11px; font-weight:600; padding:2px 8px; border-radius:var(--radius-pill); background:rgba(243,156,18,.15); color:#d68910; }
             @media (max-width: 600px) { .collab-status-bar { flex-wrap:wrap; } }
         `;
         root.document.head.appendChild(style);

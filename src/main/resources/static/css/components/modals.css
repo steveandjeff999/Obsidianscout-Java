@@ -103,7 +103,7 @@ body.theme-dark .modal-container {
         width: 100%;
         margin: 0;
         padding: 12px;
-        border-radius: 999px;
+        border-radius: var(--radius-pill);
     }
 
     .form-grid-wide {
@@ -247,7 +247,7 @@ body.theme-dark .modal-container {
     height: 3px;
     transform: translateY(-50%);
     background: var(--border);
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
 }
 
 .wizard-progress-bar {
@@ -258,7 +258,7 @@ body.theme-dark .modal-container {
     width: 0;
     transform: translateY(-50%);
     background: var(--accent);
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     transition: width 0.3s ease;
 }
 

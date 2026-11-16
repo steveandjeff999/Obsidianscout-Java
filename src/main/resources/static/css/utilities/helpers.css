@@ -67,14 +67,14 @@
 
 .bar-track {
     background: var(--surface-3);
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     overflow: hidden;
 }
 
 .bar-fill {
     height: 10px;
     background: var(--accent);
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
 }
 
 .inline-control {
@@ -175,6 +175,19 @@ body.theme-dark .counter button {
 
 .align-center {
     align-items: center;
+}
+
+/* items-center is used by many page headers; it was never defined, so rows stretched their buttons. */
+.items-center {
+    align-items: center;
+}
+
+.justify-center {
+    justify-content: center;
+}
+
+.justify-end {
+    justify-content: flex-end;
 }
 
 /* Sleek rating progress bar */

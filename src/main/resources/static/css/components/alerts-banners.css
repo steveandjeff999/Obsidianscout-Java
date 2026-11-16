@@ -871,7 +871,7 @@ body.theme-dark .slack-banner.mentioned {
     font-size: 12px;
     font-weight: 600;
     padding: 6px 12px;
-    border-radius: 9999px;
+    border-radius: var(--radius-pill);
     cursor: pointer;
 }
 

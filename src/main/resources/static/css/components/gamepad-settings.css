@@ -413,7 +413,7 @@ body.theme-dark .gamepad-hud-chip {
 
 .gamepad-filter-chip {
     padding: 5px 14px;
-    border-radius: 9999px;
+    border-radius: var(--radius-pill);
     font-size: 0.8rem;
     font-weight: 600;
     border: 1px solid var(--border-color, rgba(0, 0, 0, 0.1));

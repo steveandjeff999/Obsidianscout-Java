@@ -1,0 +1,176 @@
+/* ==========================================================================
+   Design layer
+   Loaded after every other stylesheet. It sets the type system (Newsreader
+   titles, IBM Plex Sans text, IBM Plex Mono numbers), turns each page's first
+   card into a plain page header, and quiets the boxes and labels the
+   component files draw. Page-specific layouts live in css/pages/.
+   ========================================================================== */
+
+/* ---- Type ---- */
+body,
+button,
+input,
+select,
+textarea {
+    font-family: var(--font-sans);
+}
+
+body {
+    font-size: 15px;
+    font-feature-settings: "ss02";
+}
+
+h1,
+h2 {
+    font-family: var(--font-serif);
+    font-weight: 600;
+    letter-spacing: -0.012em;
+    font-optical-sizing: auto;
+}
+
+h3,
+h4,
+h5,
+h6 {
+    font-family: var(--font-sans);
+    letter-spacing: -0.005em;
+    font-weight: 600;
+}
+
+/* Numbers that people compare at a glance read best in a fixed-width face. */
+.mono,
+.team-number,
+.team-num,
+kbd,
+code {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+}
+
+.metric-value {
+    font-variant-numeric: tabular-nums;
+    font-weight: 300;
+    letter-spacing: -0.03em;
+}
+
+/* Small labels: sentence case instead of spaced-out capitals. */
+label,
+.table th,
+.metric-card-header h3,
+.sidebar-section-title {
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+}
+
+.table th {
+    font-size: 12.5px;
+    font-weight: 500;
+    font-variant-numeric: normal;
+    font-feature-settings: normal;
+}
+
+/* ---- Page header ----
+   Nearly every page opens with a card holding its <h1>, a grey description
+   box and the page's controls. That card becomes a header on the page itself. */
+.main-content .card:has(h1) {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 4px 0 6px;
+    border-radius: 0;
+}
+
+.main-content .card:has(h1) h1 {
+    font-size: clamp(2rem, 2.6vw, 2.6rem);
+    line-height: 1.08;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    margin: 0 0 6px;
+}
+
+/* Descriptions are plain text, not boxes. */
+.notice {
+    background: none;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    font-size: 14.5px;
+    line-height: 1.55;
+    color: var(--muted);
+    max-width: 72ch;
+}
+
+/* Warnings keep their colour; .notice above loads after local-ai.css and would grey them out. */
+.notice.ai-warn {
+    color: var(--warning);
+}
+
+.main-content .card:has(h1) .notice {
+    font-size: 16px;
+    margin-bottom: 22px;
+}
+
+/* ---- Cards ---- */
+.card,
+body.theme-dark .card {
+    box-shadow: none;
+    border-color: var(--border);
+}
+
+.card > h2,
+.card > .card-header h2,
+.card-title {
+    font-size: 1.45rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+}
+
+/* ---- Sidebar ---- */
+.sidebar-brand {
+    text-transform: none;
+    letter-spacing: -0.01em;
+    font-family: var(--font-serif);
+    font-weight: 600;
+    font-size: 18px;
+}
+
+.sidebar-section-title {
+    font-size: 12px;
+    font-weight: 500;
+    opacity: 1;
+    margin-top: 22px;
+}
+
+.sidebar-link {
+    font-weight: 450;
+}
+
+.sidebar-link.active,
+body.theme-dark .sidebar-link.active {
+    font-weight: 600;
+}
+
+.connection-widget .status-text {
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 600;
+}
+
+.mobile-topbar-brand {
+    text-transform: none;
+    letter-spacing: -0.01em;
+    font-family: var(--font-serif);
+    font-weight: 600;
+    font-size: 18px;
+}
+
+/* An empty status line still has margins; hide it so it can't leave a gap under a list. */
+.notice:empty {
+    display: none;
+}

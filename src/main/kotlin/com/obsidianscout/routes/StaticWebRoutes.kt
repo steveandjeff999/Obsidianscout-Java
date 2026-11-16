@@ -129,9 +129,24 @@ private fun renderPage(fileName: String, version: String, stamp: String): Render
     val sidebar = if (fsBase.exists()) fsBase.readText().trim()
         else Thread.currentThread().contextClassLoader.getResource("static/base.html")?.readText()?.trim()
     val withSidebar = if (sidebar.isNullOrBlank()) html else html.replace(SIDEBAR_REGEX, sidebar)
-    val versioned = injectAssetVersioning(withSidebar, version)
+    val versioned = injectAssetVersioning(injectEarlyTheme(withSidebar), version)
     val crc = java.util.zip.CRC32().apply { update(versioned.toByteArray()) }
     return RenderedPage(versioned, "\"p-${java.lang.Long.toHexString(crc.value)}\"", stamp)
+}
+
+private val HEAD_OPEN_REGEX = Regex("""<head(\s[^>]*)?>""", RegexOption.IGNORE_CASE)
+
+/**
+ * Paints the root dark before anything else loads. Pages set `theme-dark` on <body> from a script inside the body,
+ * and the stylesheet arrives through a chain of @imports, so until both land the browser shows its default white
+ * canvas. This runs first thing in <head> and colours <html> directly; once the page (and its CSS) has loaded it
+ * steps aside so <body> owns the background again and theme toggles work as before.
+ */
+private const val EARLY_THEME_SCRIPT = """<script>(function(){try{if(localStorage.getItem("obsidian-theme")!=="dark")return;var bg="#0e0e11";try{var t=JSON.parse(localStorage.getItem("obsidian-custom-theme-config")||"null");if(t&&/^#[0-9a-fA-F]{3,8}${'$'}/.test(t.darkBg))bg=t.darkBg;}catch(e){}var s=document.documentElement.style;s.backgroundColor=bg;s.colorScheme="dark";window.addEventListener("load",function(){s.backgroundColor="";s.colorScheme="";});}catch(e){}})();</script>"""
+
+internal fun injectEarlyTheme(html: String): String {
+    val head = HEAD_OPEN_REGEX.find(html) ?: return html
+    return html.substring(0, head.range.last + 1) + EARLY_THEME_SCRIPT + html.substring(head.range.last + 1)
 }
 
 internal suspend fun ApplicationCall.respondStaticHtml(fileName: String, status: HttpStatusCode = HttpStatusCode.OK) {

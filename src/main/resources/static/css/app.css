@@ -3,7 +3,7 @@
    Modularized Architecture
    ========================================================================== */
 
-/* Roboto typography and Material Symbols Outlined */
+/* Newsreader, IBM Plex Sans, IBM Plex Mono, Roboto (fallback) and Material Symbols Outlined */
 @import url('./base/fonts.css');
 
 /* Font Awesome (strictly brands only: Slack, Apple, etc.) */
@@ -43,6 +43,10 @@
 
 /* 5. Responsive & Mobile Overrides */
 @import url('./layout/responsive.css');
+
+/* 5b. Design layer: type system, page headers, quieter boxes */
+@import url('./base/design.css');
+@import url('./pages/layouts.css');
 
 /* 6. Utilities & Animations */
 @import url('./utilities/helpers.css');

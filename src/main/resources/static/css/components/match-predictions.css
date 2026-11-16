@@ -300,7 +300,7 @@
     min-width: 28px;
     height: 28px;
     padding: 0 6px;
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     font-weight: 800;
     background: var(--border);
 }

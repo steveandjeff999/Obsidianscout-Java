@@ -54,15 +54,15 @@ document.addEventListener("DOMContentLoaded", async () => {
                 lightInk: legacyTheme.lightInk || "#09090b",
                 lightMuted: legacyTheme.lightMuted || "#71717a",
                 lightBg: legacyTheme.lightBg || "#ffffff",
-                lightRadius: legacyTheme.lightRadius || legacyTheme.btnRadius || "999px",
+                lightRadius: legacyTheme.lightRadius || legacyTheme.btnRadius || "4px",
                 darkAccent: legacyTheme.darkAccent || "#3b82f6",
                 darkAccent2: legacyTheme.darkAccent2 || "#38bdf8",
                 darkAccent3: legacyTheme.darkAccent3 || "#a855f7",
                 darkInk: legacyTheme.darkInk || "#f8fafc",
                 darkMuted: legacyTheme.darkMuted || "#94a3b8",
                 darkBg: legacyTheme.darkBg || "#09090b",
-                darkRadius: legacyTheme.darkRadius || legacyTheme.btnRadius || "999px",
-                btnRadius: legacyTheme.darkRadius || legacyTheme.btnRadius || "999px",
+                darkRadius: legacyTheme.darkRadius || legacyTheme.btnRadius || "4px",
+                btnRadius: legacyTheme.darkRadius || legacyTheme.btnRadius || "4px",
                 lightCard: legacyTheme.lightCard || "#ffffff",
                 darkCard: legacyTheme.darkCard || "#111116"
             });
@@ -222,7 +222,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     function setRadiusSelectValue(selectId, val) {
         const sel = document.getElementById(selectId);
         if (!sel) return;
-        const normalized = val || "999px";
+        const normalized = val || "4px";
         const exists = Array.from(sel.options).some(opt => opt.value === normalized);
         if (!exists) {
             const opt = document.createElement("option");
@@ -242,7 +242,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         document.getElementById("theme-light-muted").value = theme.lightMuted || "#5f5b55";
         const lightCardEl = document.getElementById("theme-light-card");
         if (lightCardEl) lightCardEl.value = theme.lightCard || "#ffffff";
-        setRadiusSelectValue("theme-light-radius", theme.lightRadius || theme.btnRadius || "999px");
+        setRadiusSelectValue("theme-light-radius", theme.lightRadius || theme.btnRadius || "4px");
         parseAndPopulateBg("light", theme.lightBg);
 
         document.getElementById("theme-dark-accent").value = theme.darkAccent || "#3ccfc0";
@@ -252,7 +252,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         document.getElementById("theme-dark-muted").value = theme.darkMuted || "#c3bfb8";
         const darkCardEl = document.getElementById("theme-dark-card");
         if (darkCardEl) darkCardEl.value = theme.darkCard || "#111116";
-        setRadiusSelectValue("theme-dark-radius", theme.darkRadius || theme.btnRadius || "999px");
+        setRadiusSelectValue("theme-dark-radius", theme.darkRadius || theme.btnRadius || "4px");
         parseAndPopulateBg("dark", theme.darkBg);
     }
 
@@ -574,7 +574,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             document.getElementById("theme-light-ink").value = "#1d1a17";
             document.getElementById("theme-light-muted").value = "#5f5b55";
             if (document.getElementById("theme-light-card")) document.getElementById("theme-light-card").value = "#ffffff";
-            setRadiusSelectValue("theme-light-radius", "999px");
+            setRadiusSelectValue("theme-light-radius", "4px");
             parseAndPopulateBg("light", "");
 
             document.getElementById("theme-dark-accent").value = "#3ccfc0";
@@ -583,7 +583,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             document.getElementById("theme-dark-ink").value = "#f4f2ed";
             document.getElementById("theme-dark-muted").value = "#c3bfb8";
             if (document.getElementById("theme-dark-card")) document.getElementById("theme-dark-card").value = "#111116";
-            setRadiusSelectValue("theme-dark-radius", "999px");
+            setRadiusSelectValue("theme-dark-radius", "4px");
             parseAndPopulateBg("dark", "");
             
             updateVisualThemePreview();

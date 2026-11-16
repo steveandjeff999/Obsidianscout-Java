@@ -185,7 +185,7 @@
         }
         return h("span", {
             "data-slack-status": "",
-            style: `display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:9999px;border:1px solid var(--border);color:${color};`
+            style: `display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:var(--radius-pill);border:1px solid var(--border);color:${color};`
         }, h("span", { style: `width:8px;height:8px;border-radius:50%;background:${color};display:inline-block;` }), label);
     }
 

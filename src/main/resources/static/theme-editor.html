@@ -146,10 +146,11 @@
                                 <label for="theme-light-radius">Button Style (Radius)</label>
                                 <select id="theme-light-radius" style="width: 100%; height: 38px; border-radius: var(--radius-sm); background: var(--surface-3); color: var(--ink); border: 1px solid rgba(255,255,255,0.1); padding: 0 8px;">
                                     <option value="0px">Square (0px)</option>
+                                    <option value="4px" selected>Tight (4px, default)</option>
                                     <option value="6px">Subtle Rounded (6px)</option>
                                     <option value="8px">Standard Rounded (8px)</option>
                                     <option value="12px">Large Rounded (12px)</option>
-                                    <option value="999px" selected>Fully Rounded / Pill (999px)</option>
+                                    <option value="999px">Fully Rounded / Pill (999px)</option>
                                 </select>
                             </div>
                         </div>
@@ -234,10 +235,11 @@
                                 <label for="theme-dark-radius">Button Style (Radius)</label>
                                 <select id="theme-dark-radius" style="width: 100%; height: 38px; border-radius: var(--radius-sm); background: var(--surface-3); color: var(--ink); border: 1px solid rgba(255,255,255,0.1); padding: 0 8px;">
                                     <option value="0px">Square (0px)</option>
+                                    <option value="4px" selected>Tight (4px, default)</option>
                                     <option value="6px">Subtle Rounded (6px)</option>
                                     <option value="8px">Standard Rounded (8px)</option>
                                     <option value="12px">Large Rounded (12px)</option>
-                                    <option value="999px" selected>Fully Rounded / Pill (999px)</option>
+                                    <option value="999px">Fully Rounded / Pill (999px)</option>
                                 </select>
                             </div>
                         </div>
@@ -278,7 +280,7 @@
                         <div id="theme-preview-card" style="padding: 16px 20px; border-radius: var(--preview-card-radius, 16px); background: var(--preview-card-bg, #111116); border: 1px solid var(--preview-card-border, rgba(255,255,255,0.12)); box-shadow: 0 4px 12px rgba(0,0,0,0.15); transition: all 0.25s;">
                             <div style="font-weight: 700; font-size: 14px; color: var(--preview-ink, inherit); display: flex; align-items: center; justify-content: space-between;">
                                 <span>Card Surface Preview</span>
-                                <span style="font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--preview-accent, #0b8f88); color: #fff;">Custom Style</span>
+                                <span style="font-size: 11px; padding: 2px 8px; border-radius: var(--radius-pill); background: var(--preview-accent, #0b8f88); color: #fff;">Custom Style</span>
                             </div>
                             <p style="margin: 6px 0 0 0; color: var(--preview-muted, inherit); font-size: 13px;">
                                 Cards, metric overviews, and dialog surfaces dynamically adapt to custom themes.

@@ -45,14 +45,14 @@ export function getContrastColor(hexColor) {
 }
 
 function computeCardRadius(radiusStr) {
-    if (!radiusStr) return '18px';
+    if (!radiusStr) return '6px';
     const clean = radiusStr.trim();
     if (clean === '0px') return '0px';
     if (clean === '6px') return '8px';
     if (clean === '8px') return '12px';
     if (clean === '12px') return '16px';
     const num = parseInt(clean);
-    if (isNaN(num)) return '18px';
+    if (isNaN(num)) return '6px';
     if (num >= 999) return '20px';
     return Math.min(24, Math.max(0, num)) + 'px';
 }
@@ -76,11 +76,18 @@ export function applyCustomTheme(themeOrSettings) {
         (!theme.darkBg || theme.darkBg === "#09090b" || theme.darkBg === "#000000" || theme.darkBg === "#0a0c10") &&
         (!theme.lightBg || theme.lightBg === "#ffffff" || theme.lightBg === "#f8fafc");
 
-    const activeRadius = isDark
+    let activeRadius = isDark
         ? (theme.darkRadius || theme.btnRadius)
         : (theme.lightRadius || theme.btnRadius);
+    // 999px was the shipped default, so on the Default preset it means "never chose"
+    // and the site's own corners apply. Any other preset keeps the corners it picked.
+    const isDefaultPreset = theme.name === "Default" || !theme.name;
+    if (isDefaultPreset && activeRadius && parseInt(activeRadius) >= 999) activeRadius = null;
     if (activeRadius) target.style.setProperty('--btn-radius', activeRadius);
     else target.style.removeProperty('--btn-radius');
+    // Chips and badges follow a preset that picks fully round corners.
+    if (activeRadius && parseInt(activeRadius) >= 999) target.style.setProperty('--radius-pill', '999px');
+    else target.style.removeProperty('--radius-pill');
 
     if (isExplicitDefault) {
         // Cleanly restore default card & surface styles for standard Default preset
