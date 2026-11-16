@@ -305,7 +305,7 @@
 
     function renderChannelRow(c) {
         const rule = state.rules.get(c.id);
-        const row = h("div", { style: "border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:grid;gap:10px;" });
+        const row = h("div", { style: "border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;display:grid;gap:10px;" });
         const toggle = h("input", {
             type: "checkbox", checked: !!rule,
             onchange: (e) => {

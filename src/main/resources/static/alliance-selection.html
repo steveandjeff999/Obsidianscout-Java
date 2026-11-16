@@ -59,7 +59,7 @@
         }
 
         .alliance-card:hover {
-            transform: translateY(-2px);
+            transform: translateY(-1px);
             box-shadow: var(--shadow-md);
             border-color: var(--accent);
         }
@@ -157,7 +157,7 @@
 
         .slot-clear:hover {
             opacity: 1;
-            transform: scale(1.1);
+            transform: scale(1.04);
             color: #c84b31;
         }
 
@@ -271,7 +271,7 @@
             font-size: 0.8rem;
             font-weight: 800;
             padding: 3px 8px;
-            border-radius: 6px;
+            border-radius: var(--radius-sm);
             background: var(--surface-3);
             color: var(--ink);
         }
@@ -292,8 +292,6 @@
             position: fixed;
             inset: 0;
             background: rgba(0, 0, 0, 0.55);
-            -webkit-backdrop-filter: blur(4px);
-            backdrop-filter: blur(4px);
             z-index: 5000;
             display: flex;
             align-items: center;
@@ -572,7 +570,7 @@
             justify-content: space-between;
             padding: 8px 12px;
             background: var(--surface-3);
-            border-radius: 6px;
+            border-radius: var(--radius-sm);
             font-size: 0.85rem;
             font-weight: 700;
         }
@@ -847,7 +845,7 @@
             font-size: 0.7rem;
             line-height: 1;
             padding: 4px 6px;
-            border-radius: 6px;
+            border-radius: var(--radius-sm);
             border: 1px solid transparent;
             background: none;
             color: var(--muted);
@@ -886,7 +884,7 @@
             line-height: 1;
             min-width: 22px;
             padding: 4px 5px;
-            border-radius: 6px;
+            border-radius: var(--radius-sm);
             border: 1px solid var(--surface-3);
             background: transparent;
             color: var(--muted);
@@ -907,7 +905,7 @@
             font-size: 0.66rem;
             font-weight: 800;
             padding: 2px 6px;
-            border-radius: 6px;
+            border-radius: var(--radius-sm);
             color: #fff;
             flex-shrink: 0;
         }

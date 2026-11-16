@@ -111,7 +111,7 @@
         .node-badge {
             font-size: 11px;
             padding: 2px 8px;
-            border-radius: 12px;
+            border-radius: var(--radius);
             text-transform: uppercase;
             font-weight: 600;
             display: inline-block;
@@ -185,7 +185,7 @@
             justify-content: center;
             gap: 6px;
             padding: 7px 14px;
-            border-radius: 6px;
+            border-radius: var(--radius-sm);
             font-size: 13px;
             font-weight: 600;
             cursor: pointer;
@@ -250,7 +250,7 @@
 
         .memory-bar-fill {
             height: 100%;
-            background: linear-gradient(90deg, var(--accent) 0%, #3b82f6 100%);
+            background: var(--accent);
             border-radius: 999px;
             transition: width 0.4s ease;
         }
@@ -447,7 +447,7 @@
                                 <span class="material-symbols-outlined">download</span> Install &amp; Deploy Redis on Nodes
                             </h3>
                             <p class="notice" style="margin-top: 4px; margin-bottom: 0;">
-                                Automatically installs <code style="background: var(--surface); padding: 2px 6px; border-radius: 4px;">redis-server</code> via package managers (<code style="background: var(--surface); padding: 2px 6px; border-radius: 4px;">apt-get</code>, <code style="background: var(--surface); padding: 2px 6px; border-radius: 4px;">dnf</code>, <code style="background: var(--surface); padding: 2px 6px; border-radius: 4px;">yum</code>) on Linux, or through WSL/Docker on Windows.
+                                Automatically installs <code style="background: var(--surface); padding: 2px 6px; border-radius: var(--radius-sm);">redis-server</code> via package managers (<code style="background: var(--surface); padding: 2px 6px; border-radius: var(--radius-sm);">apt-get</code>, <code style="background: var(--surface); padding: 2px 6px; border-radius: var(--radius-sm);">dnf</code>, <code style="background: var(--surface); padding: 2px 6px; border-radius: var(--radius-sm);">yum</code>) on Linux, or through WSL/Docker on Windows.
                             </p>
                         </div>
                     </div>
@@ -564,7 +564,7 @@
                 <div class="redis-card">
                     <h3 style="margin-top: 0; margin-bottom: 8px; font-size: 18px;">Redis Settings (All Nodes)</h3>
                     <p class="notice" style="margin-top: 0; margin-bottom: 16px;">
-                        Saving writes these settings to <code style="background: var(--surface-2); padding: 2px 6px; border-radius: 4px;">app-config.json</code> on every node and restarts Redis on each one with them. The app keeps running; the cache is skipped for a few seconds while Redis comes back.
+                        Saving writes these settings to <code style="background: var(--surface-2); padding: 2px 6px; border-radius: var(--radius-sm);">app-config.json</code> on every node and restarts Redis on each one with them. The app keeps running; the cache is skipped for a few seconds while Redis comes back.
                     </p>
 
                     <form id="cfgForm" data-action-scope onsubmit="saveConfig(event)">

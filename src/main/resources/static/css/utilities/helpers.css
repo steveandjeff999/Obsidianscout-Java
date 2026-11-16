@@ -73,7 +73,7 @@
 
 .bar-fill {
     height: 10px;
-    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    background: var(--accent);
     border-radius: 999px;
 }
 
@@ -119,7 +119,7 @@ body.theme-dark .code-input {
     height: 38px;
     padding: 0 6px;
     box-sizing: border-box;
-    border-radius: 10px;
+    border-radius: var(--radius);
     border: 1px solid rgba(0, 0, 0, 0.18);
     background: var(--surface-2);
     color: var(--ink);

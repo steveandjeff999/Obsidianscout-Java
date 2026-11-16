@@ -62,7 +62,7 @@ function buildSectionHeading(text) {
 function buildCheckbox(labelText, name, value, controls) {
     const group = buildGroup(labelText);
     group.style.cssText = `display: flex; flex-direction: row; align-items: center; justify-content: space-between;
-        padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color);`;
+        padding: 8px 12px; border-radius: var(--radius); border: 1px solid var(--border-color);`;
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.name = name;
@@ -156,7 +156,7 @@ function buildImagePreview(labelText, value) {
         const thumb = document.createElement('img');
         thumb.src = value;
         thumb.alt = labelText;
-        thumb.style.cssText = 'max-width: 140px; max-height: 100px; object-fit: contain; border-radius: 6px; border: 1px solid var(--border-color);';
+        thumb.style.cssText = 'max-width: 140px; max-height: 100px; object-fit: contain; border-radius: var(--radius-sm); border: 1px solid var(--border-color);';
         group.appendChild(thumb);
     } else {
         const note = document.createElement('p');
@@ -240,13 +240,13 @@ export function openEditEntryModal(options) {
         position: fixed; top: 0; left: 0; right: 0; bottom: 0;
         background: rgba(0, 0, 0, 0.75); z-index: 10000;
         display: flex; align-items: center; justify-content: center;
-        padding: 16px; backdrop-filter: blur(4px);
+        padding: 16px;
     `;
 
     const modalContent = document.createElement('div');
     modalContent.style.cssText = `
         background: var(--card-bg); color: var(--text-color);
-        border: 1px solid var(--border-color); border-radius: 12px;
+        border: 1px solid var(--border-color); border-radius: var(--radius);
         max-width: 650px; width: 100%; max-height: 90vh; display: flex; flex-direction: column;
         box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
         overflow: hidden;
@@ -319,8 +319,8 @@ export function openEditEntryModal(options) {
         display: flex; align-items: center; justify-content: flex-end; gap: 12px;
     `;
     footer.innerHTML = `
-        <button type="button" id="btn-cancel-edit" class="btn ghost" style="padding: 8px 16px; border-radius: 8px; cursor: pointer;">Cancel</button>
-        <button type="button" id="btn-save-edit" class="btn primary" style="padding: 8px 18px; border-radius: 8px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+        <button type="button" id="btn-cancel-edit" class="btn ghost" style="padding: 8px 16px; border-radius: var(--radius); cursor: pointer;">Cancel</button>
+        <button type="button" id="btn-save-edit" class="btn primary" style="padding: 8px 18px; border-radius: var(--radius); font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px;">
             <span class="material-symbols-outlined" style="font-size: 1.1rem;">save</span> Save Changes
         </button>
     `;

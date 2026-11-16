@@ -32,7 +32,7 @@
 .ai-markdown li { margin: 2px 0; }
 .ai-markdown table { border-collapse: collapse; margin: 6px 0; }
 .ai-markdown th, .ai-markdown td { border: 1px solid var(--border); padding: 4px 8px; }
-.ai-markdown code { background: var(--surface-3); border-radius: 4px; padding: 1px 4px; }
+.ai-markdown code { background: var(--surface-3); border-radius: var(--radius-sm); padding: 1px 4px; }
 
 /* Chain of Thought (Reasoning Process) */
 .ai-thought-box {
@@ -46,7 +46,7 @@
 
 .ai-thought-box.is-thinking {
     border-color: var(--accent);
-    box-shadow: 0 0 10px rgba(99, 102, 241, 0.15);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
 .ai-thought-summary {
@@ -113,7 +113,7 @@ body.theme-dark .ai-thought-content {
 .ai-progress-bar {
     height: 100%;
     width: 0;
-    background: linear-gradient(90deg, var(--accent), var(--accent-3));
+    background: var(--accent);
     transition: width 0.2s ease;
 }
 
@@ -283,12 +283,12 @@ body.theme-dark .ai-thought-content {
     align-items: center;
     justify-content: center;
     font-size: 13px;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 .btn-assistant-audio-toggle:hover {
-    transform: scale(1.1);
+    transform: scale(1.04);
 }
 
 .btn-assistant-audio-toggle.muted {
@@ -317,7 +317,7 @@ body.theme-dark .ai-thought-content {
 }
 
 .assistant-bot-avatar:hover {
-    transform: scale(1.15) rotate(5deg);
+    transform: scale(1.04) rotate(5deg);
 }
 
 .assistant-bot-meta {
@@ -339,7 +339,7 @@ body.theme-dark .ai-thought-content {
     background: var(--accent);
     color: white;
     padding: 1px 6px;
-    border-radius: 8px;
+    border-radius: var(--radius);
     font-weight: 700;
 }
 
@@ -349,7 +349,7 @@ body.theme-dark .ai-thought-content {
     color: var(--muted);
     cursor: pointer;
     padding: 4px 6px;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     display: inline-flex;
     align-items: center;
     font-size: 13px;
@@ -358,7 +358,7 @@ body.theme-dark .ai-thought-content {
 
 .btn-assistant-audio-speak:hover {
     color: var(--accent);
-    transform: scale(1.1);
+    transform: scale(1.04);
 }
 
 .btn-assistant-audio-speak.is-speaking {
@@ -498,7 +498,7 @@ label.ai-tier-card .ai-muted { font-size: 13px; color: var(--muted); }
     padding: 12px 16px;
     border: 1px solid var(--accent);
     border-radius: var(--radius-sm);
-    background: linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%);
+    background: var(--surface);
     box-shadow: 0 4px 12px rgba(0,0,0,0.06);
     margin: 8px 0;
     transition: transform 0.15s ease, box-shadow 0.15s ease;

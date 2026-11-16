@@ -123,7 +123,7 @@ export async function showQrModal(payload, typeLabel, teamNum, matchKey) {
             qrCard.style.alignItems = "center";
             qrCard.style.background = "#ffffff";
             qrCard.style.padding = "12px";
-            qrCard.style.borderRadius = "16px";
+            qrCard.style.borderRadius = "var(--radius)";
             qrCard.style.boxShadow = "0 8px 24px rgba(0,0,0,0.3)";
 
             if (isMulti) {
@@ -133,7 +133,7 @@ export async function showQrModal(payload, typeLabel, teamNum, matchKey) {
                 badge.style.fontSize = "11px";
                 badge.style.fontWeight = "bold";
                 badge.style.padding = "2px 8px";
-                badge.style.borderRadius = "6px";
+                badge.style.borderRadius = "var(--radius-sm)";
                 badge.style.marginBottom = "8px";
                 badge.textContent = `Part ${idx + 1} of ${qrChunks.length}`;
                 qrCard.appendChild(badge);

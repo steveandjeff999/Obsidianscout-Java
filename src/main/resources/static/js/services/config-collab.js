@@ -767,7 +767,7 @@
         stylesInjected = true;
         const style = root.document.createElement('style');
         style.textContent = `
-            .collab-status-bar { display:flex; align-items:center; gap:10px; padding:8px 14px; margin:10px 0; border-radius:var(--radius-sm, 8px);
+            .collab-status-bar { display:flex; align-items:center; gap:10px; padding:8px 14px; margin:10px 0; border-radius:var(--radius-sm);
                 border:1px solid var(--border, rgba(127,127,127,.25)); background:var(--surface, transparent); font-size:13px; color:var(--muted, inherit); }
             .collab-status-dot { width:8px; height:8px; border-radius:50%; background:#95a5a6; flex:none; }
             .collab-status-bar[data-status="live"] .collab-status-dot,

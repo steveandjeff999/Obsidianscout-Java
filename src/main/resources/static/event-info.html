@@ -13,7 +13,7 @@
         .ei-composer textarea { min-height: 110px; resize: vertical; }
         .ei-drop {
             border: 2px dashed rgba(0,0,0,0.15);
-            border-radius: 12px;
+            border-radius: var(--radius);
             padding: 16px;
             text-align: center;
             color: var(--muted);
@@ -38,18 +38,18 @@
         .ei-meta { font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
         .ei-badge {
             display: inline-flex; align-items: center; gap: 4px;
-            padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+            padding: 2px 8px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 700; text-transform: uppercase;
             background: #e0f2fe; color: #0369a1;
         }
         body.theme-dark .ei-badge { background: #0c4a6e; color: #e0f2fe; }
         .ei-body { white-space: pre-wrap; word-break: break-word; margin: 12px 0 0; line-height: 1.5; }
         .ei-images { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; margin-top: 12px; }
-        .ei-images a { display: block; border-radius: 10px; overflow: hidden; background: var(--surface-2); aspect-ratio: 4 / 3; }
+        .ei-images a { display: block; border-radius: var(--radius); overflow: hidden; background: var(--surface-2); aspect-ratio: 4 / 3; }
         .ei-images img { width: 100%; height: 100%; object-fit: cover; display: block; }
         .ei-files { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-direction: column; gap: 6px; }
         .ei-file {
             display: flex; align-items: center; gap: 10px;
-            padding: 8px 12px; border-radius: 10px; background: var(--surface-2);
+            padding: 8px 12px; border-radius: var(--radius); background: var(--surface-2);
         }
         .ei-file a.ei-file-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); text-decoration: none; font-weight: 600; }
         .ei-file a.ei-file-name:hover { text-decoration: underline; }
@@ -57,7 +57,7 @@
         .ei-actions { display: flex; gap: 6px; flex-shrink: 0; }
         .ei-icon-btn {
             cursor: pointer; background: transparent; border: 1px solid rgba(0,0,0,0.1); color: var(--muted);
-            padding: 6px 10px; border-radius: 8px; font-size: 13px; line-height: 1; transition: all 0.2s;
+            padding: 6px 10px; border-radius: var(--radius); font-size: 13px; line-height: 1; transition: all 0.2s;
         }
         .ei-icon-btn:hover { background: var(--surface-2); color: var(--ink); border-color: var(--accent); }
         .ei-icon-btn.danger:hover { color: #dc3545; border-color: #dc3545; background: rgba(220, 53, 69, 0.1); }
@@ -70,7 +70,7 @@
             align-items: center; justify-content: center; z-index: 2000; padding: 16px;
         }
         .ei-lightbox.show { display: flex; }
-        .ei-lightbox img { max-width: 100%; max-height: 100%; border-radius: 8px; }
+        .ei-lightbox img { max-width: 100%; max-height: 100%; border-radius: var(--radius); }
         .ei-lightbox button { position: absolute; top: 16px; right: 16px; }
         @media (max-width: 600px) {
             .ei-post-head { flex-direction: column; }

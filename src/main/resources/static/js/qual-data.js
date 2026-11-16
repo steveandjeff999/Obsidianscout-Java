@@ -529,7 +529,7 @@ function renderEntryDetail(state, ui, entry) {
         warnBanner.style.background = "rgba(234, 179, 8, 0.08)";
         warnBanner.style.color = "#854d0e";
         warnBanner.style.padding = "12px 16px";
-        warnBanner.style.borderRadius = "8px";
+        warnBanner.style.borderRadius = "var(--radius)";
         warnBanner.style.border = "1px solid #eab308";
         warnBanner.innerHTML = `
             <div style="display:flex; align-items:flex-start; gap:10px;">
@@ -539,7 +539,7 @@ function renderEntryDetail(state, ui, entry) {
                     <div style="font-size:0.85rem; margin-top:2px; color:#cbd5e1;">
                         Different qualitative scouting data exists for this match from partner teams: <strong>${(entry.conflictingTeams || []).join(", ")}</strong>.
                     </div>
-                    ${canManageQual ? `<button id="btn-resolve-conflict" class="btn primary btn-sm" style="margin-top:8px; background:#eab308; color:#0f172a; font-weight:700; border:none; padding:5px 12px; border-radius:6px; cursor:pointer; font-size:0.8rem;">
+                    ${canManageQual ? `<button id="btn-resolve-conflict" class="btn primary btn-sm" style="margin-top:8px; background:#eab308; color:#0f172a; font-weight:700; border:none; padding:5px 12px; border-radius:var(--radius-sm); cursor:pointer; font-size:0.8rem;">
                         <span class="material-symbols-outlined">bolt</span> Resolve Discrepancy
                     </button>` : ""}
                 </div>
@@ -607,10 +607,10 @@ function renderEntryDetail(state, ui, entry) {
 
                 const imageCard = document.createElement("div");
                 imageCard.className = "pit-detail-image-card";
-                imageCard.style.cssText = "margin-top:6px;padding:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:10px;display:flex;flex-direction:column;align-items:center;gap:6px;";
+                imageCard.style.cssText = "margin-top:6px;padding:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:var(--radius);display:flex;flex-direction:column;align-items:center;gap:6px;";
                 const imgEl = document.createElement("img");
                 imgEl.src = value;
-                imgEl.style.cssText = "max-width:100%;max-height:200px;object-fit:contain;border-radius:8px;cursor:pointer;";
+                imgEl.style.cssText = "max-width:100%;max-height:200px;object-fit:contain;border-radius:var(--radius);cursor:pointer;";
                 imgEl.title = "Click to inspect full image";
                 imgEl.addEventListener("click", () => {
                     Obsidianscout.showImageModal(value, `${localizeLabel(field.label)} - Team ${entry.targetTeamNumber}`);

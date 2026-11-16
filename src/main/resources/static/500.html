@@ -25,10 +25,8 @@
             max-width: 500px;
             width: 100%;
             background: var(--surface);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
             border: 1px solid var(--border);
-            border-radius: 16px;
+            border-radius: var(--radius);
             padding: 40px;
             box-shadow: var(--shadow);
             transition: transform 0.3s ease;
@@ -42,10 +40,7 @@
             font-weight: 800;
             margin: 0;
             line-height: 1;
-            background: linear-gradient(135deg, #ff5555, #ffb86c);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            filter: drop-shadow(0 2px 8px rgba(255, 85, 85, 0.3));
+            color: var(--danger, #f07171);
         }
         .error-title {
             font-size: 24px;
@@ -61,18 +56,18 @@
         }
         .btn-home {
             display: inline-block;
-            background: linear-gradient(135deg, #ff5555, #ffb86c);
+            background: var(--accent, #5b4ec7);
             color: #fff;
             padding: 12px 30px;
             font-weight: 600;
             text-decoration: none;
-            border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(255, 85, 85, 0.4);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-sm);
             transition: all 0.3s ease;
         }
         .btn-home:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(255, 85, 85, 0.6);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-hover);
         }
     </style>
 </head>

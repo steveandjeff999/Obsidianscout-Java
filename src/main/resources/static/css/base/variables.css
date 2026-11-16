@@ -1,38 +1,39 @@
 /* ==========================================================================
-   Design Tokens - Smooth Dark Google-Grade Hierarchy
-   Deep pure blacks, smooth tonal surfaces, and cohesive non-clashing accents
+   Design tokens. Neutral greys with one violet accent.
+   Corners: --radius for containers, --radius-sm for controls. A theme preset's
+   corner setting overrides both (see js/layout/theme.js).
    ========================================================================== */
 
 :root {
-    --ink: #0f172a;
-    --muted: #64748b;
+    --ink: #18181d;
+    --muted: #6b6b76;
     --surface: #ffffff;
-    --surface-2: #f8fafc;
-    --surface-3: #f1f5f9;
-    --accent: #2563eb;
-    --accent-2: #0284c7;
-    --accent-3: #3b82f6;
+    --surface-2: #f6f6f8;
+    --surface-3: #eeeef2;
+    --accent: #5b4ec7;
+    --accent-2: #7065a2;
+    --accent-3: #7d71dc;
     --accent-glow: transparent;
-    --border: #d0d7de;
-    --border-subtle: #eaeef2;
-    --border-focus: #2563eb;
-    --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+    --border: #dedee4;
+    --border-subtle: #ebebef;
+    --border-focus: #5b4ec7;
+    --shadow-sm: 0 1px 2px rgba(20, 20, 30, 0.05);
     --shadow:
-        0 1px 3px rgba(15, 23, 42, 0.08),
-        0 1px 2px rgba(15, 23, 42, 0.04);
+        0 1px 3px rgba(20, 20, 30, 0.08),
+        0 1px 2px rgba(20, 20, 30, 0.04);
     --shadow-hover:
-        0 4px 12px -1px rgba(15, 23, 42, 0.08);
+        0 4px 12px -1px rgba(20, 20, 30, 0.08);
     --radius: 10px;
     --radius-sm: 6px;
     --radius-pill: 9999px;
-    --bg: #f8fafc;
+    --bg: #f3f3f6;
     --primary: var(--accent);
     --on-primary: #ffffff;
     --ink-muted: var(--muted);
-    --danger: #ef4444;
-    --danger-surface: rgba(239, 68, 68, 0.08);
-    --success: #10b981;
-    --warning: #f59e0b;
+    --danger: #d23f3f;
+    --danger-surface: rgba(210, 63, 63, 0.08);
+    --success: #1f9d6b;
+    --warning: #d9890b;
     --text-primary: var(--ink);
     --text-muted: var(--muted);
     --text: var(--ink);
@@ -45,33 +46,33 @@
     --surface-glass: var(--surface);
     --border-glass: var(--border);
     --border-color: var(--border);
-    --primary-light: #3b82f6;
-    --secondary-light: #0284c7;
+    --primary-light: #7d71dc;
+    --secondary-light: #7065a2;
     --transition-fast: 0.15s cubic-bezier(0.16, 1, 0.3, 1);
     --transition-smooth: 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 body.theme-dark {
-    --ink: #f0f3f6;
-    --muted: #8b949e;
-    --surface: #0e1014;
-    --surface-2: #16181d;
-    --surface-3: #1e2128;
-    --accent: #388bfd;
-    --accent-2: #38bdf8;
-    --accent-3: #60a5fa;
+    --ink: #ececf0;
+    --muted: #9a9aa6;
+    --surface: #141418;
+    --surface-2: #1b1b20;
+    --surface-3: #24242a;
+    --accent: #8b7cf6;
+    --accent-2: #a39bd6;
+    --accent-3: #b3a8fa;
     --accent-glow: transparent;
-    --border: rgba(255, 255, 255, 0.08);
-    --border-subtle: rgba(255, 255, 255, 0.04);
-    --border-focus: #388bfd;
+    --border: rgba(255, 255, 255, 0.09);
+    --border-subtle: rgba(255, 255, 255, 0.05);
+    --border-focus: #8b7cf6;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
     --shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.6);
-    --bg: #000000;
-    --danger: #f87171;
-    --danger-surface: rgba(248, 113, 113, 0.12);
-    --success: #34d399;
-    --warning: #fbbf24;
+    --bg: #0c0c0f;
+    --danger: #f07171;
+    --danger-surface: rgba(240, 113, 113, 0.12);
+    --success: #3fc28f;
+    --warning: #f2b23a;
     --primary: var(--accent);
     --on-primary: #ffffff;
     --text-primary: var(--ink);
@@ -86,6 +87,6 @@ body.theme-dark {
     --surface-glass: var(--surface);
     --border-glass: var(--border);
     --border-color: var(--border);
-    --primary-light: #58a6ff;
-    --secondary-light: #38bdf8;
+    --primary-light: #a497f8;
+    --secondary-light: #a39bd6;
 }

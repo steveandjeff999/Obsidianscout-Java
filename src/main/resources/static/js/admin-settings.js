@@ -1392,7 +1392,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 <p style="margin: 0 0 10px 0; font-size: 14px; line-height: 1.4;">
                     Your <strong>${kindLabel}</strong> configuration was saved with field modifications. You have <strong>${entryCount}</strong> existing scouting records in the database.
                 </p>
-                <div class="card soft" style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2); padding: 10px; margin-bottom: 14px; border-radius: 8px;">
+                <div class="card soft" style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2); padding: 10px; margin-bottom: 14px; border-radius: var(--radius);">
                     <div style="font-size: 12px; font-weight: 600; color: #f59e0b;">Detected Schema Changes:</div>
                     ${changedListHtml || '<div style="font-size: 12px; color: var(--muted); margin-top: 2px;">Field structure modified.</div>'}
                 </div>
@@ -1402,7 +1402,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     <button id="modal-btn-auto-match" class="btn secondary" type="button" style="padding: 4px 10px; font-size: 12px;">Auto-Match</button>
                 </div>
 
-                <div style="max-height: 220px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 4px 8px; margin-bottom: 12px;">
+                <div style="max-height: 220px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.08); border-radius: var(--radius); padding: 4px 8px; margin-bottom: 12px;">
                     <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
                         <thead>
                             <tr style="border-bottom: 1px solid rgba(255,255,255,0.08); color: var(--muted); text-align: left;">
@@ -1427,11 +1427,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px;">
                         <div>
                             <div style="font-size: 11px; font-weight: 600; color: #ef4444; margin-bottom: 4px;">Before</div>
-                            <pre id="modal-preview-before" style="background: var(--surface-1); padding: 8px; border-radius: 6px; font-size: 11px; max-height: 140px; overflow-y: auto; color: var(--text); border: 1px solid rgba(255,255,255,0.08); margin: 0;"></pre>
+                            <pre id="modal-preview-before" style="background: var(--surface-1); padding: 8px; border-radius: var(--radius-sm); font-size: 11px; max-height: 140px; overflow-y: auto; color: var(--text); border: 1px solid rgba(255,255,255,0.08); margin: 0;"></pre>
                         </div>
                         <div>
                             <div style="font-size: 11px; font-weight: 600; color: #22c55e; margin-bottom: 4px;">After</div>
-                            <pre id="modal-preview-after" style="background: var(--surface-1); padding: 8px; border-radius: 6px; font-size: 11px; max-height: 140px; overflow-y: auto; color: var(--text); border: 1px solid rgba(255,255,255,0.08); margin: 0;"></pre>
+                            <pre id="modal-preview-after" style="background: var(--surface-1); padding: 8px; border-radius: var(--radius-sm); font-size: 11px; max-height: 140px; overflow-y: auto; color: var(--text); border: 1px solid rgba(255,255,255,0.08); margin: 0;"></pre>
                         </div>
                     </div>
                 </details>
@@ -2460,7 +2460,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 btnDelOpt.className = "btn-control-icon delete";
                 btnDelOpt.style.width = "32px";
                 btnDelOpt.style.height = "32px";
-                btnDelOpt.style.borderRadius = "8px";
+                btnDelOpt.style.borderRadius = "var(--radius)";
                 btnDelOpt.innerHTML = '<span class="material-symbols-outlined">delete</span>';
                 btnDelOpt.title = "Delete Option";
                 btnDelOpt.addEventListener("click", () => {

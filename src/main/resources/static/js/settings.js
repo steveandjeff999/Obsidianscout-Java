@@ -605,7 +605,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                         flex-wrap: wrap;
                         gap: 16px;
                         padding: 14px 18px;
-                        border-radius: 10px;
+                        border-radius: var(--radius);
                         border: 1px solid ${s.isCurrent ? "var(--accent, #3b82f6)" : "var(--border-color, rgba(255,255,255,0.08))"};
                         background: ${s.isCurrent ? "rgba(59, 130, 246, 0.05)" : "var(--card-bg, rgba(255,255,255,0.02))"};
                     `;
@@ -615,13 +615,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                     item.innerHTML = `
                         <div style="display: flex; align-items: center; gap: 14px; min-width: 220px; flex: 1;">
-                            <div style="font-size: 28px; line-height: 1; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 8px; background: var(--bg-surface, rgba(255,255,255,0.05));">
+                            <div style="font-size: 28px; line-height: 1; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: var(--radius); background: var(--bg-surface, rgba(255,255,255,0.05));">
                                 ${icon}
                             </div>
                             <div>
                                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                     <strong style="font-size: 15px; color: var(--text-primary, #fff);">${escapedDevice}</strong>
-                                    ${s.isCurrent ? `<span style="background: rgba(34, 197, 94, 0.15); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.3); font-size: 11px; padding: 2px 7px; border-radius: 6px; font-weight: 600;">This Device (Active)</span>` : ""}
+                                    ${s.isCurrent ? `<span style="background: rgba(34, 197, 94, 0.15); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.3); font-size: 11px; padding: 2px 7px; border-radius: var(--radius-sm); font-weight: 600;">This Device (Active)</span>` : ""}
                                 </div>
                                 <div style="font-size: 13px; color: var(--text-muted, #888); margin-top: 4px; display: flex; flex-wrap: wrap; gap: 12px;">
                                     ${escapedIp ? `<span><span class="material-symbols-outlined">public</span> ${escapedIp}</span>` : ""}
@@ -631,7 +631,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                             </div>
                         </div>
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <button class="btn ${s.isCurrent ? "outline" : "danger"}" type="button" data-session-id="${s.id}" data-is-current="${s.isCurrent}" style="padding: 6px 14px; font-size: 13px; border-radius: 6px; font-weight: 500;">
+                            <button class="btn ${s.isCurrent ? "outline" : "danger"}" type="button" data-session-id="${s.id}" data-is-current="${s.isCurrent}" style="padding: 6px 14px; font-size: 13px; border-radius: var(--radius-sm); font-weight: 500;">
                                 ${s.isCurrent ? "Log Out" : "Revoke Access"}
                             </button>
                         </div>
@@ -777,7 +777,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                 if (!creds || creds.length === 0) {
                     passkeysList.innerHTML = `
-                        <div style="padding: 16px; border: 1px dashed var(--border-color, #444); border-radius: 8px; text-align: center; color: var(--text-muted, #888); font-size: 14px;">
+                        <div style="padding: 16px; border: 1px dashed var(--border-color, #444); border-radius: var(--radius); text-align: center; color: var(--text-muted, #888); font-size: 14px;">
                             No passkeys registered yet. Click <strong>Add Passkey</strong> to enroll your current device or security key.
                         </div>
                     `;
@@ -785,7 +785,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
 
                 passkeysList.innerHTML = creds.map(c => `
-                    <div class="card soft" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-radius: 8px; border: 1px solid var(--border-color, rgba(255,255,255,0.08));">
+                    <div class="card soft" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-radius: var(--radius); border: 1px solid var(--border-color, rgba(255,255,255,0.08));">
                         <div>
                             <div style="font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 8px;">
                                 ${getPasskeyIcon(c.friendlyName)} ${Obsidianscout.escapeHtml(c.friendlyName || "Passkey")}

@@ -61,7 +61,7 @@
             color: var(--text);
             background: var(--surface);
             border: 1px solid var(--border);
-            border-radius: var(--radius-sm, 6px);
+            border-radius: var(--radius-sm);
             cursor: pointer;
         }
         .seat-picker-trigger:hover,
@@ -86,7 +86,7 @@
             padding: 8px;
             background: var(--surface);
             border: 1px solid var(--border);
-            border-radius: var(--radius-sm, 6px);
+            border-radius: var(--radius-sm);
             box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
         }
         .seat-picker-sheet-head {
@@ -116,7 +116,7 @@
             color: var(--text);
             background: transparent;
             border: 0;
-            border-radius: 4px;
+            border-radius: var(--radius-sm);
             cursor: pointer;
         }
         .seat-picker-option:hover,
@@ -177,7 +177,7 @@
                 max-height: 70vh;
                 z-index: 2001;
                 padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
-                border-radius: 16px 16px 0 0;
+                border-radius: var(--radius) var(--radius) 0 0;
                 border-bottom: 0;
             }
             .seat-picker-sheet-head {
@@ -215,7 +215,7 @@
         .assignments-header-card {
             background: var(--surface);
             border: 1px solid var(--border);
-            border-radius: var(--radius-md, 12px);
+            border-radius: var(--radius);
             padding: 20px 24px;
             box-shadow: var(--shadow-sm);
         }
@@ -228,7 +228,7 @@
         .kpi-chip {
             background: var(--surface-2);
             border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-sm, 8px);
+            border-radius: var(--radius-sm);
             padding: 10px 14px;
             display: flex;
             flex-direction: column;
@@ -259,7 +259,7 @@
         }
         .kpi-chip.conflict:hover {
             border-color: #ef4444;
-            transform: translateY(-2px);
+            transform: translateY(-1px);
             box-shadow: 0 4px 14px rgba(239, 68, 68, 0.2);
         }
         .kpi-chip.conflict.has-conflicts {
@@ -323,7 +323,7 @@
             font-size: 13px;
             font-weight: 600;
             color: var(--muted);
-            border-radius: var(--radius-sm, 6px);
+            border-radius: var(--radius-sm);
             cursor: pointer;
             transition: all 0.2s ease;
             display: inline-flex;
@@ -343,7 +343,7 @@
         /* Match Matrix Styling */
         .matrix-table-container {
             overflow-x: auto;
-            border-radius: var(--radius-sm, 8px);
+            border-radius: var(--radius-sm);
             border: 1px solid var(--border);
             background: var(--surface);
         }
@@ -378,7 +378,7 @@
         /* Slot Cards in Matrix */
         .slot-card {
             padding: 9px 12px;
-            border-radius: 8px;
+            border-radius: var(--radius);
             font-size: 12px;
             display: flex;
             flex-direction: column;
@@ -393,16 +393,16 @@
             box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
         }
         .slot-card:hover {
-            transform: translateY(-2px);
+            transform: translateY(-1px);
             box-shadow: 0 6px 16px rgba(0, 0, 0, 0.16);
             border-color: var(--border);
         }
         .slot-card.red {
-            background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(239, 68, 68, 0.02));
+            background: rgba(239, 68, 68, 0.08);
             border-color: rgba(239, 68, 68, 0.25);
         }
         .slot-card.blue {
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(59, 130, 246, 0.02));
+            background: rgba(59, 130, 246, 0.08);
             border-color: rgba(59, 130, 246, 0.25);
         }
         .slot-card.red:hover {
@@ -423,18 +423,18 @@
             border-left: 4px solid #3b82f6;
         }
         .slot-card.completed {
-            background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(16, 185, 129, 0.03));
+            background: rgba(16, 185, 129, 0.12);
             border-color: rgba(16, 185, 129, 0.45);
             border-left: 4px solid #10b981;
         }
         .slot-card.conflict {
-            background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.08));
+            background: rgba(239, 68, 68, 0.2);
             border-color: #ef4444;
             border-left: 4px solid #ef4444;
             box-shadow: 0 0 10px rgba(239, 68, 68, 0.18);
         }
         .slot-card.warning-dual {
-            background: linear-gradient(135deg, rgba(245, 158, 11, 0.16), rgba(245, 158, 11, 0.06));
+            background: rgba(245, 158, 11, 0.16);
             border-color: #f59e0b;
             border-left: 4px solid #f59e0b;
         }
@@ -490,19 +490,19 @@
             text-transform: uppercase;
         }
         .asgn-type-badge.match {
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(37, 99, 235, 0.28));
+            background: rgba(59, 130, 246, 0.18);
             border: 1px solid rgba(59, 130, 246, 0.45);
             color: #60a5fa;
             box-shadow: 0 0 10px rgba(59, 130, 246, 0.12);
         }
         .asgn-type-badge.pit {
-            background: linear-gradient(135deg, rgba(168, 85, 247, 0.18), rgba(139, 92, 246, 0.28));
+            background: rgba(168, 85, 247, 0.18);
             border: 1px solid rgba(168, 85, 247, 0.45);
             color: #c084fc;
             box-shadow: 0 0 10px rgba(168, 85, 247, 0.12);
         }
         .asgn-type-badge.qual {
-            background: linear-gradient(135deg, rgba(236, 72, 153, 0.18), rgba(219, 39, 119, 0.28));
+            background: rgba(236, 72, 153, 0.18);
             border: 1px solid rgba(236, 72, 153, 0.45);
             color: #f472b6;
             box-shadow: 0 0 10px rgba(236, 72, 153, 0.12);
@@ -542,7 +542,7 @@
         .pit-team-card {
             background: var(--surface-2);
             border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-sm, 8px);
+            border-radius: var(--radius-sm);
             padding: 12px 14px;
             display: flex;
             flex-direction: column;
@@ -568,7 +568,7 @@
             border: 1px solid rgba(239, 68, 68, 0.35);
             color: #ef4444;
             padding: 10px 14px;
-            border-radius: var(--radius-sm, 6px);
+            border-radius: var(--radius-sm);
             font-size: 13px;
             font-weight: 600;
             display: flex;
@@ -778,7 +778,7 @@
                         </p>
                         <div class="row items-center gap-8 wrap">
                             <label for="matrix-stage-filter" style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--muted);" data-i18n="assignments.stage_filter">Stage:</label>
-                            <select id="matrix-stage-filter" style="padding: 5px 10px; font-size: 12px; border-radius: 4px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border);">
+                            <select id="matrix-stage-filter" style="padding: 5px 10px; font-size: 12px; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); border: 1px solid var(--border);">
                                 <option value="all" selected>All Matches</option>
                                 <option value="qm">Qualifications</option>
                                 <option value="pr">Practice Matches</option>
@@ -815,7 +815,7 @@
                         </p>
                         <div class="row items-center gap-8 wrap">
                             <label for="qual-stage-filter" style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--muted);" data-i18n="assignments.stage_filter">Stage:</label>
-                            <select id="qual-stage-filter" style="padding: 5px 10px; font-size: 12px; border-radius: 4px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border);">
+                            <select id="qual-stage-filter" style="padding: 5px 10px; font-size: 12px; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); border: 1px solid var(--border);">
                                 <option value="all" selected>All Matches</option>
                                 <option value="qm">Qualifications</option>
                                 <option value="pr">Practice Matches</option>
@@ -1159,7 +1159,7 @@
                             <label style="margin:0;" data-i18n="assignments.pit_groups_select">Pit Groups (scout together)</label>
                             <button type="button" class="btn ghost btn-sm btn-manage-pit-groups" style="font-size:11px; padding:2px 8px;" data-i18n="assignments.manage_groups">Manage Groups</button>
                         </div>
-                        <div id="bulk-pit-groups-container" class="pit-group-checklist" style="max-height: 150px; overflow-y: auto; background: var(--surface-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm, 6px); padding: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;">
+                        <div id="bulk-pit-groups-container" class="pit-group-checklist" style="max-height: 150px; overflow-y: auto; background: var(--surface-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;">
                             <!-- Populated dynamically -->
                         </div>
                         <small style="color: var(--muted); margin-top: 4px;" data-i18n="assignments.pit_groups_hint">Each checked group takes a team as one unit. Selected scouters who are not in a checked group still get their own teams.</small>
@@ -1174,7 +1174,7 @@
                             <button type="button" id="bulk-deselect-all" class="btn ghost btn-sm" style="font-size:11px; padding:2px 8px;" data-i18n="assignments.deselect_all">Deselect All</button>
                         </div>
                     </div>
-                    <div id="bulk-scouters-container" style="max-height: 180px; overflow-y: auto; background: var(--surface-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm, 6px); padding: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px;">
+                    <div id="bulk-scouters-container" style="max-height: 180px; overflow-y: auto; background: var(--surface-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px;">
                         <!-- Populated dynamically -->
                     </div>
                     <small style="color: var(--muted); margin-top: 4px;">Scouters will rotate in order through assigned slots.</small>
@@ -1216,7 +1216,7 @@
 
                 <div id="shifts-list" class="form-grid" style="gap: 8px;"></div>
 
-                <form id="shift-form" class="form-grid" style="margin: 0; padding: 12px; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm, 6px); background: var(--surface-2);">
+                <form id="shift-form" class="form-grid" style="margin: 0; padding: 12px; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--surface-2);">
                     <input type="hidden" id="shift-id" />
                     <h3 id="shift-form-title" style="margin: 0; font-size: 14px;" data-i18n="assignments.shift_add_title">Add a Shift</h3>
 
@@ -1318,7 +1318,7 @@
                         <label style="margin:0;" data-i18n="assignments.pit_groups_select">Pit Groups (scout together)</label>
                         <button type="button" class="btn ghost btn-sm btn-manage-pit-groups" style="font-size:11px; padding:2px 8px;" data-i18n="assignments.manage_groups">Manage Groups</button>
                     </div>
-                    <div id="pit-auto-groups-container" class="pit-group-checklist" style="max-height: 150px; overflow-y: auto; background: var(--surface-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm, 6px); padding: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;">
+                    <div id="pit-auto-groups-container" class="pit-group-checklist" style="max-height: 150px; overflow-y: auto; background: var(--surface-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;">
                         <!-- Populated dynamically -->
                     </div>
                     <small style="color: var(--muted); margin-top: 4px;" data-i18n="assignments.pit_groups_hint">Each checked group takes a team as one unit. Selected scouters who are not in a checked group still get their own teams.</small>
@@ -1332,7 +1332,7 @@
                             <button type="button" id="pit-auto-deselect-all" class="btn ghost btn-sm" style="font-size:11px; padding:2px 8px;" data-i18n="assignments.deselect_all">Deselect All</button>
                         </div>
                     </div>
-                    <div id="pit-auto-scouters-container" style="max-height: 180px; overflow-y: auto; background: var(--surface-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm, 6px); padding: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px;">
+                    <div id="pit-auto-scouters-container" style="max-height: 180px; overflow-y: auto; background: var(--surface-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px;">
                         <!-- Populated dynamically -->
                     </div>
                     <div id="pit-auto-summary" style="margin-top: 6px; font-size: 12px; color: var(--primary); font-weight: 600;"></div>

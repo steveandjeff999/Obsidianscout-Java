@@ -2445,7 +2445,7 @@ function renderPredictorView(target, config, snapshot, live) {
                                 <span style="font-weight: 700;">${t('predictor.scouted_score', 'Scouted Score')}</span>
                                 <span style="color: #60a5fa;" id="lbl-pred-scouted-blue">Blue: ${blueScouted.toFixed(1)} pts</span>
                             </div>
-                            <div class="comp-bar-track" style="height: 12px; border-radius: 6px; background: var(--surface-2, rgba(0,0,0,0.1)); border: 1px solid var(--border); display: flex; overflow: hidden;">
+                            <div class="comp-bar-track" style="height: 12px; border-radius: var(--radius-sm); background: var(--surface-2, rgba(0,0,0,0.1)); border: 1px solid var(--border); display: flex; overflow: hidden;">
                                 <div id="bar-pred-scouted-red" class="comp-bar-fill" style="height: 100%; background: linear-gradient(90deg, #f87171, #ef4444); transition: width 0.6s ease;"></div>
                                 <div id="bar-pred-scouted-blue" class="comp-bar-fill" style="height: 100%; background: linear-gradient(90deg, #3b82f6, #60a5fa); transition: width 0.6s ease;"></div>
                             </div>
@@ -2458,7 +2458,7 @@ function renderPredictorView(target, config, snapshot, live) {
                                 <span style="font-weight: 700;">Statbotics EPA</span>
                                 <span style="color: #60a5fa;" id="lbl-pred-epa-blue">Blue: ${blueEpa.toFixed(1)}</span>
                             </div>
-                            <div class="comp-bar-track" style="height: 12px; border-radius: 6px; background: var(--surface-2, rgba(0,0,0,0.1)); border: 1px solid var(--border); display: flex; overflow: hidden;">
+                            <div class="comp-bar-track" style="height: 12px; border-radius: var(--radius-sm); background: var(--surface-2, rgba(0,0,0,0.1)); border: 1px solid var(--border); display: flex; overflow: hidden;">
                                 <div id="bar-pred-epa-red" class="comp-bar-fill" style="height: 100%; background: linear-gradient(90deg, #f87171, #ef4444); transition: width 0.6s ease;"></div>
                                 <div id="bar-pred-epa-blue" class="comp-bar-fill" style="height: 100%; background: linear-gradient(90deg, #3b82f6, #60a5fa); transition: width 0.6s ease;"></div>
                             </div>
@@ -2471,7 +2471,7 @@ function renderPredictorView(target, config, snapshot, live) {
                                 <span style="font-weight: 700;">Match 13 xP</span>
                                 <span style="color: #60a5fa;" id="lbl-pred-xP-blue">Blue: ${bluexP.toFixed(1)}</span>
                             </div>
-                            <div class="comp-bar-track" style="height: 12px; border-radius: 6px; background: var(--surface-2, rgba(0,0,0,0.1)); border: 1px solid var(--border); display: flex; overflow: hidden;">
+                            <div class="comp-bar-track" style="height: 12px; border-radius: var(--radius-sm); background: var(--surface-2, rgba(0,0,0,0.1)); border: 1px solid var(--border); display: flex; overflow: hidden;">
                                 <div id="bar-pred-xP-red" class="comp-bar-fill" style="height: 100%; background: linear-gradient(90deg, #f87171, #ef4444); transition: width 0.6s ease;"></div>
                                 <div id="bar-pred-xP-blue" class="comp-bar-fill" style="height: 100%; background: linear-gradient(90deg, #3b82f6, #60a5fa); transition: width 0.6s ease;"></div>
                             </div>
@@ -2484,7 +2484,7 @@ function renderPredictorView(target, config, snapshot, live) {
                                 <span style="font-weight: 700;">${isFtc ? 'FTC Scout OPR' : 'Event OPR'}</span>
                                 <span style="color: #60a5fa;" id="lbl-pred-opr-blue">Blue: ${blueOpr.toFixed(1)}</span>
                             </div>
-                            <div class="comp-bar-track" style="height: 12px; border-radius: 6px; background: var(--surface-2, rgba(0,0,0,0.1)); border: 1px solid var(--border); display: flex; overflow: hidden;">
+                            <div class="comp-bar-track" style="height: 12px; border-radius: var(--radius-sm); background: var(--surface-2, rgba(0,0,0,0.1)); border: 1px solid var(--border); display: flex; overflow: hidden;">
                                 <div id="bar-pred-opr-red" class="comp-bar-fill" style="height: 100%; background: linear-gradient(90deg, #f87171, #ef4444); transition: width 0.6s ease;"></div>
                                 <div id="bar-pred-opr-blue" class="comp-bar-fill" style="height: 100%; background: linear-gradient(90deg, #3b82f6, #60a5fa); transition: width 0.6s ease;"></div>
                             </div>
@@ -2495,19 +2495,19 @@ function renderPredictorView(target, config, snapshot, live) {
                 <!-- Alliance Breakdown Cards -->
                 <div class="alliance-cards" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                     <!-- Red Alliance -->
-                    <div class="alliance-card red-alliance" style="border-radius: 12px; padding: 20px; background: var(--surface); border: 1px solid var(--border); border-top: 4px solid #ef4444; box-shadow: 0 8px 32px 0 rgba(239, 68, 68, 0.1);">
+                    <div class="alliance-card red-alliance" style="border-radius: var(--radius); padding: 20px; background: var(--surface); border: 1px solid var(--border); border-top: 4px solid #ef4444; box-shadow: 0 8px 32px 0 rgba(239, 68, 68, 0.1);">
                         <div class="alliance-title" style="font-size: 1.3rem; font-weight: 700; color: #ef4444; display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
                             <span>${t('alliance-selection.red_alliance', 'Red Alliance')}</span>
-                            <span class="pill-tag pill-red" id="lbl-red-total-badge" style="font-size: 0.8rem; padding: 2px 8px; border-radius: 4px; font-weight: 700; background: rgba(239, 68, 68, 0.2); color: #ef4444;">${redScouted.toFixed(1)} pts</span>
+                            <span class="pill-tag pill-red" id="lbl-red-total-badge" style="font-size: 0.8rem; padding: 2px 8px; border-radius: var(--radius-sm); font-weight: 700; background: rgba(239, 68, 68, 0.2); color: #ef4444;">${redScouted.toFixed(1)} pts</span>
                         </div>
                         <div class="team-list" id="shared-red-team-list"></div>
                     </div>
 
                     <!-- Blue Alliance -->
-                    <div class="alliance-card blue-alliance" style="border-radius: 12px; padding: 20px; background: var(--surface); border: 1px solid var(--border); border-top: 4px solid #3b82f6; box-shadow: 0 8px 32px 0 rgba(59, 130, 246, 0.1);">
+                    <div class="alliance-card blue-alliance" style="border-radius: var(--radius); padding: 20px; background: var(--surface); border: 1px solid var(--border); border-top: 4px solid #3b82f6; box-shadow: 0 8px 32px 0 rgba(59, 130, 246, 0.1);">
                         <div class="alliance-title" style="font-size: 1.3rem; font-weight: 700; color: #3b82f6; display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
                             <span>${t('alliance-selection.blue_alliance', 'Blue Alliance')}</span>
-                            <span class="pill-tag pill-blue" id="lbl-blue-total-badge" style="font-size: 0.8rem; padding: 2px 8px; border-radius: 4px; font-weight: 700; background: rgba(59, 130, 246, 0.2); color: #3b82f6;">${blueScouted.toFixed(1)} pts</span>
+                            <span class="pill-tag pill-blue" id="lbl-blue-total-badge" style="font-size: 0.8rem; padding: 2px 8px; border-radius: var(--radius-sm); font-weight: 700; background: rgba(59, 130, 246, 0.2); color: #3b82f6;">${blueScouted.toFixed(1)} pts</span>
                         </div>
                         <div class="team-list" id="shared-blue-team-list"></div>
                     </div>
@@ -2605,16 +2605,16 @@ function renderPredictorView(target, config, snapshot, live) {
             const row = document.createElement("div");
             row.style.cssText = "display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border);";
 
-            let pills = `<span style="font-size: 0.75rem; padding: 1px 6px; border-radius: 4px; background: var(--surface-3, rgba(255,255,255,0.06)); color: var(--muted);">${tObj.scoutedMatchesCount || 0} matches</span>`;
+            let pills = `<span style="font-size: 0.75rem; padding: 1px 6px; border-radius: var(--radius-sm); background: var(--surface-3, rgba(255,255,255,0.06)); color: var(--muted);">${tObj.scoutedMatchesCount || 0} matches</span>`;
             if (tObj.epa !== null && tObj.epa !== undefined && effectiveUseEpa) {
-                pills += `<span style="font-size: 0.75rem; padding: 1px 6px; border-radius: 4px; background: var(--surface-3, rgba(255,255,255,0.06)); color: var(--muted);">EPA: ${Number(tObj.epa).toFixed(1)}</span>`;
+                pills += `<span style="font-size: 0.75rem; padding: 1px 6px; border-radius: var(--radius-sm); background: var(--surface-3, rgba(255,255,255,0.06)); color: var(--muted);">EPA: ${Number(tObj.epa).toFixed(1)}</span>`;
             }
             const teamxPVal = tObj.xP ?? tObj.exp ?? tObj.match13xP ?? tObj.match13Exp;
             if (teamxPVal !== null && teamxPVal !== undefined && effectiveUsexP) {
-                pills += `<span style="font-size: 0.75rem; padding: 1px 6px; border-radius: 4px; background: var(--surface-3, rgba(255,255,255,0.06)); color: var(--muted);">xP: ${Number(teamxPVal).toFixed(1)}</span>`;
+                pills += `<span style="font-size: 0.75rem; padding: 1px 6px; border-radius: var(--radius-sm); background: var(--surface-3, rgba(255,255,255,0.06)); color: var(--muted);">xP: ${Number(teamxPVal).toFixed(1)}</span>`;
             }
             if (tObj.opr !== null && tObj.opr !== undefined && effectiveUseOpr) {
-                pills += `<span style="font-size: 0.75rem; padding: 1px 6px; border-radius: 4px; background: var(--surface-3, rgba(255,255,255,0.06)); color: var(--muted);">OPR: ${Number(tObj.opr).toFixed(1)}</span>`;
+                pills += `<span style="font-size: 0.75rem; padding: 1px 6px; border-radius: var(--radius-sm); background: var(--surface-3, rgba(255,255,255,0.06)); color: var(--muted);">OPR: ${Number(tObj.opr).toFixed(1)}</span>`;
             }
 
             row.innerHTML = `
@@ -2956,7 +2956,7 @@ async function renderCustomAnalyticsView(target, config, snapshot, live) {
                     <div style="font-size: 42px; font-weight: 800; color: var(--accent); line-height: 1; margin-bottom: 6px;">${formatted}</div>
                     <div style="font-size: 13px; color: var(--muted); font-weight: 600;">${widget.subtitle || widget.measure || 'Metric'} (${(widget.aggregation || "avg").toUpperCase()})</div>
                     ${overallAvg > 0 ? `
-                        <div style="font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 10px; margin-top: 8px; background: ${delta >= 0 ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)'}; color: ${delta >= 0 ? '#16a34a' : '#dc2626'};">
+                        <div style="font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: var(--radius); margin-top: 8px; background: ${delta >= 0 ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)'}; color: ${delta >= 0 ? '#16a34a' : '#dc2626'};">
                             ${delta >= 0 ? "▲" : "▼"} ${deltaFormatted} vs Event Mean (${overallAvg.toFixed(1)})
                         </div>
                     ` : ""}

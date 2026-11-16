@@ -27,7 +27,7 @@
             align-items: center;
             gap: 6px;
             padding: 6px 12px;
-            border-radius: 20px;
+            border-radius: var(--radius);
             font-size: 13px;
             font-weight: 600;
         }
@@ -43,7 +43,7 @@
         }
         .dropzone {
             border: 2px dashed var(--border);
-            border-radius: 12px;
+            border-radius: var(--radius);
             padding: 24px;
             text-align: center;
             background: var(--surface-2);
@@ -100,7 +100,7 @@
 
                 <form id="fcm-form" data-action-scope style="display: flex; flex-direction: column; gap: 20px;">
                     <!-- Enable Toggle -->
-                    <div class="card soft" style="background: var(--surface-2); padding: 16px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between;">
+                    <div class="card soft" style="background: var(--surface-2); padding: 16px; border-radius: var(--radius); display: flex; align-items: center; justify-content: space-between;">
                         <div>
                             <strong style="font-size: 16px;" data-i18n="fcm.enable_label">Enable Firebase Push Notifications</strong>
                             <p style="margin: 2px 0 0 0; color: var(--muted); font-size: 13px;" data-i18n="fcm.enable_subtext">
@@ -114,7 +114,7 @@
                     </div>
 
                     <!-- Service Account Upload Zone -->
-                    <div class="card soft" style="background: var(--surface-2); padding: 20px; border-radius: 12px;">
+                    <div class="card soft" style="background: var(--surface-2); padding: 20px; border-radius: var(--radius);">
                         <h3 style="margin: 0 0 8px 0; font-size: 16px;" data-i18n="fcm.section_service_account">1. Service Account Credentials (JSON)</h3>
                         <p style="color: var(--muted); font-size: 13px; margin-bottom: 12px;" data-i18n="fcm.service_account_subtext">
                             Download your <code>service-account.json</code> file from Firebase Console -> Project Settings -> Service Accounts -> Generate New Private Key.
@@ -129,12 +129,12 @@
 
                         <div style="margin-top: 12px;">
                             <label style="font-size: 13px; font-weight: 600;" data-i18n="fcm.paste_label">Or Paste Service Account JSON:</label>
-                            <textarea id="json-textarea" rows="4" placeholder="{ &#34;type&#34;: &#34;service_account&#34;, &#34;project_id&#34;: &#34;your-project-id&#34;, ... }" style="width: 100%; font-family: monospace; font-size: 12px; margin-top: 6px; padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.2); color: var(--fg); border: 1px solid rgba(255,255,255,0.1);"></textarea>
+                            <textarea id="json-textarea" rows="4" placeholder="{ &#34;type&#34;: &#34;service_account&#34;, &#34;project_id&#34;: &#34;your-project-id&#34;, ... }" style="width: 100%; font-family: monospace; font-size: 12px; margin-top: 6px; padding: 10px; border-radius: var(--radius); background: rgba(0,0,0,0.2); color: var(--fg); border: 1px solid rgba(255,255,255,0.1);"></textarea>
                         </div>
                     </div>
 
                     <!-- Client Configuration Fields -->
-                    <div class="card soft" style="background: var(--surface-2); padding: 20px; border-radius: 12px;">
+                    <div class="card soft" style="background: var(--surface-2); padding: 20px; border-radius: var(--radius);">
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
                             <div>
                                 <h3 style="margin: 0 0 4px 0; font-size: 16px;" data-i18n="fcm.section_public">2. Public Firebase Client Settings</h3>

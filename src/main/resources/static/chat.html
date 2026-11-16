@@ -15,7 +15,7 @@
             display: flex;
             height: calc(100vh - 40px);
             background: var(--surface);
-            border-radius: 16px;
+            border-radius: var(--radius);
             overflow: hidden;
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.08);
             border: 1px solid var(--border);
@@ -54,7 +54,7 @@
             align-items: center;
             justify-content: space-between;
             padding: 9px 12px;
-            border-radius: 8px;
+            border-radius: var(--radius);
             cursor: pointer;
             font-size: 14px;
             font-weight: 500;
@@ -97,7 +97,7 @@
             color: var(--muted);
             cursor: pointer;
             padding: 3px 5px;
-            border-radius: 4px;
+            border-radius: var(--radius-sm);
             font-size: 13px;
             line-height: 1;
             opacity: 0;
@@ -138,7 +138,7 @@
             font-size: 10px;
             font-weight: 700;
             padding: 2px 6px;
-            border-radius: 10px;
+            border-radius: var(--radius);
             min-width: 10px;
             text-align: center;
             line-height: 1;
@@ -155,7 +155,7 @@
         }
 
         .ypp-banner {
-            background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+            background: var(--accent);
             color: #ffffff;
             padding: 12px 20px;
             font-size: 13px;
@@ -229,7 +229,7 @@
         .message-bubble {
             background: var(--surface-2);
             padding: 12px 16px;
-            border-radius: 12px;
+            border-radius: var(--radius);
             border-top-left-radius: 2px;
             border: 1px solid var(--border);
             position: relative;
@@ -238,7 +238,7 @@
         .message-row.me .message-bubble {
             background: rgba(var(--accent-rgb, 124, 58, 237), 0.1);
             border-color: rgba(var(--accent-rgb, 124, 58, 237), 0.2);
-            border-radius: 12px;
+            border-radius: var(--radius);
             border-top-right-radius: 2px;
         }
 
@@ -287,7 +287,7 @@
             color: var(--muted);
             cursor: pointer;
             padding: 2px 6px;
-            border-radius: 4px;
+            border-radius: var(--radius-sm);
             font-size: 14px;
             line-height: 1;
             display: inline-flex;
@@ -312,7 +312,7 @@
             right: 0;
             background: var(--surface);
             border: 1px solid var(--border);
-            border-radius: 8px;
+            border-radius: var(--radius);
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
             min-width: 110px;
             z-index: 100;
@@ -329,7 +329,7 @@
             color: var(--ink);
             background: transparent;
             border: none;
-            border-radius: 6px;
+            border-radius: var(--radius-sm);
             cursor: pointer;
             text-align: left;
             display: flex;
@@ -364,7 +364,7 @@
             width: 100%;
             box-sizing: border-box;
             border: 1px solid var(--accent);
-            border-radius: 8px;
+            border-radius: var(--radius);
             padding: 8px 10px;
             background: var(--surface);
             color: var(--ink);
@@ -407,7 +407,7 @@
             align-items: center;
             gap: 4px;
             padding: 2px 6px;
-            border-radius: 12px;
+            border-radius: var(--radius);
             background: var(--surface-3);
             border: 1px solid var(--border);
             font-size: 11px;
@@ -443,7 +443,7 @@
             font-size: 12px;
             cursor: pointer;
             padding: 2px 6px;
-            border-radius: 12px;
+            border-radius: var(--radius);
             background: var(--surface-3);
             border: 1px solid var(--border);
             color: var(--muted);
@@ -462,7 +462,7 @@
             left: 0;
             background: var(--surface);
             border: 1px solid var(--border);
-            border-radius: 8px;
+            border-radius: var(--radius);
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             padding: 6px;
             display: flex;
@@ -474,7 +474,7 @@
             cursor: pointer;
             font-size: 18px;
             padding: 4px;
-            border-radius: 4px;
+            border-radius: var(--radius-sm);
             transition: background 0.2s;
         }
 
@@ -493,7 +493,7 @@
         .chat-input {
             flex: 1;
             border: 1px solid var(--border);
-            border-radius: 10px;
+            border-radius: var(--radius);
             padding: 12px 16px;
             background: var(--surface);
             color: var(--ink);
@@ -546,7 +546,7 @@
             max-width: 320px;
             background: var(--surface);
             border: 1px solid var(--border);
-            border-radius: 12px;
+            border-radius: var(--radius);
             box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.12), 0 8px 32px rgba(0, 0, 0, 0.08);
             overflow-y: auto;
             max-height: 200px;
@@ -561,7 +561,7 @@
 
         .mention-item {
             padding: 8px 12px;
-            border-radius: 8px;
+            border-radius: var(--radius);
             font-size: 13px;
             font-weight: 500;
             color: var(--muted);
@@ -724,7 +724,7 @@
                         <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
                             <button class="btn ghost btn-back-to-channels" id="btn-back-channels" style="padding: 8px 12px; display: none; font-size: 13px; font-weight: 600;"><span class="material-symbols-outlined">menu</span> Channels</button>
                             <h2 id="current-group-title" style="margin: 0; font-size: 18px;"># general</h2>
-                            <button class="btn ghost btn-channel-settings" id="btn-channel-settings" title="Channel Settings" style="display: none; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; margin-left: auto; align-items: center; gap: 6px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg> <span data-i18n="chat.channel_settings">Settings</span></button>
+                            <button class="btn ghost btn-channel-settings" id="btn-channel-settings" title="Channel Settings" style="display: none; padding: 6px 12px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; margin-left: auto; align-items: center; gap: 6px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg> <span data-i18n="chat.channel_settings">Settings</span></button>
                         </div>
                     </div>
 
@@ -740,8 +740,8 @@
             </div>
 
             <!-- Channel Settings Modal -->
-            <div id="channel-settings-modal" class="modal-overlay hidden" style="position: fixed; inset: 0; background: rgba(0,0,0,0.65); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; backdrop-filter: blur(4px);">
-                <div class="modal-card" style="background: var(--surface); border: 1px solid var(--border); border-radius: 12px; max-width: 520px; width: 100%; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+            <div id="channel-settings-modal" class="modal-overlay hidden" style="position: fixed; inset: 0; background: rgba(0,0,0,0.65); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px;">
+                <div class="modal-card" style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); max-width: 520px; width: 100%; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
                     <div class="modal-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
                         <h3 id="channel-settings-title" style="margin: 0; font-size: 18px; color: var(--ink);">Channel Settings</h3>
                         <button class="btn ghost" id="btn-close-channel-settings" style="padding: 4px 8px; font-size: 18px; line-height: 1;">&times;</button>
@@ -758,8 +758,8 @@
                             </div>
 
                             <label style="display: block; font-weight: 600; font-size: 13px; margin-bottom: 6px; color: var(--ink);" data-i18n="chat.allowed_members">Allowed Team Members</label>
-                            <input type="text" id="channel-member-search" placeholder="Search members..." data-i18n-placeholder="chat.search_members" style="margin-bottom: 8px; width: 100%; padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--ink); font-size: 13px; box-sizing: border-box;" />
-                            <div id="channel-members-container" style="max-height: 140px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 6px; background: var(--surface-2);">
+                            <input type="text" id="channel-member-search" placeholder="Search members..." data-i18n-placeholder="chat.search_members" style="margin-bottom: 8px; width: 100%; padding: 6px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--ink); font-size: 13px; box-sizing: border-box;" />
+                            <div id="channel-members-container" style="max-height: 140px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px; display: flex; flex-direction: column; gap: 6px; background: var(--surface-2);">
                                 <!-- Member checkboxes -->
                             </div>
                         </div>

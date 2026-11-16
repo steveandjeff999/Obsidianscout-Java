@@ -57,7 +57,7 @@
     gap: 2px;
     min-width: 0;
     padding: 10px 14px;
-    border-radius: var(--radius, 12px);
+    border-radius: var(--radius);
     border: 2px solid transparent;
     font: inherit;
     text-align: left;
@@ -285,7 +285,7 @@
 }
 
 #leaderboard-table tr.is-me td {
-    background: var(--accent-surface, rgba(59, 130, 246, 0.08));
+    background: var(--accent-surface, color-mix(in srgb, var(--accent) 8%, transparent));
     font-weight: 700;
 }
 

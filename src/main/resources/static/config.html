@@ -279,14 +279,14 @@
 
                 </div>
 
-                <div id="personal-local-ai-panel" class="card soft mt-16 hidden" style="border: 1px solid var(--border-color, rgba(255,255,255,0.1)); padding: 16px; border-radius: 12px;">
+                <div id="personal-local-ai-panel" class="card soft mt-16 hidden" style="border: 1px solid var(--border-color, rgba(255,255,255,0.1)); padding: 16px; border-radius: var(--radius);">
                     <h4 style="margin: 0; font-size: 15px; display: flex; align-items: center; gap: 8px;">
                         <span class="material-symbols-outlined" style="color: var(--accent);">memory</span> <span data-i18n="ai.settings.models_title">AI models on this device</span>
                     </h4>
                     <div id="personal-local-ai-models"></div>
                 </div>
 
-                <div class="card soft mt-16" style="border: 1px solid var(--border-color, rgba(255,255,255,0.1)); padding: 16px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                <div class="card soft mt-16" style="border: 1px solid var(--border-color, rgba(255,255,255,0.1)); padding: 16px; border-radius: var(--radius); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
                     <div>
                         <h4 style="margin: 0; font-size: 15px; display: flex; align-items: center; gap: 8px;">
                             <span class="material-symbols-outlined" style="color: var(--accent);">school</span> Interactive Feature Tutorials &amp; Progress Hub
@@ -369,7 +369,7 @@
                 </div>
 
                 <!-- Passkeys & Biometric Security -->
-                <div class="card soft mt-24" id="personal-passkeys-card" style="border: 1px solid var(--border-color, rgba(255,255,255,0.1)); padding: 20px; border-radius: 12px; margin-top: 24px;">
+                <div class="card soft mt-24" id="personal-passkeys-card" style="border: 1px solid var(--border-color, rgba(255,255,255,0.1)); padding: 20px; border-radius: var(--radius); margin-top: 24px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
                         <div>
                             <h2 style="margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px;">
@@ -396,7 +396,7 @@
                 </div>
 
                 <!-- Logged-in Devices & Authorizations -->
-                <div class="card soft mt-24" id="personal-devices-card" style="border: 1px solid var(--border-color, rgba(255,255,255,0.1)); padding: 20px; border-radius: 12px; margin-top: 24px;">
+                <div class="card soft mt-24" id="personal-devices-card" style="border: 1px solid var(--border-color, rgba(255,255,255,0.1)); padding: 20px; border-radius: var(--radius); margin-top: 24px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
                         <div>
                             <h2 style="margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px;">
@@ -426,13 +426,13 @@
                 </div>
 
                 <!-- Controller & Gamepad Settings -->
-                <div class="card soft mt-24" id="personal-gamepad-settings-container" style="border: 1px solid var(--border-color, rgba(255,255,255,0.1)); padding: 20px; border-radius: 12px; margin-top: 24px;">
+                <div class="card soft mt-24" id="personal-gamepad-settings-container" style="border: 1px solid var(--border-color, rgba(255,255,255,0.1)); padding: 20px; border-radius: var(--radius); margin-top: 24px;">
                 </div>
 
-                <div class="card soft danger-zone mt-24" style="border: 1px solid rgba(220, 53, 69, 0.2); background: rgba(220, 53, 69, 0.02); padding: 18px; border-radius: 12px; margin-top: 24px;">
+                <div class="card soft danger-zone mt-24" style="border: 1px solid rgba(220, 53, 69, 0.2); background: rgba(220, 53, 69, 0.02); padding: 18px; border-radius: var(--radius); margin-top: 24px;">
                     <h3 style="color: #dc3545; margin-top: 0;" data-i18n="config.danger_zone">Danger Zone</h3>
                     <p class="notice" style="margin-bottom: 16px;" data-i18n="config.once_you_delete_your_account_t">Once you delete your account, there is no going back. Please be certain.</p>
-                    <button id="personal-delete-account" class="btn delete-btn" type="button" style="background: #dc3545; color: #fff; border: none; padding: 10px 20px; font-weight: 600; border-radius: 8px; cursor: pointer;" data-i18n="config.delete_account">Delete Account</button>
+                    <button id="personal-delete-account" class="btn delete-btn" type="button" style="background: #dc3545; color: #fff; border: none; padding: 10px 20px; font-weight: 600; border-radius: var(--radius); cursor: pointer;" data-i18n="config.delete_account">Delete Account</button>
                 </div>
 
             </div>

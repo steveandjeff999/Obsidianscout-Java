@@ -85,6 +85,8 @@ export function applyCustomTheme(themeOrSettings) {
     if (isExplicitDefault) {
         // Cleanly restore default card & surface styles for standard Default preset
         target.style.removeProperty('--card-radius');
+        target.style.removeProperty('--radius');
+        target.style.removeProperty('--radius-sm');
         target.style.removeProperty('--surface');
         target.style.removeProperty('--surface-1');
         target.style.removeProperty('--surface-2');
@@ -104,6 +106,16 @@ export function applyCustomTheme(themeOrSettings) {
         // Custom theme active: style cards and surfaces harmoniously
         const cardRadius = computeCardRadius(activeRadius);
         target.style.setProperty('--card-radius', cardRadius);
+        // Every container and control reads --radius / --radius-sm, so the
+        // theme's corner choice reaches the whole UI, not just cards.
+        if (activeRadius) {
+            const cardPx = parseInt(cardRadius) || 0;
+            target.style.setProperty('--radius', cardPx + 'px');
+            target.style.setProperty('--radius-sm', Math.round(cardPx * 0.6) + 'px');
+        } else {
+            target.style.removeProperty('--radius');
+            target.style.removeProperty('--radius-sm');
+        }
 
         if (isDark) {
             let surfaceColor = null;

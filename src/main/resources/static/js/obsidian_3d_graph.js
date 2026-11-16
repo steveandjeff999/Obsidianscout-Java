@@ -564,7 +564,7 @@
             this.canvas.style.width = "100%";
             this.canvas.style.height = "100%";
             this.canvas.style.display = "block";
-            this.canvas.style.borderRadius = "10px";
+            this.canvas.style.borderRadius = "var(--radius)";
             this.container.appendChild(this.canvas);
 
             this.toolbar = document.createElement("div");
@@ -591,7 +591,7 @@
                 const btn = document.createElement("button");
                 btn.type = "button";
                 btn.textContent = label;
-                btn.style.cssText = "font-size:11px;padding:3px 7px;border-radius:6px;border:1px solid rgba(128,128,128,0.35);background:rgba(20,25,32,0.58);color:#fff;cursor:pointer;backdrop-filter:blur(4px);";
+                btn.style.cssText = "font-size:11px;padding:3px 7px;border-radius:var(--radius-sm);border:1px solid rgba(128,128,128,0.35);background:rgba(20,25,32,0.58);color:#fff;cursor:pointer;";
                 btn.addEventListener("click", (e) => {
                     e.stopPropagation();
                     this.camera = Object.assign({}, PRESET_CAMERAS[key]);
@@ -618,8 +618,8 @@
             if (!this.labelsBtn) return;
             this.labelsBtn.textContent = this.showLabels ? "Labels: On" : "Labels: Off";
             this.labelsBtn.style.cssText = this.showLabels
-                ? "font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid rgba(11,143,136,0.8);background:rgba(11,143,136,0.78);color:#fff;cursor:pointer;font-weight:600;backdrop-filter:blur(4px);"
-                : "font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid rgba(128,128,128,0.35);background:rgba(20,25,32,0.58);color:#fff;cursor:pointer;backdrop-filter:blur(4px);";
+                ? "font-size:11px;padding:3px 8px;border-radius:var(--radius-sm);border:1px solid rgba(11,143,136,0.8);background:rgba(11,143,136,0.78);color:#fff;cursor:pointer;font-weight:600;"
+                : "font-size:11px;padding:3px 8px;border-radius:var(--radius-sm);border:1px solid rgba(128,128,128,0.35);background:rgba(20,25,32,0.58);color:#fff;cursor:pointer;";
         }
 
         _bindEvents() {

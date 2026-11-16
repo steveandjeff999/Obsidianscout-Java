@@ -80,7 +80,7 @@ body.theme-dark .pit-detail-item {
 }
 
 .team-header-card {
-    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-3) 100%);
+    background: var(--accent);
     color: white;
     padding: 32px;
     border-radius: var(--radius);
@@ -95,7 +95,7 @@ body.theme-dark .pit-detail-item {
     content: "";
     position: absolute;
     inset: 0;
-    background: radial-gradient(circle at top right, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0) 60%);
+    background: none;
     pointer-events: none;
 }
 
@@ -123,7 +123,6 @@ body.theme-dark .pit-detail-item {
 
 .team-header-card .meta-pill {
     background: rgba(255, 255, 255, 0.15);
-    backdrop-filter: blur(8px);
     padding: 6px 14px;
     border-radius: 999px;
     font-size: 13px;
@@ -244,7 +243,7 @@ body.theme-dark .team-stat-card {
 .alliance-member-badge {
     display: inline-block;
     padding: 2px 8px;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     margin: 1px 2px;
     font-size: 13px;
     font-weight: 600;
@@ -531,7 +530,7 @@ body.theme-dark .team-chart-wrapper {
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     overflow: hidden;
     background: rgba(0, 0, 0, 0.05);
 }
@@ -614,7 +613,7 @@ body.theme-dark .qual-feedback-card {
     color: var(--accent);
     background: rgba(91, 108, 255, 0.12);
     padding: 2px 8px;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
 }
 
 .qual-meta {

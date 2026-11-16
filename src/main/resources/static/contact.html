@@ -44,9 +44,7 @@
             position: sticky;
             top: 0;
             z-index: 100;
-            background: rgba(255, 255, 255, 0.88);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
+            background: var(--surface);
             border-bottom: 1px solid var(--border);
             padding: 14px 28px;
             align-items: center;
@@ -54,7 +52,7 @@
         }
 
         body.theme-dark .contact-public-header {
-            background: rgba(11, 15, 25, 0.85);
+            background: var(--surface);
             border-bottom: 1px solid rgba(255, 255, 255, 0.08);
         }
 
@@ -115,7 +113,7 @@
         .header-brand img {
             width: 28px;
             height: 28px;
-            border-radius: 6px;
+            border-radius: var(--radius-sm);
         }
 
         .header-nav {
@@ -149,7 +147,7 @@
             font-size: 13.5px;
             font-weight: 600;
             padding: 8px 16px;
-            border-radius: 8px;
+            border-radius: var(--radius);
             border: 1px solid var(--border);
             background: var(--surface-2);
             transition: all 0.15s ease;
@@ -168,7 +166,7 @@
             font-size: 13.5px;
             font-weight: 600;
             padding: 8px 18px;
-            border-radius: 8px;
+            border-radius: var(--radius);
             border: 1px solid rgba(255, 255, 255, 0.15);
             transition: all 0.15s ease;
             display: inline-flex;
@@ -185,7 +183,7 @@
         .btn-theme-toggle {
             width: 36px;
             height: 36px;
-            border-radius: 8px;
+            border-radius: var(--radius);
             border: 1px solid var(--border);
             background: var(--surface-2);
             color: var(--ink);

@@ -171,7 +171,7 @@ async function loadQualScoutPageData(me) {
                 teamCard.dataset.teamNumber = team.teamNumber;
                 teamCard.style.background = "rgba(255, 255, 255, 0.03)";
                 teamCard.style.border = isRed ? "1px solid rgba(239, 68, 68, 0.35)" : "1px solid rgba(59, 130, 246, 0.35)";
-                teamCard.style.borderRadius = "var(--radius, 14px)";
+                teamCard.style.borderRadius = "var(--radius)";
                 teamCard.style.overflow = "hidden";
                 teamCard.style.boxShadow = isRed ? "0 4px 16px rgba(239, 68, 68, 0.08)" : "0 4px 16px rgba(59, 130, 246, 0.08)";
 
@@ -180,7 +180,7 @@ async function loadQualScoutPageData(me) {
                 const nick = team.nickname ? `<span style="font-weight:normal;opacity:0.85;margin-left:4px;">(${team.nickname})</span>` : "";
                 header.innerHTML = `
                     <div style="display:flex;align-items:center;gap:10px;">
-                        <span class="badge" style="background:${isRed ? '#ef4444' : '#3b82f6'};color:#fff;font-weight:bold;font-size:12px;padding:3px 8px;border-radius:6px;">${team.posLabel}</span>
+                        <span class="badge" style="background:${isRed ? '#ef4444' : '#3b82f6'};color:#fff;font-weight:bold;font-size:12px;padding:3px 8px;border-radius:var(--radius-sm);">${team.posLabel}</span>
                         <span style="font-size:15px;font-weight:bold;color:var(--text);">Team ${team.teamNumber}${nick}</span>
                     </div>
                 `;
@@ -1489,7 +1489,7 @@ function buildRating(field) {
 function buildImageUpload(field) {
     const wrapper = document.createElement("div");
     wrapper.className = "image-upload-field-container";
-    wrapper.style.cssText = "display:flex;flex-direction:column;gap:10px;padding:12px;background:rgba(255,255,255,0.03);border:1px dashed rgba(255,255,255,0.18);border-radius:12px;";
+    wrapper.style.cssText = "display:flex;flex-direction:column;gap:10px;padding:12px;background:rgba(255,255,255,0.03);border:1px dashed rgba(255,255,255,0.18);border-radius:var(--radius);";
 
     const hiddenInput = document.createElement("input");
     hiddenInput.type = "hidden";
@@ -1516,13 +1516,13 @@ function buildImageUpload(field) {
     const btnCamera = document.createElement("button");
     btnCamera.type = "button";
     btnCamera.className = "btn";
-    btnCamera.style.cssText = "background:linear-gradient(135deg,#0284c7,#0369a1);color:#fff;border:none;padding:8px 16px;border-radius:8px;font-weight:600;font-size:0.85rem;display:flex;align-items:center;gap:6px;cursor:pointer;";
+    btnCamera.style.cssText = "background:linear-gradient(135deg,#0284c7,#0369a1);color:#fff;border:none;padding:8px 16px;border-radius:var(--radius);font-weight:600;font-size:0.85rem;display:flex;align-items:center;gap:6px;cursor:pointer;";
     btnCamera.innerHTML = `<span>Take Photo</span>`;
 
     const btnBrowse = document.createElement("button");
     btnBrowse.type = "button";
     btnBrowse.className = "btn";
-    btnBrowse.style.cssText = "background:rgba(255,255,255,0.08);color:#f8fafc;border:1px solid rgba(255,255,255,0.15);padding:8px 14px;border-radius:8px;font-weight:600;font-size:0.85rem;display:flex;align-items:center;gap:6px;cursor:pointer;";
+    btnBrowse.style.cssText = "background:rgba(255,255,255,0.08);color:#f8fafc;border:1px solid rgba(255,255,255,0.15);padding:8px 14px;border-radius:var(--radius);font-weight:600;font-size:0.85rem;display:flex;align-items:center;gap:6px;cursor:pointer;";
     btnBrowse.innerHTML = `<span>Choose Image</span>`;
 
     btnRow.appendChild(btnCamera);
@@ -1535,7 +1535,7 @@ function buildImageUpload(field) {
     previewState.style.cssText = "display:none;flex-direction:column;align-items:center;gap:10px;";
 
     const imgPreview = document.createElement("img");
-    imgPreview.style.cssText = "max-width:100%;max-height:240px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);object-fit:contain;cursor:pointer;";
+    imgPreview.style.cssText = "max-width:100%;max-height:240px;border-radius:var(--radius);border:1px solid rgba(255,255,255,0.12);object-fit:contain;cursor:pointer;";
     imgPreview.title = "Click to inspect full image";
 
     const badgeRow = document.createElement("div");
@@ -1543,7 +1543,7 @@ function buildImageUpload(field) {
 
     const sizeBadge = document.createElement("span");
     sizeBadge.className = "img-meta-badge";
-    sizeBadge.style.cssText = "background:rgba(56,189,248,0.15);color:#38bdf8;padding:2px 8px;border-radius:6px;font-weight:600;";
+    sizeBadge.style.cssText = "background:rgba(56,189,248,0.15);color:#38bdf8;padding:2px 8px;border-radius:var(--radius-sm);font-weight:600;";
 
     const actionButtons = document.createElement("div");
     actionButtons.style.cssText = "display:flex;gap:8px;";
@@ -1551,13 +1551,13 @@ function buildImageUpload(field) {
     const btnRetake = document.createElement("button");
     btnRetake.type = "button";
     btnRetake.className = "btn btn-sm";
-    btnRetake.style.cssText = "background:rgba(255,255,255,0.08);color:#f8fafc;border:1px solid rgba(255,255,255,0.15);padding:4px 10px;border-radius:6px;font-size:0.8rem;cursor:pointer;";
+    btnRetake.style.cssText = "background:rgba(255,255,255,0.08);color:#f8fafc;border:1px solid rgba(255,255,255,0.15);padding:4px 10px;border-radius:var(--radius-sm);font-size:0.8rem;cursor:pointer;";
     btnRetake.textContent = "Change / Retake";
 
     const btnRemove = document.createElement("button");
     btnRemove.type = "button";
     btnRemove.className = "btn btn-sm";
-    btnRemove.style.cssText = "background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3);padding:4px 10px;border-radius:6px;font-size:0.8rem;cursor:pointer;";
+    btnRemove.style.cssText = "background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3);padding:4px 10px;border-radius:var(--radius-sm);font-size:0.8rem;cursor:pointer;";
     btnRemove.textContent = "Remove";
 
     actionButtons.appendChild(btnRetake);
@@ -1803,7 +1803,7 @@ function buildRobotRoleCollectionField() {
         label.style.alignItems = "center";
         label.style.gap = "6px";
         label.style.padding = "8px 16px";
-        label.style.borderRadius = "20px";
+        label.style.borderRadius = "var(--radius)";
         label.style.border = "1px solid var(--border)";
         label.style.cursor = "pointer";
         label.style.userSelect = "none";

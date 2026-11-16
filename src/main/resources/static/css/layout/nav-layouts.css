@@ -84,7 +84,7 @@ body.nav-layout-topbar .sidebar-link {
     padding: 6px 12px !important;
     font-size: 13px !important;
     white-space: nowrap !important;
-    border-radius: var(--radius-sm, 8px) !important;
+    border-radius: var(--radius-sm) !important;
 }
 
 /* Category & Account Dropdowns */
@@ -98,7 +98,7 @@ body.nav-layout-topbar .sidebar-link {
     align-items: center !important;
     gap: 6px !important;
     padding: 6px 14px !important;
-    border-radius: var(--radius-sm, 8px) !important;
+    border-radius: var(--radius-sm) !important;
     font-size: 13px !important;
     font-weight: 600 !important;
     color: var(--muted) !important;
@@ -156,7 +156,7 @@ body.theme-dark .topbar-dropdown-btn.active-category {
     min-width: 200px !important;
     background: var(--surface) !important;
     border: 1px solid var(--border) !important;
-    border-radius: 12px !important;
+    border-radius: var(--radius) !important;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15), 0 4px 10px rgba(0, 0, 0, 0.05) !important;
     padding: 6px !important;
     z-index: 99999 !important;
@@ -180,7 +180,7 @@ body.theme-dark .topbar-dropdown-menu {
     width: 100% !important;
     box-sizing: border-box !important;
     padding: 8px 12px !important;
-    border-radius: 6px !important;
+    border-radius: var(--radius-sm) !important;
     font-size: 13px !important;
     font-weight: 500 !important;
     color: var(--muted) !important;
@@ -233,7 +233,7 @@ body.nav-layout-topbar .sidebar-footer {
 .topbar-account-btn {
     padding: 4px 10px 4px 4px !important;
     gap: 8px !important;
-    border-radius: 20px !important;
+    border-radius: var(--radius) !important;
     background: var(--surface-2) !important;
     border: 1px solid var(--border) !important;
 }
@@ -294,7 +294,7 @@ body.theme-dark .topbar-account-btn {
     text-align: left !important;
     padding: 8px 12px !important;
     font-size: 13px !important;
-    border-radius: 6px !important;
+    border-radius: var(--radius-sm) !important;
     margin-top: 4px !important;
 }
 
@@ -390,7 +390,7 @@ body.nav-layout-topbar-left .sidebar-brand {
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    border-radius: 10px !important;
+    border-radius: var(--radius) !important;
     background: var(--surface-2) !important;
     border: 1px solid var(--border) !important;
     box-sizing: border-box !important;
@@ -432,7 +432,7 @@ body.nav-layout-topbar-left .topbar-dropdown-btn {
     min-width: 44px !important;
     min-height: 44px !important;
     padding: 0 !important;
-    border-radius: 10px !important;
+    border-radius: var(--radius) !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
@@ -550,7 +550,7 @@ body.nav-layout-topbar-right .sidebar-brand {
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    border-radius: 10px !important;
+    border-radius: var(--radius) !important;
     background: var(--surface-2) !important;
     border: 1px solid var(--border) !important;
     box-sizing: border-box !important;
@@ -592,7 +592,7 @@ body.nav-layout-topbar-right .topbar-dropdown-btn {
     min-width: 44px !important;
     min-height: 44px !important;
     padding: 0 !important;
-    border-radius: 10px !important;
+    border-radius: var(--radius) !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
@@ -694,7 +694,7 @@ body.nav-layout-topbar-right .sidebar-nav > .sidebar-link {
     min-width: 44px !important;
     min-height: 44px !important;
     padding: 0 !important;
-    border-radius: 10px !important;
+    border-radius: var(--radius) !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;

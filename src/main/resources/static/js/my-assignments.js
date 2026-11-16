@@ -624,7 +624,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                         <div class="card-target-subtitle">${subtitle}</div>
 
                         ${a.notes ? `
-                            <div style="background:var(--surface-2); border-radius:6px; padding:8px 10px; margin-top:10px; font-size:12px; color:var(--text); border:1px solid var(--border-subtle);">
+                            <div style="background:var(--surface-2); border-radius:var(--radius-sm); padding:8px 10px; margin-top:10px; font-size:12px; color:var(--text); border:1px solid var(--border-subtle);">
                                 <strong style="color:var(--muted); font-size:10px; text-transform:uppercase; display:block; margin-bottom:2px;">${instructionsLabel}</strong>
                                 ${escapeHtml(a.notes)}
                             </div>

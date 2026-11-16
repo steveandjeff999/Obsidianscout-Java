@@ -165,7 +165,7 @@
                 (m.status !== 'ADMIN' || members.filter(x => x.status === 'ADMIN').length > 1);
 
             const canPromote = canManage && m.status === 'ACCEPTED';
-            const promoteBtn = canPromote ? `<button class="promote-member btn-xs ghost" style="padding:1px 6px; font-size:10px; margin-left:6px; border-radius:4px;" type="button" data-alliance="${alliance.id}" data-team="${m.teamNumber}" title="${t('alliances.make_admin', 'Make Admin')}">${t('alliances.make_admin', 'Make Admin')}</button>` : '';
+            const promoteBtn = canPromote ? `<button class="promote-member btn-xs ghost" style="padding:1px 6px; font-size:10px; margin-left:6px; border-radius:var(--radius-sm);" type="button" data-alliance="${alliance.id}" data-team="${m.teamNumber}" title="${t('alliances.make_admin', 'Make Admin')}">${t('alliances.make_admin', 'Make Admin')}</button>` : '';
             const disabledLabel = m.disabled ? ` <span style="color:#e05252; font-weight:normal;">(${t('alliances.invite_badge_disabled', 'Disabled')})</span>` : '';
 
             return `<span class="member-chip ${cls}" title="Team ${m.teamNumber} — ${label}">
@@ -178,7 +178,7 @@
         }).join('');
 
         const eventTag = alliance.eventKey
-            ? `<span style="background:var(--surface-2);border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;">${alliance.eventKey}</span>`
+            ? `<span style="background:var(--surface-2);border-radius:var(--radius-sm);padding:2px 8px;font-size:11px;font-weight:600;">${alliance.eventKey}</span>`
             : '';
 
         const actions = [];
@@ -215,16 +215,16 @@
         }
 
         const activeBadge = isActive
-            ? `<span style="background:#2ecc71;color:white;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;">${t('alliances.active_badge', 'Active')}</span>`
+            ? `<span style="background:#2ecc71;color:white;border-radius:var(--radius-sm);padding:2px 8px;font-size:11px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;">${t('alliances.active_badge', 'Active')}</span>`
             : '';
 
         const isMisconfigured = alliance.validation && alliance.validation.isMisconfigured;
         const configWarningBadge = (isActive && isMisconfigured)
-            ? `<span style="background:rgba(234,179,8,0.2);color:#b45309;border:1px solid rgba(234,179,8,0.4);border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;" title="${escHtml(alliance.validation.issues.map(i => i.category + ': ' + i.error).join('\n'))}">⚠️ Needs Setup (${alliance.validation.issues.length})</span>`
+            ? `<span style="background:rgba(234,179,8,0.2);color:#b45309;border:1px solid rgba(234,179,8,0.4);border-radius:var(--radius-sm);padding:2px 8px;font-size:11px;font-weight:700;" title="${escHtml(alliance.validation.issues.map(i => i.category + ': ' + i.error).join('\n'))}">⚠️ Needs Setup (${alliance.validation.issues.length})</span>`
             : '';
 
         const warningCardNotice = (isActive && isMisconfigured)
-            ? `<div style="background:rgba(234,179,8,0.1);border-left:3px solid #eab308;padding:8px 12px;border-radius:4px;font-size:12px;color:var(--text);margin-top:8px;">
+            ? `<div style="background:rgba(234,179,8,0.1);border-left:3px solid #eab308;padding:8px 12px;border-radius:var(--radius-sm);font-size:12px;color:var(--text);margin-top:8px;">
                  <strong>⚠️ Configuration Incomplete:</strong> ${escHtml(alliance.validation.issues.map(i => i.category).join(', '))}. Scouting forms and schedule syncing are falling back to local team settings. <a href="/alliances/${alliance.id}" style="color:var(--accent);font-weight:600;margin-left:4px;">Fix now →</a>
                </div>`
             : '';

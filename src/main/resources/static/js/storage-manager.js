@@ -651,7 +651,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const sum = detail.summary;
             if (summaryEl) {
                 summaryEl.innerHTML = `
-                    <div style="background: var(--surface-2); padding: 14px 18px; border-radius: 10px; font-size: 13px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div style="background: var(--surface-2); padding: 14px 18px; border-radius: var(--radius); font-size: 13px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                         <div><strong>Total Data Size:</strong> ${formatBytes(sum.totalBytes)}</div>
                         <div><strong>Total Records:</strong> ${formatNumber(sum.totalRecords)}</div>
                         <div><strong>Match Forms:</strong> ${formatNumber(sum.matchEntryCount)} (${formatBytes(sum.matchBytes)})</div>

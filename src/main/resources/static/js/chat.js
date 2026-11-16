@@ -299,7 +299,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         channelRolesContainer.innerHTML = "";
         availableRoles.forEach(r => {
             const label = document.createElement("label");
-            label.style.cssText = "display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink); padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); cursor: pointer; user-select: none;";
+            label.style.cssText = "display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink); padding: 4px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); cursor: pointer; user-select: none;";
             
             const checkbox = document.createElement("input");
             checkbox.type = "checkbox";
@@ -334,7 +334,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         filtered.forEach(m => {
             const label = document.createElement("label");
-            label.style.cssText = "display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--ink); padding: 4px 6px; border-radius: 4px; cursor: pointer; user-select: none;";
+            label.style.cssText = "display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--ink); padding: 4px 6px; border-radius: var(--radius-sm); cursor: pointer; user-select: none;";
             
             const left = document.createElement("div");
             left.style.cssText = "display: flex; align-items: center; gap: 8px;";
@@ -358,7 +358,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             left.appendChild(nameSpan);
 
             const roleBadge = document.createElement("span");
-            roleBadge.style.cssText = "font-size: 10px; color: var(--muted); background: var(--surface-3); padding: 2px 6px; border-radius: 4px;";
+            roleBadge.style.cssText = "font-size: 10px; color: var(--muted); background: var(--surface-3); padding: 2px 6px; border-radius: var(--radius-sm);";
             roleBadge.textContent = m.role;
 
             label.appendChild(left);

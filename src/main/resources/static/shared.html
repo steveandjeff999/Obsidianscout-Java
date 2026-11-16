@@ -27,7 +27,7 @@
         .shared-header-card {
             background: var(--surface, #1e1e24);
             border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
-            border-radius: 16px;
+            border-radius: var(--radius);
             padding: 24px;
             margin-bottom: 24px;
             box-shadow: var(--shadow, 0 8px 24px rgba(0, 0, 0, 0.2));
@@ -125,7 +125,7 @@
                         <span id="view-title-text">Shared Report</span>
                     </h1>
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <button class="btn ghost btn-sm" id="shared-theme-toggle" type="button" style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; border: 1px solid var(--border);" title="Toggle Dark / Light Mode">
+                        <button class="btn ghost btn-sm" id="shared-theme-toggle" type="button" style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: var(--radius); font-size: 0.8rem; border: 1px solid var(--border);" title="Toggle Dark / Light Mode">
                             <span class="material-symbols-outlined" id="shared-theme-icon">dark_mode</span>
                             <span id="shared-theme-label">Dark Mode</span>
                         </button>

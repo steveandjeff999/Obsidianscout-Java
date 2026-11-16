@@ -6,8 +6,6 @@
     right: 0;
     bottom: 0;
     background: rgba(0, 0, 0, 0.65);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -27,7 +25,7 @@
     background: var(--surface, #1e1e24);
     color: var(--ink, #ffffff);
     border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
-    border-radius: 16px;
+    border-radius: var(--radius);
     width: 100%;
     max-width: 580px;
     max-height: 90vh;
@@ -67,7 +65,7 @@
     font-size: 1.25rem;
     cursor: pointer;
     padding: 4px 8px;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     transition: color 0.15s ease, background 0.15s ease;
 }
 
@@ -100,7 +98,7 @@
     padding: 10px 14px;
     background: var(--surface-2, #282832);
     border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
-    border-radius: 8px;
+    border-radius: var(--radius);
     color: var(--ink, #ffffff);
     font-size: 0.95rem;
     outline: none;
@@ -109,7 +107,7 @@
 
 .share-input:focus, .share-select:focus {
     border-color: var(--accent, #6366f1);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
 .share-radio-grid {
@@ -121,7 +119,7 @@
 .share-radio-card {
     background: var(--surface-2, #282832);
     border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
-    border-radius: 10px;
+    border-radius: var(--radius);
     padding: 12px;
     cursor: pointer;
     display: flex;
@@ -132,12 +130,12 @@
 
 .share-radio-card:hover {
     border-color: var(--accent, #6366f1);
-    background: rgba(99, 102, 241, 0.08);
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
 .share-radio-card.active {
     border-color: var(--accent, #6366f1);
-    background: rgba(99, 102, 241, 0.16);
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
 .share-radio-title {
@@ -159,7 +157,7 @@
     justify-content: space-between;
     padding: 10px 14px;
     background: var(--surface-2, #282832);
-    border-radius: 8px;
+    border-radius: var(--radius);
     border: 1px solid var(--border, rgba(255, 255, 255, 0.06));
 }
 
@@ -190,7 +188,7 @@
 .share-result-box {
     background: var(--surface-2, #282832);
     border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
-    border-radius: 12px;
+    border-radius: var(--radius);
     padding: 16px;
     display: flex;
     flex-direction: column;
@@ -209,7 +207,7 @@
     justify-content: center;
     padding: 16px;
     background: #ffffff;
-    border-radius: 12px;
+    border-radius: var(--radius);
     margin: 8px auto;
     width: fit-content;
 }
@@ -224,7 +222,7 @@
     align-items: center;
     gap: 4px;
     padding: 3px 8px;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     font-size: 0.75rem;
     font-weight: 600;
 }
@@ -283,7 +281,7 @@
     height: 32px;
     min-width: 32px;
     padding: 0;
-    border-radius: 8px;
+    border-radius: var(--radius);
     background: rgba(255, 255, 255, 0.06);
     color: var(--ink, #ffffff);
     border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
@@ -301,7 +299,7 @@
 }
 
 .shares-action-btn:hover {
-    background: rgba(99, 102, 241, 0.15);
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
     border-color: var(--accent, #6366f1);
     color: var(--accent, #6366f1);
     transform: translateY(-1px);
@@ -328,7 +326,7 @@
 
     .share-modal-dialog {
         max-height: 94vh;
-        border-radius: 16px 16px 0 0;
+        border-radius: var(--radius) var(--radius) 0 0;
     }
 
     .share-modal-header {

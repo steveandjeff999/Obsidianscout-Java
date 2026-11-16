@@ -55,7 +55,7 @@
                 <h1 data-i18n="nav.admin-settings">Admin Settings</h1>
 
                 <!-- Team Theme Editor Card -->
-                <div class="card soft mb-24" style="background: var(--surface-2); padding: 20px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1);">
+                <div class="card soft mb-24" style="background: var(--surface-2); padding: 20px; border-radius: var(--radius); border: 1px solid rgba(255, 255, 255, 0.1);">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
                         <div style="flex: 1; min-width: 250px;">
                             <h2 style="margin: 0; font-size: 18px;">Team Custom Theme</h2>
@@ -66,7 +66,7 @@
                 </div>
 
                 <!-- Team Setup Wizard Card -->
-                <div class="card soft mb-24" style="background: var(--surface-2); padding: 20px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1);">
+                <div class="card soft mb-24" style="background: var(--surface-2); padding: 20px; border-radius: var(--radius); border: 1px solid rgba(255, 255, 255, 0.1);">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
                         <div style="flex: 1; min-width: 250px;">
                             <h2 style="margin: 0; font-size: 18px;">Team Setup Wizard</h2>
@@ -565,7 +565,7 @@
                     <p class="notice" data-i18n="config.cloudflared_notice">Configure Cloudflare Tunnel (cloudflared) to securely expose your ObsidianScout instance to the web without port forwarding.</p>
 
                     <!-- Status Display Card -->
-                    <div class="card soft mb-20" style="background: var(--surface-2); padding: 18px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1);">
+                    <div class="card soft mb-20" style="background: var(--surface-2); padding: 18px; border-radius: var(--radius); border: 1px solid rgba(255, 255, 255, 0.1);">
                         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
                             <div>
                                 <h3 style="margin: 0; font-size: 16px;" data-i18n="config.cloudflared_status">Tunnel Status</h3>
@@ -699,7 +699,7 @@
                 </div>
 
                 <!-- Site Storage & Cache Management Card (Site Admin / SuperAdmin only) -->
-                <div id="storage-manager-card" class="card soft mt-24" style="display: none; border: 1px solid var(--accent, #3b82f6); background: rgba(59, 130, 246, 0.03); padding: 20px; border-radius: 12px;">
+                <div id="storage-manager-card" class="card soft mt-24" style="display: none; border: 1px solid var(--accent, #3b82f6); background: rgba(59, 130, 246, 0.03); padding: 20px; border-radius: var(--radius);">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
                         <div style="flex: 1; min-width: 250px;">
                             <h2 style="margin: 0; font-size: 18px;" data-i18n="settings.storage_manager_title">
@@ -714,7 +714,7 @@
                 </div>
 
                 <!-- Shared API Keys Card (SuperAdmin only) -->
-                <div id="shared-api-keys-card" data-action-scope class="card soft mt-24" style="display: none; border: 1px solid var(--accent, #3b82f6); background: rgba(59, 130, 246, 0.03); padding: 20px; border-radius: 12px;">
+                <div id="shared-api-keys-card" data-action-scope class="card soft mt-24" style="display: none; border: 1px solid var(--accent, #3b82f6); background: rgba(59, 130, 246, 0.03); padding: 20px; border-radius: var(--radius);">
                     <h2 style="margin: 0; font-size: 18px;" data-i18n="settings.shared_api_keys_title">Shared API Keys</h2>
                     <p class="notice" style="margin-top: 6px;" data-i18n="settings.shared_api_keys_desc">Used by every team that has no key of its own for a source. A team's own key, or one from its alliance, always comes first. Teams on a shared key see a banner asking them to add their own, and a warning when the shared key hits its rate limit.</p>
                     <div id="shared-api-keys-status" class="notice" style="display: none; color: var(--warning, #b45309);"></div>
@@ -760,7 +760,7 @@
                 </div>
 
                 <!-- Cluster Security Card (Site Admin / SuperAdmin only) -->
-                <div id="cluster-keys-card" class="card soft mt-24" style="display: none; border: 1px solid var(--accent, #3b82f6); background: rgba(59, 130, 246, 0.03); padding: 20px; border-radius: 12px;">
+                <div id="cluster-keys-card" class="card soft mt-24" style="display: none; border: 1px solid var(--accent, #3b82f6); background: rgba(59, 130, 246, 0.03); padding: 20px; border-radius: var(--radius);">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
                         <div style="flex: 1; min-width: 250px;">
                             <h2 style="margin: 0; font-size: 18px;">
@@ -775,7 +775,7 @@
                 </div>
 
                 <!-- Danger Zone: Wipe Team Scouting Data -->
-                <div class="card soft mt-24" style="border: 1px solid var(--danger); background: rgba(223, 56, 44, 0.03); padding: 20px; border-radius: 12px;">
+                <div class="card soft mt-24" style="border: 1px solid var(--danger); background: rgba(223, 56, 44, 0.03); padding: 20px; border-radius: var(--radius);">
                     <h2 style="color: var(--danger); margin: 0; font-size: 18px;">
                         Danger Zone: Wipe Team Scouting Data
                     </h2>

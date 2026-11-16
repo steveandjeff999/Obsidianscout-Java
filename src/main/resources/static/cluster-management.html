@@ -82,7 +82,7 @@
         .node-badge {
             font-size: 11px;
             padding: 2px 8px;
-            border-radius: 12px;
+            border-radius: var(--radius);
             text-transform: uppercase;
             font-weight: 600;
         }
@@ -141,7 +141,7 @@
             justify-content: center;
             gap: 6px;
             padding: 6px 12px;
-            border-radius: 6px;
+            border-radius: var(--radius-sm);
             font-size: 12px;
             font-weight: 600;
             cursor: pointer;
@@ -732,8 +732,8 @@
                             <span id="log-count-badge" class="badge" style="margin-left: 8px; font-size: 11px;">0 entries</span>
                         </div>
                         <div class="log-console-controls" style="display: flex; gap: 10px; align-items: center;">
-                            <input type="text" id="log-search" style="background: #090d16; border: 1px solid #334155; color: white; padding: 6px 12px; border-radius: 6px; font-size: 13px;" data-i18n-placeholder="cluster.filter_placeholder" placeholder="Filter logs..." />
-                            <select id="log-limit-select" style="background: #090d16; border: 1px solid #334155; color: white; padding: 6px 12px; border-radius: 6px; font-size: 13px;">
+                            <input type="text" id="log-search" style="background: #090d16; border: 1px solid #334155; color: white; padding: 6px 12px; border-radius: var(--radius-sm); font-size: 13px;" data-i18n-placeholder="cluster.filter_placeholder" placeholder="Filter logs..." />
+                            <select id="log-limit-select" style="background: #090d16; border: 1px solid #334155; color: white; padding: 6px 12px; border-radius: var(--radius-sm); font-size: 13px;">
                                 <option value="200" data-i18n="cluster.last_200">Last 200 lines</option>
                                 <option value="500" selected data-i18n="cluster.last_500">Last 500 lines</option>
                                 <option value="1000" data-i18n="cluster.last_1000">Last 1,000 lines (Max)</option>
@@ -764,7 +764,7 @@
                     Editing <strong>config/app-config.json</strong> for target server node.
                 </p>
                 <div style="margin-bottom: 12px;">
-                    <textarea id="app-config-editor" spellcheck="false" wrap="off" autocomplete="off" autocapitalize="off" style="width: 100%; height: 60vh; min-height: 380px; font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; line-height: 1.5; tab-size: 4; white-space: pre; overflow: auto; overflow-wrap: normal; background: #090d16; color: #38bdf8; border: 1px solid #334155; padding: 14px; border-radius: 8px; resize: vertical; box-sizing: border-box;"></textarea>
+                    <textarea id="app-config-editor" spellcheck="false" wrap="off" autocomplete="off" autocapitalize="off" style="width: 100%; height: 60vh; min-height: 380px; font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; line-height: 1.5; tab-size: 4; white-space: pre; overflow: auto; overflow-wrap: normal; background: #090d16; color: #38bdf8; border: 1px solid #334155; padding: 14px; border-radius: var(--radius); resize: vertical; box-sizing: border-box;"></textarea>
                 </div>
                 <p id="modal-config-error" style="color: var(--danger); font-size: 12px; margin: 0; display: none;"></p>
             </div>
@@ -851,27 +851,27 @@
                 <div style="display: flex; flex-direction: column; gap: 14px;">
                     <div>
                         <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: var(--ink);">Local Preference Margin (Tie Breaker)</label>
-                        <input type="number" id="lb-input-margin" step="0.01" min="0" max="1" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); color: var(--ink); border-radius: 6px;" />
+                        <input type="number" id="lb-input-margin" step="0.01" min="0" max="1" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); color: var(--ink); border-radius: var(--radius-sm);" />
                         <small style="color: var(--muted); font-size: 11px;">Peers must beat local score by at least this margin (e.g. 0.10) to trigger a remote forward.</small>
                     </div>
                     <div>
                         <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: var(--ink);">Max Expected Latency Ceiling (ms)</label>
-                        <input type="number" id="lb-input-latency" step="1" min="10" max="5000" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); color: var(--ink); border-radius: 6px;" />
+                        <input type="number" id="lb-input-latency" step="1" min="10" max="5000" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); color: var(--ink); border-radius: var(--radius-sm);" />
                         <small style="color: var(--muted); font-size: 11px;">Latency normalization ceiling for score calculation (default: 150ms).</small>
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                         <div>
                             <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: var(--ink);">Probe Interval (s)</label>
-                            <input type="number" id="lb-input-probe" step="1" min="5" max="300" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); color: var(--ink); border-radius: 6px;" />
+                            <input type="number" id="lb-input-probe" step="1" min="5" max="300" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); color: var(--ink); border-radius: var(--radius-sm);" />
                         </div>
                         <div>
                             <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: var(--ink);">Forward Timeout (s)</label>
-                            <input type="number" id="lb-input-timeout" step="1" min="5" max="120" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); color: var(--ink); border-radius: 6px;" />
+                            <input type="number" id="lb-input-timeout" step="1" min="5" max="120" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); color: var(--ink); border-radius: var(--radius-sm);" />
                         </div>
                     </div>
                     <div>
                         <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: var(--ink);">Excluded Path Prefixes (comma-separated)</label>
-                        <input type="text" id="lb-input-excluded" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); color: var(--ink); border-radius: 6px;" />
+                        <input type="text" id="lb-input-excluded" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); color: var(--ink); border-radius: var(--radius-sm);" />
                         <small style="color: var(--muted); font-size: 11px;">Path prefixes that should never be forwarded (e.g. /api/admin, /api/cluster, /cluster-management).</small>
                     </div>
                 </div>
@@ -918,7 +918,7 @@
                 </p>
 
                 <!-- Mode Selection -->
-                <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+                <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 16px;">
                     <div style="font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 10px;">Cache Mode</div>
                     <div style="display: flex; flex-direction: column; gap: 10px;">
                         <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; color: var(--ink); font-size: 13px;">
@@ -939,7 +939,7 @@
                 </div>
 
                 <!-- Selective Categories (Enabled when selective mode is active) -->
-                <div id="qf-selective-options" style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+                <div id="qf-selective-options" style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 16px;">
                     <div style="font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 10px;">Included Data Categories</div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                         <label style="display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: 12px; cursor: pointer;">
@@ -979,7 +979,7 @@
                     <!-- Retention Window Dropdown -->
                     <div style="margin-top: 14px;">
                         <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: var(--ink);">Competition Event & Scouting Window</label>
-                        <select id="qf-select-retention" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); color: var(--ink); border-radius: 6px; font-size: 13px;">
+                        <select id="qf-select-retention" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); color: var(--ink); border-radius: var(--radius-sm); font-size: 13px;">
                             <option value="7">±7 Days (1 Week Window - Recommended)</option>
                             <option value="14">±14 Days (2 Weeks Window)</option>
                             <option value="30">±30 Days (1 Month Window)</option>
@@ -994,11 +994,11 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                     <div>
                         <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: var(--ink);">Sync Interval (seconds)</label>
-                        <input type="number" id="qf-input-interval" min="5" max="3600" step="1" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); color: var(--ink); border-radius: 6px;" />
+                        <input type="number" id="qf-input-interval" min="5" max="3600" step="1" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); color: var(--ink); border-radius: var(--radius-sm);" />
                     </div>
                     <div>
                         <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: var(--ink);">SQLite File Path</label>
-                        <input type="text" id="qf-input-sqlite-file" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); color: var(--ink); border-radius: 6px;" />
+                        <input type="text" id="qf-input-sqlite-file" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); color: var(--ink); border-radius: var(--radius-sm);" />
                     </div>
                 </div>
             </div>
@@ -1037,7 +1037,7 @@
                     <label for="modal-node-backup-retention" style="font-size: 13px; font-weight: 600; display: block; margin-bottom: 4px; color: var(--ink);">
                         Auto-Deletion Retention (Days)
                     </label>
-                    <input type="number" id="modal-node-backup-retention" class="input-wide" min="1" max="3650" value="30" style="padding: 8px 12px; width: 100%; box-sizing: border-box; background: var(--surface); border: 1px solid var(--border); color: var(--ink); border-radius: 6px;" />
+                    <input type="number" id="modal-node-backup-retention" class="input-wide" min="1" max="3650" value="30" style="padding: 8px 12px; width: 100%; box-sizing: border-box; background: var(--surface); border: 1px solid var(--border); color: var(--ink); border-radius: var(--radius-sm);" />
                     <small style="color: var(--muted); display: block; margin-top: 4px; font-size: 11.5px;">
                         Database snapshots on this node older than this number of days will be deleted automatically during daily backup runs.
                     </small>

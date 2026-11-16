@@ -28,7 +28,7 @@
     align-items: center;
     gap: 10px;
     padding: 8px 10px;
-    border-radius: 12px;
+    border-radius: var(--radius);
     background: var(--surface);
     border: 1px solid rgba(0, 0, 0, 0.06);
     margin-bottom: 8px;
@@ -89,7 +89,7 @@
     align-items: center;
     gap: 8px;
     padding: 8px 10px;
-    border-radius: 12px;
+    border-radius: var(--radius);
     border: 1px solid rgba(0, 0, 0, 0.08);
     background: var(--surface-2);
     cursor: pointer;
@@ -191,7 +191,7 @@ body.theme-dark .line-grid {
 
 .graph-fullscreen-btn {
     padding: 6px 8px;
-    border-radius: var(--radius-sm, 6px);
+    border-radius: var(--radius-sm);
     border: 1px solid rgba(0, 0, 0, 0.12);
     cursor: pointer;
     display: inline-flex;
@@ -253,8 +253,6 @@ body.theme-dark .graph-fullscreen-btn:hover {
     right: 0;
     bottom: 0;
     background: rgba(0, 0, 0, 0.65);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
 }
 
 .graphs-fullscreen-dialog {
@@ -262,7 +260,7 @@ body.theme-dark .graph-fullscreen-btn:hover {
     z-index: 1;
     background: var(--surface, #fff);
     border: 1px solid var(--line, rgba(0, 0, 0, 0.1));
-    border-radius: var(--radius-md, 12px);
+    border-radius: var(--radius);
     box-shadow: 0 20px 45px rgba(0, 0, 0, 0.35);
     width: 95vw;
     height: 90vh;
@@ -302,7 +300,7 @@ body.theme-dark .graphs-fullscreen-header {
     align-items: center;
     justify-content: center;
     padding: 6px;
-    border-radius: var(--radius-sm, 6px);
+    border-radius: var(--radius-sm);
     cursor: pointer;
     color: var(--muted, #6b7280);
     transition: color 0.15s ease, background 0.15s ease;

@@ -22,7 +22,7 @@
         .stat-card-error {
             background: var(--surface-2);
             padding: 18px;
-            border-radius: var(--radius-sm, 12px);
+            border-radius: var(--radius-sm);
             border: 1px solid rgba(0, 0, 0, 0.06);
             display: flex;
             flex-direction: column;
@@ -36,7 +36,7 @@
         }
 
         .stat-card-error:hover {
-            transform: translateY(-2px);
+            transform: translateY(-1px);
             box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
         }
 
@@ -117,7 +117,7 @@
         .filter-group input, .filter-group select {
             padding: 8px 12px;
             font-size: 13px;
-            border-radius: 8px;
+            border-radius: var(--radius);
             border: 1px solid rgba(0, 0, 0, 0.1);
             background: var(--surface);
             color: var(--ink);
@@ -130,7 +130,7 @@
         /* Table container */
         .errors-table-container {
             overflow-x: auto;
-            border-radius: 10px;
+            border-radius: var(--radius);
             border: 1px solid rgba(0, 0, 0, 0.06);
             background: var(--surface);
         }
@@ -186,7 +186,7 @@
             font-size: 10px;
             font-weight: 700;
             padding: 2px 7px;
-            border-radius: 4px;
+            border-radius: var(--radius-sm);
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
@@ -226,7 +226,7 @@
 
         .btn-table-action {
             padding: 5px 10px;
-            border-radius: 6px;
+            border-radius: var(--radius-sm);
             font-size: 11px;
             font-weight: 600;
             border: 1px solid transparent;
@@ -273,7 +273,7 @@
         .stack-code-block {
             background: #090d16;
             border: 1px solid #334155;
-            border-radius: 8px;
+            border-radius: var(--radius);
             padding: 14px;
             color: #fca5a5;
             font-size: 12px;
@@ -327,7 +327,7 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            border-radius: 4px;
+            border-radius: var(--radius-sm);
             transition: transform 0.2s ease, color 0.15s ease, background 0.15s ease;
         }
 
@@ -391,7 +391,7 @@
             border-collapse: collapse;
             font-size: 12px;
             background: var(--surface);
-            border-radius: 8px;
+            border-radius: var(--radius);
             border: 1px solid rgba(0, 0, 0, 0.06);
             overflow: hidden;
         }
@@ -585,7 +585,7 @@
                     <span id="modal-detail-id" style="font-family: monospace; font-size: 11px; color: var(--muted);"></span>
                 </div>
 
-                <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: var(--radius); padding: 12px; margin-bottom: 16px;">
                     <div id="modal-detail-msg" style="font-weight: 700; color: #f87171; font-size: 14px; word-break: break-word;"></div>
                 </div>
 
@@ -642,7 +642,7 @@
                 </p>
                 <div style="margin: 16px 0;">
                     <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px;">Clear Target:</label>
-                    <select id="select-clear-target" style="width: 100%; padding: 8px 12px; border-radius: 8px; background: var(--surface); color: var(--ink); border: 1px solid rgba(255, 255, 255, 0.1);">
+                    <select id="select-clear-target" style="width: 100%; padding: 8px 12px; border-radius: var(--radius); background: var(--surface); color: var(--ink); border: 1px solid rgba(255, 255, 255, 0.1);">
                         <option value="RESOLVED">Resolved errors only (Safe)</option>
                         <option value="OPEN">Open errors only</option>
                         <option value="ALL">All error reports (Complete purge)</option>

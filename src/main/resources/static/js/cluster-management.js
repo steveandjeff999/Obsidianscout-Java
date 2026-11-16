@@ -290,7 +290,7 @@
                         const isWinner = (p.ip === status.bestNodeIp);
                         const winnerBadge = isWinner ? `<span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; font-size: 10px; margin-left: 4px;">Top Route</span>` : "";
                         return `
-                            <div style="background: rgba(0, 0, 0, 0.2); padding: 8px 10px; border-radius: 6px; margin-bottom: 6px; border: 1px solid ${isWinner ? 'rgba(16, 185, 129, 0.4)' : 'rgba(255, 255, 255, 0.05)'};">
+                            <div style="background: rgba(0, 0, 0, 0.2); padding: 8px 10px; border-radius: var(--radius-sm); margin-bottom: 6px; border: 1px solid ${isWinner ? 'rgba(16, 185, 129, 0.4)' : 'rgba(255, 255, 255, 0.05)'};">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <span style="font-family: monospace; font-weight: 600; font-size: 13px; color: ${isWinner ? '#34d399' : '#f1f5f9'};">${escapeHtml(p.ip)}${winnerBadge}</span>
                                     <span style="font-size: 12px; font-weight: 700; color: #38bdf8;">${scorePct}%</span>
@@ -306,22 +306,22 @@
                 }
 
                 container.innerHTML = `
-                    <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px;">
+                    <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: var(--radius); padding: 12px;">
                         <div style="font-size: 11px; text-transform: uppercase; color: #94a3b8; font-weight: 600;">Forwarded Requests</div>
                         <div style="font-size: 22px; font-weight: 700; color: #34d399; margin-top: 4px;">${status.forwardedCount || 0}</div>
                         <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Check every ${status.probeIntervalSeconds}s</div>
                     </div>
-                    <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px;">
+                    <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: var(--radius); padding: 12px;">
                         <div style="font-size: 11px; text-transform: uppercase; color: #94a3b8; font-weight: 600;">Selected Target</div>
                         <div style="font-size: 15px; font-weight: 700; font-family: monospace; color: #60a5fa; margin-top: 6px;">${escapeHtml(status.bestNodeIp || "local")}</div>
                         <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Local Preference Margin: +${status.localPreferenceMargin}</div>
                     </div>
-                    <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px;">
+                    <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: var(--radius); padding: 12px;">
                         <div style="font-size: 11px; text-transform: uppercase; color: #94a3b8; font-weight: 600;">Local Node Capacity</div>
                         <div style="font-size: 18px; font-weight: 700; color: #38bdf8; margin-top: 4px;">Score: ${localScore}%</div>
                         <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">${localHeap} (CPU: ${localCpu})</div>
                     </div>
-                    <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px; grid-column: 1 / -1;">
+                    <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: var(--radius); padding: 12px; grid-column: 1 / -1;">
                         <div style="font-size: 12px; text-transform: uppercase; color: #94a3b8; font-weight: 600; margin-bottom: 8px;">Network Peer Load & Latency Ranking</div>
                         ${peersHtml}
                     </div>
@@ -357,7 +357,7 @@
                             <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); gap: 10px; flex-wrap: wrap;">
                                 <div style="display: flex; align-items: center; gap: 8px;">
                                     <span style="color: #64748b; font-size: 11px;">[${timeStr}]</span>
-                                    <span style="background: ${badgeBg}; color: ${badgeColor}; border: 1px solid ${badgeBorder}; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">
+                                    <span style="background: ${badgeBg}; color: ${badgeColor}; border: 1px solid ${badgeBorder}; padding: 2px 6px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 600;">
                                         ${badgeText}
                                     </span>
                                     <span style="color: #cbd5e1; font-size: 11px;">${escapeHtml(item.note || "")}</span>
@@ -1672,7 +1672,7 @@
 
         const tableEntries = Object.entries(tableCounts).sort(([a], [b]) => a.localeCompare(b));
         const tablesGridHtml = tableEntries.map(([tbl, count]) => `
-            <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center;">
+            <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: var(--radius-sm); padding: 8px 12px; display: flex; justify-content: space-between; align-items: center;">
                 <span style="font-size: 12px; color: #cbd5e1; font-family: monospace;">${escapeHtml(tbl)}</span>
                 <span style="font-size: 12px; font-weight: 700; color: ${count > 0 ? '#38bdf8' : '#64748b'};">${count.toLocaleString()}</span>
             </div>
@@ -1681,26 +1681,26 @@
         container.innerHTML = `
             <!-- Top Status Grid -->
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px;">
-                <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 8px; padding: 12px;">
+                <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: var(--radius); padding: 12px;">
                     <div style="font-size: 11px; color: #fbbf24; text-transform: uppercase; font-weight: 700;">Mirror Status</div>
                     <div style="font-size: 15px; font-weight: 700; color: #fef3c7; margin-top: 4px;">${escapeHtml(data.status)}</div>
                 </div>
-                <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 8px; padding: 12px;">
+                <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: var(--radius); padding: 12px;">
                     <div style="font-size: 11px; color: #38bdf8; text-transform: uppercase; font-weight: 700;">Snapshot File Size</div>
                     <div style="font-size: 15px; font-weight: 700; color: #f0f9ff; margin-top: 4px;">${formatBytes(data.databaseSizeBytes)}</div>
                 </div>
-                <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; padding: 12px;">
+                <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: var(--radius); padding: 12px;">
                     <div style="font-size: 11px; color: #34d399; text-transform: uppercase; font-weight: 700;">Available Free Disk</div>
                     <div style="font-size: 15px; font-weight: 700; color: #ecfdf5; margin-top: 4px;">${formatBytes(data.freeDiskSpaceBytes)} / ${formatBytes(data.totalDiskSpaceBytes)}</div>
                 </div>
-                <div style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 8px; padding: 12px;">
+                <div style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.2); border-radius: var(--radius); padding: 12px;">
                     <div style="font-size: 11px; color: #c084fc; text-transform: uppercase; font-weight: 700;">Last Synced</div>
                     <div style="font-size: 13px; font-weight: 600; color: #faf5ff; margin-top: 4px;">${data.lastSyncTimestamp ? new Date(data.lastSyncTimestamp).toLocaleString() : 'Never'}</div>
                 </div>
             </div>
 
             <!-- Mirrored Events (±1 Week Window) -->
-            <div style="margin-bottom: 20px; background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 14px;">
+            <div style="margin-bottom: 20px; background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: var(--radius); padding: 14px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                     <h3 style="font-size: 14px; color: #fbbf24; margin: 0;"><span class="material-symbols-outlined">calendar_today</span> Mirrored Events (±1 Week Competition Window)</h3>
                     <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; font-size: 11px;">${activeEvents.length} events</span>
@@ -1712,7 +1712,7 @@
             </div>
 
             <!-- Mirrored Database Tables & Row Counts -->
-            <div style="background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 14px;">
+            <div style="background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: var(--radius); padding: 14px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                     <h3 style="font-size: 14px; color: #38bdf8; margin: 0;"><i class="fa-solid fa-database"></i> SQLite Table Records Breakdown</h3>
                     <span class="badge" style="background: rgba(56, 189, 248, 0.2); color: #38bdf8; font-size: 11px;">${tableEntries.length} tables</span>

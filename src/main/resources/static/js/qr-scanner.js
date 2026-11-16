@@ -637,7 +637,7 @@ function initScanner(me) {
             bannerEl.style.padding = "16px";
             bannerEl.style.marginBottom = "16px";
             bannerEl.style.border = "1px solid var(--primary-accent, #6366f1)";
-            bannerEl.style.borderRadius = "16px";
+            bannerEl.style.borderRadius = "var(--radius)";
             bannerEl.style.background = "rgba(18, 24, 38, 0.95)";
             bannerEl.style.boxShadow = "0 8px 32px rgba(0, 0, 0, 0.4)";
             
@@ -656,7 +656,7 @@ function initScanner(me) {
             pillsHtml += `
                 <div style="
                     padding: 6px 12px;
-                    border-radius: 20px;
+                    border-radius: var(--radius);
                     font-size: 12px;
                     font-weight: 700;
                     display: inline-flex;

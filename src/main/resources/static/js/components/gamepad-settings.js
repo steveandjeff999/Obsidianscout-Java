@@ -576,7 +576,7 @@
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 4px;">
                         <label style="font-size: 0.85rem; font-weight: 600; color: var(--ink);">Profile Name</label>
-                        <input type="text" id="new-profile-name-input" class="input" placeholder="e.g. Driver Station Layout" value="Custom Layout ${service.getProfiles ? service.getProfiles().length + 1 : 1}" style="padding: 10px 12px; border-radius: 10px;" />
+                        <input type="text" id="new-profile-name-input" class="input" placeholder="e.g. Driver Station Layout" value="Custom Layout ${service.getProfiles ? service.getProfiles().length + 1 : 1}" style="padding: 10px 12px; border-radius: var(--radius);" />
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 4px;">
                         <label style="font-size: 0.85rem; font-weight: 600; color: var(--ink);">Controller Style</label>
@@ -1450,7 +1450,7 @@
                     <!-- 2. Active Period / Phase -->
                     <div style="display: flex; flex-direction: column; gap: 4px;">
                         <label style="font-size: 0.85rem; font-weight: 600; color: var(--ink);">Active Period / Phase</label>
-                        <select id="sheet-phase-select" class="select-wide" style="padding: 8px 12px; border-radius: 10px;" ${isSystemAction(state.actionType) ? 'disabled' : ''}>
+                        <select id="sheet-phase-select" class="select-wide" style="padding: 8px 12px; border-radius: var(--radius);" ${isSystemAction(state.actionType) ? 'disabled' : ''}>
                             <option value="global" ${state.phase === 'global' ? 'selected' : ''}>Global (Active in All Periods)</option>
                             <option value="auto" ${state.phase === 'auto' ? 'selected' : ''}>Autonomous Period Only</option>
                             <option value="teleop" ${state.phase === 'teleop' ? 'selected' : ''}>Teleoperated Period Only</option>
@@ -1467,7 +1467,7 @@
                     <!-- 3. Target Action -->
                     <div style="display: flex; flex-direction: column; gap: 4px;">
                         <label style="font-size: 0.85rem; font-weight: 600; color: var(--ink);">Target Action</label>
-                        <select id="sheet-action-select" class="select-wide" style="padding: 8px 12px; border-radius: 10px;">
+                        <select id="sheet-action-select" class="select-wide" style="padding: 8px 12px; border-radius: var(--radius);">
                             <option value="increment" ${state.actionType === 'increment' ? 'selected' : ''}>+ Increment Field Count</option>
                             <option value="decrement" ${state.actionType === 'decrement' ? 'selected' : ''}>- Decrement Field Count</option>
                             <option value="toggle" ${state.actionType === 'toggle' ? 'selected' : ''}>Toggle Checkbox / Boolean</option>
@@ -1489,7 +1489,7 @@
                                     <div>${emptyWarning}</div>
                                 </div>
                             ` : `
-                                <select id="sheet-target-field-select" class="select-wide" style="padding: 8px 12px; border-radius: 10px;">
+                                <select id="sheet-target-field-select" class="select-wide" style="padding: 8px 12px; border-radius: var(--radius);">
                                     ${matchingFields.map(f => `
                                         <option value="${f.id}" ${state.targetFieldId === f.id ? 'selected' : ''}>
                                             ${getFieldLabel(f) || f.id} (${f.id})
@@ -1503,7 +1503,7 @@
                     ${state.actionType === 'switchTab' ? `
                         <div style="display: flex; flex-direction: column; gap: 4px;">
                             <label style="font-size: 0.85rem; font-weight: 600; color: var(--ink);">Target Tab</label>
-                            <select id="sheet-target-tab-select" class="select-wide" style="padding: 8px 12px; border-radius: 10px;">
+                            <select id="sheet-target-tab-select" class="select-wide" style="padding: 8px 12px; border-radius: var(--radius);">
                                 <option value="next" ${state.targetValue === 'next' ? 'selected' : ''}>Next Tab (Cycle Forward)</option>
                                 <option value="prev" ${state.targetValue === 'prev' ? 'selected' : ''}>Previous Tab (Cycle Backward)</option>
                                 <option value="auto" ${state.targetValue === 'auto' ? 'selected' : ''}>Auto Phase</option>
@@ -1518,7 +1518,7 @@
                     <div style="display: flex; flex-direction: column; gap: 6px;">
                         <label style="font-size: 0.85rem; font-weight: 600; color: var(--ink);">Input Execution Mode</label>
                         ${!isRepeatable ? `
-                            <div style="padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,0.03); border: 1px solid var(--border-color, rgba(0,0,0,0.08)); font-size: 0.82rem; color: var(--muted); display: flex; align-items: center; gap: 8px;">
+                            <div style="padding: 10px 12px; border-radius: var(--radius); background: rgba(0,0,0,0.03); border: 1px solid var(--border-color, rgba(0,0,0,0.08)); font-size: 0.82rem; color: var(--muted); display: flex; align-items: center; gap: 8px;">
                                 <span style="color: var(--accent); display: inline-flex; align-items: center;">${ICONS.pointer}</span>
                                 <span>Single Press Only (Hold-to-repeat is disabled for ${state.actionType})</span>
                             </div>
@@ -1745,7 +1745,7 @@
                     <p class="notice" style="margin: 6px 0 10px 0; font-size: 0.82rem;">
                         Copy the JSON below or save it as a backup file.
                     </p>
-                    <textarea id="gamepad-export-textarea" rows="12" readonly style="width: 100%; font-family: monospace; font-size: 0.8rem; padding: 10px; border-radius: 8px; resize: vertical; border: 1px solid var(--border-color, rgba(0,0,0,0.1));">${jsonStr}</textarea>
+                    <textarea id="gamepad-export-textarea" rows="12" readonly style="width: 100%; font-family: monospace; font-size: 0.8rem; padding: 10px; border-radius: var(--radius); resize: vertical; border: 1px solid var(--border-color, rgba(0,0,0,0.1));">${jsonStr}</textarea>
                     <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px;">
                         <button type="button" class="btn ghost btn-close-export">Close</button>
                         <button type="button" id="gamepad-btn-copy-export" class="btn" style="display: inline-flex; align-items: center; gap: 6px;">
@@ -1784,7 +1784,7 @@
                     <p class="notice" style="margin: 6px 0 10px 0; font-size: 0.82rem;">
                         Paste the JSON of a exported profile to load it into your profile list.
                     </p>
-                    <textarea id="gamepad-import-textarea" rows="12" placeholder="Paste JSON profile here..." style="width: 100%; font-family: monospace; font-size: 0.8rem; padding: 10px; border-radius: 8px; resize: vertical; border: 1px solid var(--border-color, rgba(0,0,0,0.1));"></textarea>
+                    <textarea id="gamepad-import-textarea" rows="12" placeholder="Paste JSON profile here..." style="width: 100%; font-family: monospace; font-size: 0.8rem; padding: 10px; border-radius: var(--radius); resize: vertical; border: 1px solid var(--border-color, rgba(0,0,0,0.1));"></textarea>
                     <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px;">
                         <button type="button" class="btn ghost btn-close-import">Cancel</button>
                         <button type="button" id="gamepad-btn-apply-import" class="btn" style="display: inline-flex; align-items: center; gap: 6px;">

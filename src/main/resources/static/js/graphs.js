@@ -1343,7 +1343,7 @@ async function generateGraphs(state) {
         warnBanner.style.background = "rgba(234, 179, 8, 0.08)";
         warnBanner.style.color = "#854d0e";
         warnBanner.style.padding = "10px 16px";
-        warnBanner.style.borderRadius = "6px";
+        warnBanner.style.borderRadius = "var(--radius-sm)";
         warnBanner.style.border = "1px solid";
         warnBanner.style.display = "flex";
         warnBanner.style.alignItems = "center";

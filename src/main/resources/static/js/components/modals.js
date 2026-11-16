@@ -12,7 +12,7 @@ import { processImageUpload, isWebpSupported } from '../utilities/media.js';
 export function showImageModal(imageSrc, title = "Robot Photo Preview") {
     if (!imageSrc) return;
     const modal = document.createElement("div");
-    modal.style.cssText = "position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px);";
+    modal.style.cssText = "position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;";
 
     const topBar = document.createElement("div");
     topBar.style.cssText = "width:100%;max-width:900px;display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;color:#f8fafc;";
@@ -21,13 +21,13 @@ export function showImageModal(imageSrc, title = "Robot Photo Preview") {
             <span>${escAttr(title)}</span>
         </div>
         <div style="display:flex;align-items:center;gap:12px;">
-            <a href="${escAttr(imageSrc)}" download="robot_photo.jpg" class="btn btn-sm" style="background:rgba(255,255,255,0.1);color:#fff;text-decoration:none;padding:6px 12px;border-radius:8px;font-size:0.85rem;">Download</a>
+            <a href="${escAttr(imageSrc)}" download="robot_photo.jpg" class="btn btn-sm" style="background:rgba(255,255,255,0.1);color:#fff;text-decoration:none;padding:6px 12px;border-radius:var(--radius);font-size:0.85rem;">Download</a>
             <button type="button" class="btn-close-lightbox" style="background:none;border:none;color:#cbd5e1;font-size:1.6rem;cursor:pointer;padding:2px 8px;">✕</button>
         </div>
     `;
 
     const imgContainer = document.createElement("div");
-    imgContainer.style.cssText = "max-width:900px;max-height:80vh;display:flex;align-items:center;justify-content:center;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.15);background:#000;";
+    imgContainer.style.cssText = "max-width:900px;max-height:80vh;display:flex;align-items:center;justify-content:center;border-radius:var(--radius);overflow:hidden;border:1px solid rgba(255,255,255,0.15);background:#000;";
 
     const img = document.createElement("img");
     img.src = imageSrc;
@@ -79,7 +79,7 @@ export function imageThumbHtml(value, title = "Robot Photo Preview", maxHeight =
             if (img) showImageModal(img.getAttribute("src"), img.getAttribute("data-photo-zoom"));
         });
     }
-    return `<img src="${escAttr(value)}" data-photo-zoom="${escAttr(title)}" alt="${escAttr(title)}" title="Click to inspect full image" style="display:block;max-width:100%;max-height:${Number(maxHeight) || 160}px;object-fit:contain;border-radius:8px;cursor:zoom-in;">`;
+    return `<img src="${escAttr(value)}" data-photo-zoom="${escAttr(title)}" alt="${escAttr(title)}" title="Click to inspect full image" style="display:block;max-width:100%;max-height:${Number(maxHeight) || 160}px;object-fit:contain;border-radius:var(--radius);cursor:zoom-in;">`;
 }
 
 /**
@@ -93,11 +93,11 @@ export function openInlineCameraModal(options = {}) {
 
     const modalBackdrop = document.createElement("div");
     modalBackdrop.className = "obsidian-modal-backdrop";
-    modalBackdrop.style.cssText = "position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(6px);";
+    modalBackdrop.style.cssText = "position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;";
 
     const modalBox = document.createElement("div");
     modalBox.className = "card";
-    modalBox.style.cssText = "width:100%;max-width:560px;background:#0f172a;border:1px solid rgba(255,255,255,0.15);border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:14px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.7);";
+    modalBox.style.cssText = "width:100%;max-width:560px;background:#0f172a;border:1px solid rgba(255,255,255,0.15);border-radius:var(--radius);padding:20px;display:flex;flex-direction:column;gap:14px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.7);";
 
     const header = document.createElement("div");
     header.style.cssText = "display:flex;align-items:center;justify-content:space-between;";
@@ -109,7 +109,7 @@ export function openInlineCameraModal(options = {}) {
     `;
 
     const videoContainer = document.createElement("div");
-    videoContainer.style.cssText = "position:relative;width:100%;background:#000;border-radius:12px;overflow:hidden;min-height:280px;max-height:60vh;display:flex;align-items:center;justify-content:center;";
+    videoContainer.style.cssText = "position:relative;width:100%;background:#000;border-radius:var(--radius);overflow:hidden;min-height:280px;max-height:60vh;display:flex;align-items:center;justify-content:center;";
 
     const video = document.createElement("video");
     video.autoplay = true;
@@ -130,13 +130,13 @@ export function openInlineCameraModal(options = {}) {
     const btnFlip = document.createElement("button");
     btnFlip.type = "button";
     btnFlip.className = "btn";
-    btnFlip.style.cssText = "background:rgba(255,255,255,0.08);color:#f8fafc;border:1px solid rgba(255,255,255,0.12);padding:10px 14px;border-radius:10px;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:0.85rem;font-weight:600;";
+    btnFlip.style.cssText = "background:rgba(255,255,255,0.08);color:#f8fafc;border:1px solid rgba(255,255,255,0.12);padding:10px 14px;border-radius:var(--radius);cursor:pointer;display:flex;align-items:center;gap:6px;font-size:0.85rem;font-weight:600;";
     btnFlip.innerHTML = `Flip Camera`;
 
     const btnCapture = document.createElement("button");
     btnCapture.type = "button";
     btnCapture.className = "btn primary";
-    btnCapture.style.cssText = "flex:1;background:linear-gradient(135deg,#0284c7,#0369a1);color:#fff;border:none;padding:12px 20px;border-radius:10px;cursor:pointer;font-weight:700;font-size:0.95rem;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 14px rgba(2,132,199,0.4);";
+    btnCapture.style.cssText = "flex:1;background:linear-gradient(135deg,#0284c7,#0369a1);color:#fff;border:none;padding:12px 20px;border-radius:var(--radius);cursor:pointer;font-weight:700;font-size:0.95rem;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 14px rgba(2,132,199,0.4);";
     btnCapture.innerHTML = `Capture Snapshot`;
 
     controls.appendChild(btnFlip);

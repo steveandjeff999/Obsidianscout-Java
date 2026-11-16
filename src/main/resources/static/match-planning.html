@@ -19,36 +19,20 @@
 
         /* ── Field Strategy Workspace ── */
         .field-workspace-card {
-            background: rgba(255, 255, 255, 0.08);
+            background: var(--surface);
             border-radius: var(--radius);
             padding: 20px;
-            box-shadow:
-                inset 0 1px 0 rgba(255,255,255,0.55),
-                inset 0 -1px 0 rgba(0,0,0,0.08),
-                inset 1px 0 0 rgba(255,255,255,0.18),
-                0 2px 6px rgba(0,0,0,0.06),
-                0 10px 28px rgba(0,0,0,0.09),
-                0 32px 64px rgba(0,0,0,0.06);
-            border: 1px solid rgba(255,255,255,0.30);
-            backdrop-filter: blur(36px) saturate(180%) brightness(104%);
-            -webkit-backdrop-filter: blur(36px) saturate(180%) brightness(104%);
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border);
             display: flex;
             flex-direction: column;
             gap: 16px;
         }
 
         body.theme-dark .field-workspace-card {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255,255,255,0.13);
-            box-shadow:
-                inset 0 1px 0 rgba(255,255,255,0.18),
-                inset 0 -1px 0 rgba(0,0,0,0.28),
-                inset 1px 0 0 rgba(255,255,255,0.07),
-                0 2px 6px rgba(0,0,0,0.28),
-                0 10px 28px rgba(0,0,0,0.36),
-                0 32px 64px rgba(0,0,0,0.26);
-            backdrop-filter: blur(36px) saturate(180%) brightness(90%);
-            -webkit-backdrop-filter: blur(36px) saturate(180%) brightness(90%);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-sm);
         }
 
         /* ── Field Strategy Layout ── */
@@ -198,7 +182,7 @@
         }
 
         .ds-slot-card:hover {
-            transform: translateY(-2px);
+            transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
         }
 
@@ -309,8 +293,6 @@
             background: rgba(15, 23, 42, 0.92);
             border-radius: 999px;
             border: 1px solid rgba(255, 255, 255, 0.18);
-            backdrop-filter: blur(24px) saturate(180%);
-            -webkit-backdrop-filter: blur(24px) saturate(180%);
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
             flex-wrap: nowrap;
             white-space: nowrap;
@@ -347,7 +329,7 @@
         .phase-selector-group {
             background: rgba(255, 255, 255, 0.06);
             border: 1px solid rgba(255, 255, 255, 0.12);
-            border-radius: 10px;
+            border-radius: var(--radius);
             padding: 2px;
             gap: 2px;
         }
@@ -356,7 +338,7 @@
             font-size: 0.80rem;
             font-weight: 800;
             padding: 4px 10px;
-            border-radius: 7px;
+            border-radius: var(--radius-sm);
         }
 
         .toolbar-label {
@@ -553,7 +535,7 @@
             width: clamp(40px, 4.5vw, 60px);
             height: clamp(40px, 4.5vw, 60px);
             background: rgba(15, 23, 42, 0.90);
-            border-radius: 4px; /* Square box */
+            border-radius: var(--radius-sm); /* Square box */
             box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.12);
             display: flex;
             flex-direction: column;
@@ -568,7 +550,7 @@
         }
 
         .field-team-marker:hover {
-            transform: translate(-50%, -50%) scale(1.06);
+            transform: translate(-50%, -50%) scale(1.04);
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7);
         }
 
@@ -613,7 +595,7 @@
             color: #cbd5e1;
             font-size: 0.95rem;
             padding: 5px 8px;
-            border-radius: 6px;
+            border-radius: var(--radius-sm);
             cursor: pointer;
             display: inline-flex;
             align-items: center;
@@ -651,7 +633,7 @@
         }
 
         .swatch-btn:hover {
-            transform: scale(1.15);
+            transform: scale(1.04);
         }
 
         .swatch-btn.active {
@@ -664,7 +646,7 @@
             background: rgba(30, 41, 59, 0.9);
             color: #f8fafc;
             border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 6px;
+            border-radius: var(--radius-sm);
             padding: 4px 8px;
             font-size: 0.8rem;
             font-weight: 600;
@@ -676,10 +658,8 @@
             position: absolute;
             z-index: 100;
             background: rgba(15, 23, 42, 0.95);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 14px;
+            border-radius: var(--radius);
             box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
             padding: 10px 14px;
             display: flex;
@@ -719,7 +699,7 @@
             padding: 5px 8px;
             font-size: 0.8rem;
             font-weight: 700;
-            border-radius: 6px;
+            border-radius: var(--radius-sm);
             background: rgba(255, 255, 255, 0.06);
             color: #cbd5e1;
             border: 1px solid rgba(255, 255, 255, 0.12);
@@ -1061,7 +1041,7 @@
         .alliance-member-badge {
             display: inline-block;
             padding: 2px 6px;
-            border-radius: 4px;
+            border-radius: var(--radius-sm);
             font-weight: 700;
             font-size: 0.75rem;
             margin-right: 4px;
@@ -1084,7 +1064,7 @@
         .graph-datasource-pills {
             display: inline-flex;
             background: rgba(0, 0, 0, 0.06);
-            border-radius: var(--radius-sm, 6px);
+            border-radius: var(--radius-sm);
             padding: 2px;
             gap: 2px;
             border: 1px solid rgba(0, 0, 0, 0.05);
@@ -1102,7 +1082,7 @@
             font-size: 0.70rem;
             font-weight: 700;
             padding: 3px 8px;
-            border-radius: 4px;
+            border-radius: var(--radius-sm);
             cursor: pointer;
             transition: all 0.15s ease;
             display: inline-flex;
@@ -1134,7 +1114,7 @@
             font-size: 0.75rem;
             cursor: pointer;
             padding: 4px 6px;
-            border-radius: 4px;
+            border-radius: var(--radius-sm);
             display: inline-flex;
             align-items: center;
             gap: 4px;
@@ -1192,8 +1172,6 @@
             position: absolute;
             inset: 0;
             background: rgba(0, 0, 0, 0.75);
-            backdrop-filter: blur(6px);
-            -webkit-backdrop-filter: blur(6px);
         }
 
         .graphs-fullscreen-dialog {
@@ -1201,7 +1179,7 @@
             z-index: 2;
             background: var(--surface, #1e293b);
             border: 1px solid var(--line, rgba(255, 255, 255, 0.15));
-            border-radius: var(--radius-md, 12px);
+            border-radius: var(--radius);
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
             width: 95vw;
             height: 88vh;

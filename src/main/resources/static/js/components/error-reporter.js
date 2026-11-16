@@ -179,17 +179,17 @@ function showErrorPromptModal(error, me) {
             ObsidianScout encountered an unexpected error. Would you like to send this bug report back to the administrators so it can be fixed?
         </p>
 
-        <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+        <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: var(--radius); padding: 12px; margin-bottom: 16px;">
             <p style="margin: 0; font-size: 13px; color: var(--ink, #f1f5f9); font-weight: 500;">
                 <strong>Report contents:</strong> This report will include your <strong>Team Number (${teamNumber})</strong>, <strong>Program (${program})</strong>, and <strong>User Level (${userRole})</strong>, along with technical error details.
             </p>
         </div>
 
-        <div style="background: var(--surface-2, rgba(0,0,0,0.2)); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px 12px; margin-bottom: 18px; max-height: 80px; overflow-y: auto; font-family: monospace; font-size: 12px; color: #fca5a5; word-break: break-word;">
+        <div style="background: var(--surface-2, rgba(0,0,0,0.2)); border: 1px solid rgba(255,255,255,0.08); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 18px; max-height: 80px; overflow-y: auto; font-family: monospace; font-size: 12px; color: #fca5a5; word-break: break-word;">
             ${error.message || "Unknown error"}
         </div>
 
-        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; background: rgba(255, 255, 255, 0.03); border-radius: 8px; padding: 12px; border: 1px solid rgba(255,255,255,0.06);">
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; background: rgba(255, 255, 255, 0.03); border-radius: var(--radius); padding: 12px; border: 1px solid rgba(255,255,255,0.06);">
             <label style="display: flex; align-items: center; gap: 10px; font-size: 13.5px; cursor: pointer; color: var(--ink, #f1f5f9);">
                 <input type="checkbox" id="chk-always-send" style="width: 17px; height: 17px; cursor: pointer;" />
                 <span>Always send bug reports automatically</span>

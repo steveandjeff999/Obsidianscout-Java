@@ -11,7 +11,7 @@
     <link rel="manifest" href="/manifest.json" />
     <style>
         .hero-banner {
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
+            background: rgba(59, 130, 246, 0.15);
             border: 1px solid rgba(59, 130, 246, 0.35);
             border-radius: var(--radius);
             padding: 24px;
@@ -38,7 +38,7 @@
         .my-card {
             background: var(--surface);
             border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
-            border-radius: var(--radius, 12px);
+            border-radius: var(--radius);
             padding: 18px;
             display: flex;
             flex-direction: column;
@@ -50,7 +50,7 @@
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
         }
         .my-card:hover {
-            transform: translateY(-3px);
+            transform: translateY(-1px);
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
             border-color: rgba(59, 130, 246, 0.4);
         }
@@ -123,19 +123,19 @@
             text-transform: uppercase;
         }
         .asgn-type-badge.match {
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(37, 99, 235, 0.28));
+            background: rgba(59, 130, 246, 0.18);
             border: 1px solid rgba(59, 130, 246, 0.45);
             color: #60a5fa;
             box-shadow: 0 0 10px rgba(59, 130, 246, 0.12);
         }
         .asgn-type-badge.pit {
-            background: linear-gradient(135deg, rgba(168, 85, 247, 0.18), rgba(139, 92, 246, 0.28));
+            background: rgba(168, 85, 247, 0.18);
             border: 1px solid rgba(168, 85, 247, 0.45);
             color: #c084fc;
             box-shadow: 0 0 10px rgba(168, 85, 247, 0.12);
         }
         .asgn-type-badge.qual {
-            background: linear-gradient(135deg, rgba(236, 72, 153, 0.18), rgba(219, 39, 119, 0.28));
+            background: rgba(236, 72, 153, 0.18);
             border: 1px solid rgba(236, 72, 153, 0.45);
             color: #f472b6;
             box-shadow: 0 0 10px rgba(236, 72, 153, 0.12);

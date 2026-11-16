@@ -220,7 +220,7 @@
         box.className = 'alert alert-warning mb-24';
         box.style.background = 'rgba(245, 158, 11, 0.12)';
         box.style.border = '1px solid rgba(245, 158, 11, 0.4)';
-        box.style.borderRadius = 'var(--radius-sm, 8px)';
+        box.style.borderRadius = 'var(--radius-sm)';
         box.style.padding = '16px';
         box.style.color = 'var(--text, #1e293b)';
 
@@ -280,7 +280,7 @@
                 (m.status !== 'ADMIN' || members.filter(x => x.status === 'ADMIN').length > 1);
 
             const canPromote = canManage && m.status === 'ACCEPTED';
-            const promoteBtn = canPromote ? `<button class="promote-member btn-xs ghost" style="padding:1px 6px; font-size:10px; margin-left:6px; border-radius:4px;" type="button" data-team="${m.teamNumber}" title="Promote to Admin">Make Admin</button>` : '';
+            const promoteBtn = canPromote ? `<button class="promote-member btn-xs ghost" style="padding:1px 6px; font-size:10px; margin-left:6px; border-radius:var(--radius-sm);" type="button" data-team="${m.teamNumber}" title="Promote to Admin">Make Admin</button>` : '';
             const statusLabel = m.active ? `${label} (Active)` : `${label} (Inactive)`;
 
             return `<span class="member-chip ${cls}" title="Team ${m.teamNumber} — ${statusLabel}">
@@ -1650,7 +1650,7 @@
         .shared-entry-item {
             cursor: pointer;
             padding: 10px 12px;
-            border-radius: 6px;
+            border-radius: var(--radius-sm);
             border: 1px solid rgba(0,0,0,0.08);
             background: var(--surface);
             transition: all 0.2s ease;

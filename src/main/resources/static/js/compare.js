@@ -221,13 +221,13 @@ document.addEventListener("DOMContentLoaded", async () => {
                 : "";
 
             const epaBadge = (effectiveUseEpa && tData.epa != null)
-                ? `<span style="font-size: 0.75rem; background: rgba(56,189,248,0.15); color: #38bdf8; padding: 2px 6px; border-radius: 4px; margin-right: 4px;">EPA ${tData.epa.toFixed(1)}</span>`
+                ? `<span style="font-size: 0.75rem; background: rgba(56,189,248,0.15); color: #38bdf8; padding: 2px 6px; border-radius: var(--radius-sm); margin-right: 4px;">EPA ${tData.epa.toFixed(1)}</span>`
                 : "";
             const xPBadge = (effectiveUsexP && (tData.xP ?? tData.exp) != null)
-                ? `<span style="font-size: 0.75rem; background: rgba(16,185,129,0.15); color: #10b981; padding: 2px 6px; border-radius: 4px; margin-right: 4px;">xP ${Number(tData.xP ?? tData.exp).toFixed(1)}</span>`
+                ? `<span style="font-size: 0.75rem; background: rgba(16,185,129,0.15); color: #10b981; padding: 2px 6px; border-radius: var(--radius-sm); margin-right: 4px;">xP ${Number(tData.xP ?? tData.exp).toFixed(1)}</span>`
                 : "";
             const oprBadge = (effectiveUseOpr && tData.opr != null)
-                ? `<span style="font-size: 0.75rem; background: rgba(168,85,247,0.15); color: #c084fc; padding: 2px 6px; border-radius: 4px;">OPR ${tData.opr.toFixed(1)}</span>`
+                ? `<span style="font-size: 0.75rem; background: rgba(168,85,247,0.15); color: #c084fc; padding: 2px 6px; border-radius: var(--radius-sm);">OPR ${tData.opr.toFixed(1)}</span>`
                 : "";
 
             card.innerHTML = `

@@ -61,7 +61,7 @@
     align-items: center;
     gap: 6px;
     padding: 8px 14px;
-    border-radius: 10px;
+    border-radius: var(--radius);
     background: var(--accent);
     color: #fff;
     font-size: 13px;
@@ -79,7 +79,7 @@
 .profile-pic-remove {
     background: transparent;
     border: 1px solid rgba(0,0,0,0.15);
-    border-radius: 10px;
+    border-radius: var(--radius);
     padding: 6px 12px;
     font-size: 12px;
     font-weight: 600;
@@ -221,7 +221,7 @@ body.theme-dark .spinner {
     gap: 14px;
     text-align: center;
     border: 1px dashed rgba(239, 68, 68, 0.3);
-    border-radius: var(--radius-sm, 10px);
+    border-radius: var(--radius-sm);
     background: rgba(239, 68, 68, 0.03);
     margin: 16px 0;
 }
@@ -312,7 +312,7 @@ body.theme-dark .retry-container {
     font-family: inherit;
     white-space: nowrap;
     padding: 5px 10px;
-    border-radius: 8px;
+    border-radius: var(--radius);
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.18s ease;
@@ -401,7 +401,7 @@ body.theme-dark .match-video-link {
     font-weight: 700;
     line-height: 1;
     padding: 2px 5px;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     cursor: default;
     user-select: none;
     letter-spacing: 0.02em;
@@ -433,7 +433,7 @@ body.theme-dark .match-video-link {
     font-family: inherit;
     white-space: nowrap;
     padding: 5px 10px;
-    border-radius: 8px;
+    border-radius: var(--radius);
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.18s ease;

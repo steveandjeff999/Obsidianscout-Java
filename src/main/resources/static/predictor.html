@@ -39,7 +39,7 @@
         }
 
         .alliance-card {
-            border-radius: 12px;
+            border-radius: var(--radius);
             padding: 24px;
             position: relative;
             overflow: hidden;
@@ -51,12 +51,11 @@
 
         body.theme-dark .alliance-card {
             border: 1px solid rgba(255, 255, 255, 0.08);
-            background: rgba(20, 20, 20, 0.6);
-            backdrop-filter: blur(10px);
+            background: var(--surface);
         }
 
         .alliance-card:hover {
-            transform: translateY(-2px);
+            transform: translateY(-1px);
         }
 
         .alliance-card.red-alliance {
@@ -109,7 +108,7 @@
         .team-number-badge {
             font-weight: 800;
             padding: 4px 8px;
-            border-radius: 6px;
+            border-radius: var(--radius-sm);
             font-size: 0.95rem;
         }
 
@@ -160,7 +159,7 @@
 
         .comp-bar-track {
             height: 12px;
-            border-radius: 6px;
+            border-radius: var(--radius-sm);
             background: var(--surface-2, rgba(0, 0, 0, 0.08));
             border: 1px solid var(--border);
             display: flex;
@@ -173,26 +172,25 @@
         }
 
         .comp-bar-red {
-            background: linear-gradient(90deg, #f87171, #ef4444);
+            background: #ef4444;
         }
 
         .comp-bar-blue {
-            background: linear-gradient(90deg, #3b82f6, #60a5fa);
+            background: #60a5fa;
         }
 
         .winner-spotlight {
             background: var(--surface);
             border: 1px solid var(--border);
-            border-radius: 12px;
+            border-radius: var(--radius);
             padding: 20px;
             text-align: center;
             box-shadow: var(--shadow);
         }
 
         body.theme-dark .winner-spotlight {
-            background: rgba(30, 30, 35, 0.55);
+            background: var(--surface-2);
             border: 1px solid rgba(255, 255, 255, 0.08);
-            backdrop-filter: blur(8px);
         }
 
         .winner-spotlight-title {
@@ -241,7 +239,7 @@
         .pill-tag {
             font-size: 0.75rem;
             padding: 2px 6px;
-            border-radius: 4px;
+            border-radius: var(--radius-sm);
             font-weight: 700;
             text-transform: uppercase;
         }

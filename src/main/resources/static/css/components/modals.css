@@ -3,8 +3,6 @@
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
     z-index: 1000;
     display: flex;
     align-items: center;
@@ -150,7 +148,7 @@ body.theme-dark .modal-container {
 
 .submit-review-chip {
     padding: 5px 10px;
-    border-radius: 10px;
+    border-radius: var(--radius);
     border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
     background: color-mix(in srgb, var(--accent) 12%, transparent);
     color: var(--ink);
@@ -222,7 +220,7 @@ body.theme-dark .modal-container {
     .submit-review-modal {
         width: 100vw;
         max-height: 88vh;
-        border-radius: 20px 20px 0 0;
+        border-radius: var(--radius) var(--radius) 0 0;
         padding: 18px 16px calc(16px + env(safe-area-inset-bottom));
     }
 

@@ -183,7 +183,7 @@ body.theme-dark .btn.dark:hover {
 .btn-control-icon {
     width: 32px;
     height: 32px;
-    border-radius: 8px;
+    border-radius: var(--radius);
     border: 1px solid var(--border);
     background: var(--surface-2);
     color: var(--muted);
@@ -202,7 +202,7 @@ body.theme-dark .btn-control-icon {
 .btn-control-icon:hover {
     background: var(--surface-3);
     color: var(--ink);
-    transform: scale(1.05);
+    transform: scale(1.04);
 }
 
 .btn-control-icon.delete {
@@ -221,7 +221,7 @@ body.theme-dark .btn-control-icon {
     border: 1px solid var(--border);
     color: var(--muted);
     padding: 6px 12px;
-    border-radius: 8px;
+    border-radius: var(--radius);
     font-size: 12px;
     font-weight: 600;
     transition: all var(--transition-fast);
@@ -262,12 +262,11 @@ body.theme-dark .btn-icon-edit {
     font-weight: bold;
     border: none;
     cursor: pointer;
-    box-shadow: 0 4px 8px rgba(2, 132, 199, 0.2);
-    animation: button-bounce 1s infinite alternate;
+    box-shadow: none;
 }
 
 .btn-sync-offline:hover {
-    transform: scale(1.05);
+    transform: scale(1.04);
 }
 
 /* ── Banner Buttons ───────────────────────────────────────────────── */
@@ -346,7 +345,7 @@ body.theme-dark .btn-role-filter.active {
     display: inline-flex;
     align-items: center;
     padding: 4px 10px;
-    border-radius: 12px;
+    border-radius: var(--radius);
     font-size: 11px;
     font-weight: 700;
     margin: 2px;

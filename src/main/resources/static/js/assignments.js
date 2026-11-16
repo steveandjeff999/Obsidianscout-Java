@@ -483,7 +483,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const uid = u.id || u.userId;
             const displayName = u.displayName || u.username;
             return `
-                <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer; padding:3px 6px; border-radius:4px; background:var(--surface-2, rgba(255,255,255,0.03));">
+                <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer; padding:3px 6px; border-radius:var(--radius-sm); background:var(--surface-2, rgba(255,255,255,0.03));">
                     <input type="checkbox" name="bulk_scouter" value="${uid}" checked />
                     <span>${escapeHtml(displayName)}</span>
                 </label>
@@ -497,7 +497,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const uid = u.id || u.userId;
                 const displayName = u.displayName || u.username;
                 return `
-                    <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer; padding:3px 6px; border-radius:4px; background:var(--surface-2, rgba(255,255,255,0.03));">
+                    <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer; padding:3px 6px; border-radius:var(--radius-sm); background:var(--surface-2, rgba(255,255,255,0.03));">
                         <input type="checkbox" name="pit_auto_scouter" value="${uid}" checked />
                         <span>${escapeHtml(displayName)}</span>
                     </label>
@@ -673,7 +673,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         container.innerHTML = groups.map(g => {
             const names = (g.memberIds || []).map(getUserDisplayName).join(", ");
             return `
-                <label style="display:flex; align-items:flex-start; gap:6px; font-size:12px; cursor:pointer; padding:4px 6px; border-radius:4px; background:var(--surface-2, rgba(255,255,255,0.03));">
+                <label style="display:flex; align-items:flex-start; gap:6px; font-size:12px; cursor:pointer; padding:4px 6px; border-radius:var(--radius-sm); background:var(--surface-2, rgba(255,255,255,0.03));">
                     <input type="checkbox" name="pit_group" value="${escapeHtml(g.id)}" style="margin-top:2px;" />
                     <span><strong>${escapeHtml(g.name)}</strong><br><span style="color:var(--muted);">${escapeHtml(names || "No members")}</span></span>
                 </label>
@@ -713,7 +713,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const row = document.createElement("div");
         row.className = "pit-group-editor";
         row.dataset.groupId = group.id;
-        row.style.cssText = "border:1px solid var(--border-subtle); border-radius:var(--radius-sm, 6px); padding:10px; background:var(--surface-2);";
+        row.style.cssText = "border:1px solid var(--border-subtle); border-radius:var(--radius-sm); padding:10px; background:var(--surface-2);";
         row.innerHTML = `
             <div class="row gap-8 items-center mb-6">
                 <input type="text" class="pit-group-name" maxlength="64" placeholder="Group name (e.g. Pit Crew A)" value="${escapeHtml(group.name || "")}" style="flex:1;" />
@@ -2529,7 +2529,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 : (a.targetTeamNumber ? `Team #${a.targetTeamNumber}` : "");
 
             return `
-                <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:var(--surface-2); border:1px solid var(--border-subtle); border-radius:6px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:var(--surface-2); border:1px solid var(--border-subtle); border-radius:var(--radius-sm);">
                     <div>
                         <div style="font-weight:600; font-size:13px; display:flex; align-items:center; gap:6px;">
                             <span>${escapeHtml(name)}</span>
@@ -3162,7 +3162,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const applied = s.appliedCount > 0 ? ` · ${shiftText("assignments.shift_applied", "{count} assignment(s) created", { count: s.appliedCount })}` : "";
             const when = `${formatShiftDay(s.day)} · ${formatShiftTime(s.startTime)} – ${formatShiftTime(s.endTime)} · ${shiftStageLabel(s.stageFilter)}`;
             return `
-                <div class="row justify-between items-center gap-12" style="padding:10px 12px; border:1px solid var(--border-subtle); border-radius:var(--radius-sm, 6px);">
+                <div class="row justify-between items-center gap-12" style="padding:10px 12px; border:1px solid var(--border-subtle); border-radius:var(--radius-sm);">
                     <div style="min-width:0; flex:1;">
                         <div style="font-weight:700; font-size:13px;">${escapeHtml(s.name || when)}</div>
                         ${s.name ? `<div style="font-size:12px; margin-top:2px;">${escapeHtml(when)}</div>` : ""}

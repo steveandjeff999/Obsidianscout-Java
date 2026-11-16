@@ -58,7 +58,7 @@
     align-items: center;
     gap: 6px;
     padding: 3px 8px;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.03em;
@@ -69,9 +69,9 @@
 }
 
 .dashboard-badge.badge-program {
-    background: rgba(56, 139, 253, 0.12);
-    color: #58a6ff;
-    border-color: rgba(56, 139, 253, 0.25);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
 .dashboard-badge.badge-team {
@@ -104,7 +104,7 @@
     align-items: center;
     gap: 8px;
     padding: 10px 18px;
-    border-radius: 12px;
+    border-radius: var(--radius);
     background: var(--accent);
     color: var(--on-primary, #ffffff);
     font-weight: 700;
@@ -117,7 +117,7 @@
 }
 
 .dash-btn-primary:hover {
-    transform: translateY(-2px);
+    transform: translateY(-1px);
     box-shadow: var(--shadow-sm);
     opacity: 0.95;
     color: var(--on-primary, #ffffff);
@@ -128,7 +128,7 @@
     align-items: center;
     gap: 8px;
     padding: 10px 16px;
-    border-radius: 12px;
+    border-radius: var(--radius);
     background: var(--surface);
     color: var(--ink);
     font-weight: 600;
@@ -141,7 +141,7 @@
 }
 
 .dash-btn-secondary:hover {
-    transform: translateY(-2px);
+    transform: translateY(-1px);
     background: var(--surface-2);
     border-color: rgba(255, 255, 255, 0.3);
     color: var(--ink);
@@ -220,7 +220,7 @@
 .dashboard-kpi-icon {
     width: 32px;
     height: 32px;
-    border-radius: 8px;
+    border-radius: var(--radius);
     background: var(--surface-2);
     display: flex;
     align-items: center;
@@ -232,7 +232,7 @@
 .dashboard-kpi-icon {
     width: 32px;
     height: 32px;
-    border-radius: 8px;
+    border-radius: var(--radius);
     background: var(--surface-2);
     border: 1px solid var(--border);
     display: flex;
@@ -250,8 +250,8 @@
 
 .dashboard-kpi-card:hover .dashboard-kpi-icon {
     color: var(--accent);
-    background: rgba(56, 139, 253, 0.1);
-    border-color: rgba(56, 139, 253, 0.25);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
 .dashboard-kpi-icon.icon-blue,
@@ -377,7 +377,7 @@
     align-items: center;
     gap: 6px;
     padding: 5px 12px;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     background: var(--surface-3);
     color: var(--muted);
     font-size: 12px;
@@ -406,7 +406,7 @@
     justify-content: space-between;
     gap: 12px;
     padding: 12px 14px;
-    border-radius: 12px;
+    border-radius: var(--radius);
     background: var(--surface-2);
     border: 1px solid var(--border-subtle);
     transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
@@ -449,7 +449,7 @@
     align-items: center;
     gap: 6px;
     padding: 4px 10px;
-    border-radius: 8px;
+    border-radius: var(--radius);
     font-size: 12px;
     font-weight: 700;
 }
@@ -461,15 +461,15 @@
 }
 
 .dash-alliance-group.blue {
-    background: rgba(37, 99, 235, 0.1);
-    color: #2563eb;
-    border: 1px solid rgba(37, 99, 235, 0.2);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    color: var(--accent);
+    border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .dash-team-pill {
     display: inline-block;
     padding: 2px 6px;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     background: var(--surface);
     color: inherit;
     font-weight: 700;
@@ -479,7 +479,7 @@
 }
 
 .dash-team-pill:hover {
-    transform: scale(1.08);
+    transform: scale(1.04);
 }
 
 .dash-match-actions {
@@ -490,7 +490,7 @@
 
 .dash-btn-mini {
     padding: 5px 10px;
-    border-radius: 8px;
+    border-radius: var(--radius);
     font-size: 12px;
     font-weight: 700;
     border: 1px solid var(--border);
@@ -527,7 +527,7 @@
 .dash-search-input {
     flex: 1;
     padding: 10px 14px;
-    border-radius: 10px;
+    border-radius: var(--radius);
     border: 1px solid var(--border);
     background: var(--surface);
     color: var(--ink);
@@ -608,7 +608,7 @@
     text-align: center;
     gap: 8px;
     padding: 16px 12px;
-    border-radius: 12px;
+    border-radius: var(--radius);
     background: var(--surface-2);
     border: 1px solid var(--border-subtle);
     text-decoration: none;
@@ -624,7 +624,7 @@
 .dash-tile-icon {
     width: 38px;
     height: 38px;
-    border-radius: 10px;
+    border-radius: var(--radius);
     background: var(--surface);
     display: flex;
     align-items: center;

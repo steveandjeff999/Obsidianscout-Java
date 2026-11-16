@@ -31,13 +31,13 @@ export function openConflictResolutionModal(options) {
         position: fixed; top: 0; left: 0; right: 0; bottom: 0;
         background: rgba(0, 0, 0, 0.75); z-index: 10000;
         display: flex; align-items: center; justify-content: center;
-        padding: 16px; backdrop-filter: blur(4px);
+        padding: 16px;
     `;
 
     const modalContent = document.createElement('div');
     modalContent.style.cssText = `
         background: var(--card-bg, #18181b); color: var(--text-color, #f8fafc);
-        border: 1px solid var(--border-color, #27272a); border-radius: 12px;
+        border: 1px solid var(--border-color, #27272a); border-radius: var(--radius);
         max-width: 900px; width: 100%; max-height: 90vh; display: flex; flex-direction: column;
         box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
         overflow: hidden; animation: fadeIn 0.15s ease-out;
@@ -131,7 +131,7 @@ export function openConflictResolutionModal(options) {
 
     // Comparison Table
     const tableScroll = document.createElement('div');
-    tableScroll.style.cssText = `overflow-x: auto; margin-bottom: 20px; border: 1px solid var(--border-color, #27272a); border-radius: 8px;`;
+    tableScroll.style.cssText = `overflow-x: auto; margin-bottom: 20px; border: 1px solid var(--border-color, #27272a); border-radius: var(--radius);`;
 
     const table = document.createElement('table');
     table.style.cssText = `width: 100%; border-collapse: collapse; font-size: 0.85rem; text-align: left;`;
@@ -196,7 +196,7 @@ export function openConflictResolutionModal(options) {
     const actionsCard = document.createElement('div');
     actionsCard.style.cssText = `
         background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, #27272a);
-        border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 12px;
+        border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 12px;
     `;
     actionsCard.innerHTML = `
         <div style="font-weight: 700; font-size: 0.9rem; color: #e2e8f0; margin-bottom: 4px;">Resolution Options:</div>
@@ -204,7 +204,7 @@ export function openConflictResolutionModal(options) {
             ${conflictingEntries.map((entry, idx) => {
                 const rawId = entry.originalId || entry.id || '';
                 const scouter = entry.scoutUsername || entry.username || `Submission #${idx + 1}`;
-                return `<button class="btn secondary btn-sm btn-keep-single" data-id="${rawId}" style="padding: 6px 12px; font-size: 0.8rem; border-radius: 6px; cursor: pointer;">
+                return `<button class="btn secondary btn-sm btn-keep-single" data-id="${rawId}" style="padding: 6px 12px; font-size: 0.8rem; border-radius: var(--radius-sm); cursor: pointer;">
                     ✓ Keep Submission #${idx + 1} (${scouter})
                 </button>`;
             }).join('')}
@@ -213,7 +213,7 @@ export function openConflictResolutionModal(options) {
             <div style="font-size: 0.8rem; color: #a1a1aa;">
                 Or combine them into a single consensus entry with numeric averages and boolean consensus.
             </div>
-            <button id="btn-save-consensus" class="btn primary" style="background: #eab308; color: #0f172a; font-weight: 700; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.85rem;">
+            <button id="btn-save-consensus" class="btn primary" style="background: #eab308; color: #0f172a; font-weight: 700; border: none; padding: 8px 16px; border-radius: var(--radius-sm); cursor: pointer; font-size: 0.85rem;">
                 <span class="material-symbols-outlined">bolt</span> Save Merged Consensus
             </button>
         </div>
