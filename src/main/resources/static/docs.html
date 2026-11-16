@@ -158,11 +158,59 @@
             border: 1px solid var(--border);
             border-radius: var(--radius);
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+            cursor: zoom-in;
         }
-        /* Feature-tour screenshots are all 1440x900: reserve their space so lazy loading doesn't shift #anchor jumps. */
+        /* Feature-tour screenshots preview the top 1440x900 inline so lazy loading doesn't shift #anchor jumps; clicking opens the full page. */
         .markdown-body img[src^="/assets/images/docs/"] {
             width: 100%;
             aspect-ratio: 1440 / 900;
+            object-fit: cover;
+            object-position: top;
+        }
+        .docs-image-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 2000;
+            background: rgba(0, 0, 0, 0.84);
+            overflow-y: auto;
+            padding: 32px 20px;
+            justify-content: center;
+            align-items: flex-start;
+        }
+        .docs-image-modal.open {
+            display: flex;
+        }
+        .docs-image-modal img {
+            max-width: min(1440px, 100%);
+            width: auto;
+            height: auto;
+            margin: 0 auto;
+            border-radius: var(--radius);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+            background: var(--surface);
+            cursor: zoom-out;
+        }
+        .docs-image-modal-close {
+            position: fixed;
+            top: 16px;
+            right: 20px;
+            z-index: 2001;
+            width: 40px;
+            height: 40px;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            border-radius: 999px;
+            background: rgba(20, 20, 24, 0.85);
+            color: #ffffff;
+            font-size: 24px;
+            line-height: 1;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .docs-image-modal-close:hover {
+            background: rgba(40, 40, 48, 0.95);
         }
         .markdown-body a {
             color: var(--accent);
@@ -426,6 +474,11 @@
         </main>
     </div>
 
+    <div class="docs-image-modal" id="docs-image-modal" role="dialog" aria-modal="true" aria-label="Expanded documentation screenshot">
+        <button type="button" class="docs-image-modal-close" id="docs-image-modal-close" aria-label="Close">&times;</button>
+        <img id="docs-image-modal-img" alt="" />
+    </div>
+
     <!-- Include local marked.js to parse markdown on the client side -->
     <script src="/vendor/marked.min.js"></script>
     <script type="module" src="/js/common.js"></script>
@@ -484,6 +537,7 @@
                 viewport.querySelectorAll("img").forEach(img => {
                     img.loading = "lazy";
                     img.decoding = "async";
+                    if (!img.title) img.title = "Click to view full page";
                 });
                 if (window.location.hash) {
                     const target = document.getElementById(decodeURIComponent(window.location.hash.slice(1)));
@@ -491,8 +545,42 @@
                 }
             }
 
-            // Links to other docs (e.g. "PUBLIC_DATA.md") open in this viewer instead of 404ing.
+            const imageModal = document.getElementById("docs-image-modal");
+            const imageModalImg = document.getElementById("docs-image-modal-img");
+            const imageModalClose = document.getElementById("docs-image-modal-close");
+
+            function openImageModal(src, alt) {
+                imageModalImg.src = src;
+                imageModalImg.alt = alt || "";
+                imageModal.scrollTop = 0;
+                imageModal.classList.add("open");
+                document.body.style.overflow = "hidden";
+            }
+
+            function closeImageModal() {
+                if (!imageModal.classList.contains("open")) return;
+                imageModal.classList.remove("open");
+                imageModalImg.removeAttribute("src");
+                document.body.style.overflow = "";
+            }
+
+            imageModalClose.addEventListener("click", closeImageModal);
+            imageModal.addEventListener("click", (e) => {
+                if (e.target === imageModal || e.target === imageModalImg) {
+                    closeImageModal();
+                }
+            });
+            document.addEventListener("keydown", (e) => {
+                if (e.key === "Escape") closeImageModal();
+            });
+
+            // Links to other docs (e.g. "PUBLIC_DATA.md") open in this viewer instead of 404ing, and clicking images expands them.
             viewport.addEventListener("click", (e) => {
+                const img = e.target.closest("img");
+                if (img) {
+                    openImageModal(img.currentSrc || img.src, img.alt);
+                    return;
+                }
                 const a = e.target.closest("a[href]");
                 if (!a) return;
                 const href = a.getAttribute("href");

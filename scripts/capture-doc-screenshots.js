@@ -79,6 +79,15 @@ async function pick(page, sel, pattern) {
 // The picks suit the 2026cttd test event; on another event a missing option only logs a warning.
 const MATCH = /\b(QM|Qual\w*)( Match)? ?3\b/i;
 const SETUP = {
+  'pit-scout': p => pick(p, '#team-select', /\S/),
+  'qual-scout': async p => {
+    await pick(p, '#match-select', MATCH);
+    await pick(p, '#team-select', /\S/);
+  },
+  scout: async p => {
+    await pick(p, '#match-select', MATCH);
+    await pick(p, '#team-select', /\S/);
+  },
   predictor: p => pick(p, '#match-select', MATCH),
   'event-predictor': p => pick(p, '#event-select', /cttd|Cow Town/i),
   // Opened with URL parameters: picking three teams in a row fires overlapping requests, and an older
@@ -169,7 +178,7 @@ async function patchJson(route, mutate) {
     }
     const finalPath = new URL(page.url()).pathname;
     if (url !== '/' && finalPath !== url) console.warn(`${name}: redirected to ${finalPath} (page may be hidden for this account)`);
-    const png = await page.screenshot({ type: 'png' });
+    const png = await page.screenshot({ type: 'png', fullPage: true });
     // Convert to WebP in the browser to keep the repo small.
     const webp = await page.evaluate(async (b64) => {
       const img = new Image();
