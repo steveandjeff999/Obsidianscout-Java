@@ -231,8 +231,9 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "if exist obsidianscout-server-native-windows-x86_64.exe set EXEC_CMD=.\\obsidianscout-server-native-windows-x86_64.exe -Xmx1536m\r\n" +
             "if exist obsidianscout-server-native.exe set EXEC_CMD=.\\obsidianscout-server-native.exe -Xmx1536m\r\n" +
             "if defined EXEC_CMD (\r\n" +
+            "    if not exist logs mkdir logs\r\n" +
             "    echo [ObsidianScout] Native executable detected, running native binary: !EXEC_CMD!\r\n" +
-            "    !EXEC_CMD!\r\n" +
+            "    !EXEC_CMD! 2>>logs\\native-stderr.log\r\n" +
             ") else (\r\n" +
             "    set JAVA_EXEC=java\r\n" +
             "    set GRAAL_JAVA=%USERPROFILE%\\.graalvm\\graalvm-jdk-25\\bin\\java.exe\r\n" +

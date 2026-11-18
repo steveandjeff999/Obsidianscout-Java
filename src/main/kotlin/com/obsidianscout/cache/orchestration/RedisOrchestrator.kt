@@ -641,8 +641,9 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
     private fun installOnWindows(): Boolean {
         if (isWslAvailable()) {
             installProgress = "Installing redis-server in the default WSL distro..."
-            val cmd = listOf("wsl", "-u", "root", "-e", "sh", "-c", WSL_INSTALL_SCRIPT)
-            val (code, out) = runCapture(cmd, INSTALL_TIMEOUT_SECONDS)
+            // Pass the script on stdin (`sh -s`): wsl.exe mangles inner quotes in `-e sh -c "..."`.
+            val cmd = listOf("wsl", "-u", "root", "-e", "sh", "-s")
+            val (code, out) = runCapture(cmd, INSTALL_TIMEOUT_SECONDS, stdin = WSL_INSTALL_SCRIPT + "\n")
             if (code != 0) {
                 installProgress = when (code) {
                     NO_PACKAGE_MANAGER -> "Failed: the default WSL distro has no apt, dnf, yum, zypper or apk. Set an Ubuntu/Debian/Fedora distro as default (wsl -s <name>)."
@@ -818,7 +819,8 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
         )
         installProgress = "Auto-upgrading WSL Redis ($verStr -> 7.4+)..."
         stop()
-        val (code, out) = runCapture(listOf("wsl", "-u", "root", "-e", "sh", "-c", UPGRADE_SCRIPT), INSTALL_TIMEOUT_SECONDS)
+        // Pass the script on stdin (`sh -s`): wsl.exe mangles inner quotes in `-e sh -c "..."`.
+        val (code, out) = runCapture(listOf("wsl", "-u", "root", "-e", "sh", "-s"), INSTALL_TIMEOUT_SECONDS, stdin = UPGRADE_SCRIPT + "\n")
         runCapture(listOf("wsl", "-u", "root", "-e", "sh", "-c", DISABLE_SERVICE_SCRIPT), 30)
         if (code != 0) {
             log.error("[RedisOrchestrator] WSL Redis auto-upgrade exited with code {}: {}", code, out.takeLast(1500))
