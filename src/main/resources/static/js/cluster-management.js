@@ -72,6 +72,16 @@
         bindQuorumFallbackEvents();
         loadSnapshotsStatus();
         bindSnapshotEvents();
+
+        if (window.Obsidianscout && typeof Obsidianscout.liveRefresh === "function") {
+            Obsidianscout.liveRefresh(["cluster"], async () => {
+                await Promise.all([
+                    loadClusterNodes(),
+                    loadLoadBalancerStatus(),
+                    loadQuorumFallbackStatus()
+                ]);
+            });
+        }
     }
 
     async function loadNodeAlertEnrollment() {

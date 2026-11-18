@@ -297,3 +297,55 @@ test("the last-updated line follows the server, and says when it's showing a sav
     assert.match(line(), /^Last updated /);
     document.querySelector = querySelector;
 });
+
+test("stale-data notice skips the back-online refresh prompt on live-refresh pages", async () => {
+    const elementsById = new Map();
+    const span = { textContent: "" };
+    const pill = {
+        id: "",
+        className: "",
+        setAttribute() {},
+        addEventListener() {},
+        querySelector: (sel) => (sel === "span" ? span : null),
+        remove() { elementsById.delete(this.id); }
+    };
+    const origBody = document.body;
+    const origGetById = document.getElementById;
+    const origCreateElement = document.createElement;
+    document.body = { dataset: { page: "rankings" }, appendChild(el) { elementsById.set(el.id, el); } };
+    document.getElementById = (id) => elementsById.get(id) || null;
+    document.createElement = () => ({ ...pill, innerHTML: "" });
+
+    try {
+        const { hasLiveRefresh } = await import(js("services/live-refresh.js"));
+        const { initStaleDataNotice, SERVED_FROM_CACHE_EVENT } = await import(js("components/stale-data-notice.js"));
+        initStaleDataNotice();
+
+        // Non-live-refresh page: shows "Back online. Refresh to see the latest data."
+        assert.equal(hasLiveRefresh(), false);
+        window.dispatchEvent(new CustomEvent(SERVED_FROM_CACHE_EVENT, {
+            detail: { path: "/api/teams", timestamp: Date.now() - 60000 }
+        }));
+        assert.ok(document.getElementById("stale-data-pill"));
+        window.dispatchEvent(new CustomEvent("obsidianscout:connection-changed", { detail: { online: true } }));
+        assert.ok(document.getElementById("stale-data-pill"));
+        assert.equal(span.textContent, "Back online. Refresh to see the latest data.");
+        document.getElementById("stale-data-pill").remove();
+
+        // Live-refresh page: removes the pill on reconnect without prompting to reload.
+        const stop = liveRefresh(["cluster"], async () => {});
+        assert.equal(hasLiveRefresh(), true);
+        window.dispatchEvent(new CustomEvent(SERVED_FROM_CACHE_EVENT, {
+            detail: { path: "/api/admin/cluster/nodes", timestamp: Date.now() - 60000 }
+        }));
+        assert.ok(document.getElementById("stale-data-pill"));
+        window.dispatchEvent(new CustomEvent("obsidianscout:connection-changed", { detail: { online: true } }));
+        assert.equal(document.getElementById("stale-data-pill"), null);
+        stop();
+        assert.equal(hasLiveRefresh(), false);
+    } finally {
+        document.body = origBody;
+        document.getElementById = origGetById;
+        document.createElement = origCreateElement;
+    }
+});

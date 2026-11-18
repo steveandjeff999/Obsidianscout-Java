@@ -31,6 +31,12 @@ const OPEN_DIALOGS = `body.modal-open, .modal-backdrop.show, [id$="-modal"].acti
 
 let pointerHeld = false;
 let pointerTracked = false;
+let activeCount = 0;
+
+/** True when the current page has an active liveRefresh registration. */
+export function hasLiveRefresh() {
+    return activeCount > 0;
+}
 
 function trackPointer() {
     if (pointerTracked) return;
@@ -148,12 +154,18 @@ export function liveRefresh(topics, refresh, options = {}) {
     };
 
     trackPointer();
+    activeCount += 1;
+    let stopped = false;
     const stopListening = onInvalidate(topics, markDirty, 300, eventKey);
     document.addEventListener("visibilitychange", schedule);
     window.addEventListener("obsidianscout:connection-changed", onConnectionChanged);
     window.addEventListener(RECONNECTED_EVENT, catchUp);
 
     return () => {
+        if (!stopped) {
+            stopped = true;
+            activeCount = Math.max(0, activeCount - 1);
+        }
         stopListening();
         clearTimeout(timer);
         clearTimeout(catchUpTimer);

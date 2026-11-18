@@ -5,6 +5,7 @@
  */
 
 import { faIcon } from '../utilities/fa-icons.js';
+import { hasLiveRefresh } from '../services/live-refresh.js';
 
 export const SERVED_FROM_CACHE_EVENT = "obsidianscout:served-from-cache";
 
@@ -81,7 +82,17 @@ export function initStaleDataNotice() {
         render("offline");
     });
     window.addEventListener("obsidianscout:connection-changed", (e) => {
-        if (document.getElementById(PILL_ID) && e.detail && e.detail.online) render("online");
+        const pill = document.getElementById(PILL_ID);
+        if (!pill || !e.detail || !e.detail.online) return;
+        // Live-refresh pages catch up in place, so don't prompt the user to reload.
+        if (hasLiveRefresh()) {
+            pill.remove();
+            _pillState = null;
+            _oldest = null;
+            _unknownAge = false;
+            return;
+        }
+        render("online");
     });
     // A page that updates itself has caught up, so there's nothing left to refresh.
     window.addEventListener("obsidianscout:live-refreshed", () => {

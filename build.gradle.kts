@@ -850,8 +850,9 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "    )\r\n" +
                 ")\r\n" +
                 ":loop\r\n" +
+                "if not exist logs mkdir logs\r\n" +
                 "echo [ObsidianScout Native] Starting server ($arch native binary)...\r\n" +
-                "%EXEC_CMD%\r\n" +
+                "%EXEC_CMD% 2>>logs\\native-stderr.log\r\n" +
                 "set EXIT_CODE=%ERRORLEVEL%\r\n" +
                 // For the next start's log (see run.bat above).
                 "if not exist logs mkdir logs\r\n" +
