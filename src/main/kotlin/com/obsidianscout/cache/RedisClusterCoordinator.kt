@@ -58,6 +58,7 @@ object RedisClusterCoordinator {
     @Volatile private var replicaStartedAtMs: Long = 0L
     @Volatile private var replicaFailures: Int = 0
     @Volatile private var nextReplicaAttemptMs: Long = 0L
+    @Volatile private var standbyReplicaDisabledReason: String? = null
     private val reloadMutex = kotlinx.coroutines.sync.Mutex()
 
     fun getEffectivePassword(): String {
@@ -80,6 +81,15 @@ object RedisClusterCoordinator {
         if (!config.redis.enabled) {
             log.info("[RedisClusterCoordinator] Redis is disabled in configuration. Running in Direct-DB Fallback mode.")
             return
+        }
+
+        if (canHostRedis && !orchestrator.isExternalRunning && config.redis.host.isBlank()) {
+            scope.launch(Dispatchers.IO) {
+                if (orchestrator.autoUpgradeIfNeeded()) {
+                    resetReplicaBackoff()
+                    canHostRedis = orchestrator.detectHostCapability(getEffectivePassword())
+                }
+            }
         }
 
         // Statically configured external Redis: continuously monitor & reconnect via lifecycle loop
@@ -213,6 +223,8 @@ object RedisClusterCoordinator {
      * several wsl/netsh processes, which wore the host and WSL down until the server itself died.
      */
     private fun maintainStandbyReplica(myIp: String) {
+        if (RedisOrchestrator.isInstalling || standbyReplicaDisabledReason != null) return
+
         val now = System.currentTimeMillis()
         if (orchestrator.isAlive()) {
             if (replicaStartedAtMs != 0L && replicaFailures > 0 && now - replicaStartedAtMs >= REPLICA_STABLE_MS) {
@@ -225,17 +237,8 @@ object RedisClusterCoordinator {
         if (replicaStartedAtMs != 0L) {
             // A replica launched earlier has died (or never came up).
             val livedMs = now - replicaStartedAtMs
-            replicaStartedAtMs = 0L
-            if (livedMs >= REPLICA_STABLE_MS) replicaFailures = 0
-            replicaFailures++
-            val backoffMs = replicaBackoffMs(replicaFailures)
-            nextReplicaAttemptMs = now + backoffMs
-            log.warn(
-                "[RedisClusterCoordinator] Standby Redis replica stopped after {}s ({} failure(s) in a row). Retrying in {}s. {}",
-                livedMs / 1000, replicaFailures, backoffMs / 1000, orchestrator.describeLastExit()
-            )
-            // Clean up its port proxy and any leftover process now rather than leaving them until the retry.
-            runCatching { orchestrator.stop() }
+            recordReplicaFailure(now, livedMs, stopProcess = true)
+            if (standbyReplicaDisabledReason != null) return
         }
 
         if (now < nextReplicaAttemptMs) return
@@ -247,7 +250,38 @@ object RedisClusterCoordinator {
         localPort = replicaPort
         replicaStartedAtMs = now
         // Pass myIp so replica binds to Tailscale IP, ready for immediate promotion without restart
-        orchestrator.startReplica(myIp, replicaPort, masterHost, masterPort, getEffectivePassword())
+        val started = orchestrator.startReplica(myIp, replicaPort, masterHost, masterPort, getEffectivePassword())
+        if (!started) {
+            recordReplicaFailure(now, livedMs = 0L, stopProcess = false)
+        }
+    }
+
+    private fun recordReplicaFailure(now: Long, livedMs: Long, stopProcess: Boolean) {
+        replicaStartedAtMs = 0L
+        if (livedMs >= REPLICA_STABLE_MS) replicaFailures = 0
+        replicaFailures++
+        val backoffMs = replicaBackoffMs(replicaFailures)
+        nextReplicaAttemptMs = now + backoffMs
+        log.warn(
+            "[RedisClusterCoordinator] Standby Redis replica stopped after {}s ({} failure(s) in a row). Retrying in {}s. {}",
+            livedMs / 1000, replicaFailures, backoffMs / 1000, orchestrator.describeLastExit()
+        )
+        if (stopProcess) {
+            // Clean up its port proxy and any leftover process now rather than leaving them until the retry.
+            runCatching { orchestrator.stop() }
+        }
+        if (orchestrator.hasIncompatibleRdbError()) {
+            scope.launch(Dispatchers.IO) {
+                if (orchestrator.autoUpgradeIfNeeded()) {
+                    resetReplicaBackoff()
+                } else if (!RedisOrchestrator.isInstalling) {
+                    standbyReplicaDisabledReason = "Incompatible RDB format version with master"
+                    log.error(
+                        "[RedisClusterCoordinator] Disabling standby Redis replica for this session: local Redis cannot load the master's RDB format and auto-upgrade did not resolve it."
+                    )
+                }
+            }
+        }
     }
 
     /** 10s, 20s, 40s ... capped at [REPLICA_MAX_BACKOFF_MS]. */
@@ -260,6 +294,7 @@ object RedisClusterCoordinator {
         replicaStartedAtMs = 0L
         replicaFailures = 0
         nextReplicaAttemptMs = 0L
+        standbyReplicaDisabledReason = null
     }
 
     private fun becomeHost(myIp: String, port: Int) {

@@ -13,15 +13,59 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
         private const val EARLY_EXIT_WAIT_MS = 2_000L
         private const val BACKEND_RECHECK_MS = 10 * 60_000L
         private const val MAX_LOG_BYTES = 5L * 1024 * 1024
+        private const val MIN_REDIS_MAJOR = 7
+        private const val MIN_REDIS_MINOR = 4
+        private const val MIN_REDIS_PATCH = 0
+
+        /**
+         * Configures the official Redis APT repository on Debian/Ubuntu so `redis-server` is 7.4+ (RDB v12 compatible)
+         * instead of the older 7.0.x shipped in default distro repos, then installs/upgrades `redis-server`.
+         * Falls back to the distro repo if packages.redis.io is unreachable.
+         */
+        private const val APT_INSTALL_REDIS_SCRIPT =
+            "export DEBIAN_FRONTEND=noninteractive; " +
+            "apt-get update && apt-get install -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold lsb-release curl gpg ca-certificates && " +
+            "CODENAME=\$(lsb_release -cs 2>/dev/null || (. /etc/os-release && echo \"\$VERSION_CODENAME\")) && " +
+            "if [ -n \"\$CODENAME\" ] && curl -fsSL https://packages.redis.io/gpg | gpg --dearmor --yes -o /usr/share/keyrings/redis-archive-keyring.gpg; then " +
+            "chmod 644 /usr/share/keyrings/redis-archive-keyring.gpg && " +
+            "echo \"deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb \${CODENAME} main\" > /etc/apt/sources.list.d/redis.list && " +
+            "apt-get update && " +
+            "(apt-get install -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold redis-server || " +
+            "apt-get install -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold redis); " +
+            "else apt-get install -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold redis-server; fi"
 
         /** Installs redis-server with whatever package manager the distro has; exits [NO_PACKAGE_MANAGER] if none. */
         private const val WSL_INSTALL_SCRIPT =
-            "if command -v apt-get >/dev/null 2>&1; then export DEBIAN_FRONTEND=noninteractive; apt-get update && apt-get install -y redis-server; " +
+            "if command -v apt-get >/dev/null 2>&1; then $APT_INSTALL_REDIS_SCRIPT; " +
             "elif command -v dnf >/dev/null 2>&1; then dnf install -y redis || dnf install -y valkey-compat-redis; " +
             "elif command -v yum >/dev/null 2>&1; then yum install -y redis; " +
             "elif command -v zypper >/dev/null 2>&1; then zypper --non-interactive install redis; " +
             "elif command -v apk >/dev/null 2>&1; then apk add redis; " +
             "else exit 3; fi"
+
+        /** Upgrades an existing redis-server installation in WSL or Linux. */
+        private const val UPGRADE_SCRIPT =
+            "if command -v apt-get >/dev/null 2>&1; then $APT_INSTALL_REDIS_SCRIPT; " +
+            "elif command -v dnf >/dev/null 2>&1; then dnf upgrade -y redis || dnf upgrade -y valkey-compat-redis; " +
+            "elif command -v yum >/dev/null 2>&1; then yum update -y redis; " +
+            "elif command -v zypper >/dev/null 2>&1; then zypper --non-interactive update redis; " +
+            "elif command -v apk >/dev/null 2>&1; then apk upgrade redis; " +
+            "else exit 3; fi"
+
+        private val VERSION_REGEX = Regex("""\bv=(\d+)\.(\d+)\.(\d+)""")
+
+        internal fun parseRedisVersion(versionOutput: String): Triple<Int, Int, Int>? {
+            val match = VERSION_REGEX.find(versionOutput) ?: return null
+            val (maj, min, patch) = match.destructured
+            return Triple(maj.toInt(), min.toInt(), patch.toInt())
+        }
+
+        internal fun isVersionSupported(version: Triple<Int, Int, Int>): Boolean {
+            val (maj, min, patch) = version
+            if (maj != MIN_REDIS_MAJOR) return maj > MIN_REDIS_MAJOR
+            if (min != MIN_REDIS_MINOR) return min > MIN_REDIS_MINOR
+            return patch >= MIN_REDIS_PATCH
+        }
 
         /** Distro packages start their own Redis on 127.0.0.1:6379; this node runs its own, so turn that one off. */
         private const val DISABLE_SERVICE_SCRIPT =
@@ -47,6 +91,7 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
     private var isWslProcess: Boolean = false
     private var wslPort: Int = 0
     private var wslProxyIp: String? = null
+    @Volatile private var upgradeAttempted: Boolean = false
     @Volatile var isExternalRunning: Boolean = false; private set
     @Volatile var activePort: Int = appConfig.redis.port; private set
 
@@ -159,13 +204,12 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
         }
     }
 
-    fun startReplica(tailscaleIp: String, replicaPort: Int, masterHost: String, masterPort: Int, password: String) {
+    fun startReplica(tailscaleIp: String, replicaPort: Int, masterHost: String, masterPort: Int, password: String): Boolean {
         stop()
         activePort = replicaPort
 
         if (isWindows) {
-            startWindowsReplica(tailscaleIp, replicaPort, masterHost, masterPort, password)
-            return
+            return startWindowsReplica(tailscaleIp, replicaPort, masterHost, masterPort, password)
         }
 
         if (resolvedBinaryPath != null) {
@@ -193,10 +237,17 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
                 .redirectError(ProcessBuilder.Redirect.appendTo(logFile))
                 .start()
 
+            val exitedEarly = runCatching { process!!.waitFor(EARLY_EXIT_WAIT_MS, java.util.concurrent.TimeUnit.MILLISECONDS) }.getOrDefault(false)
+            if (exitedEarly && !isLoopbackPortOpen(replicaPort)) {
+                log.error("[RedisOrchestrator] Redis replica on port {} exited right after launch ({}).", replicaPort, describeLastExit())
+                return false
+            }
             log.info("[RedisOrchestrator] Started Redis Replica on {}:{} replicating {}:{}", tailscaleIp, replicaPort, masterHost, masterPort)
+            return true
         } else if (isDockerAvailable()) {
-            startDockerReplica(tailscaleIp, replicaPort, masterHost, masterPort, password)
+            return startDockerReplica(tailscaleIp, replicaPort, masterHost, masterPort, password)
         }
+        return false
     }
 
     fun promoteToMaster(tailscaleIp: String, maxMemoryBytes: Long, password: String) {
@@ -254,6 +305,12 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
             true
         }
     }.getOrDefault(false)
+
+    /** Returns true if the last Redis log ended with an RDB format version incompatibility error. */
+    fun hasIncompatibleRdbError(): Boolean {
+        val tail = lastLogFile?.let { tailOf(it, 20) }.orEmpty()
+        return tail.contains("Can't handle RDB format version")
+    }
 
     /** Exit code and the end of the log of the last launched Redis process, for the restart-backoff warning. */
     fun describeLastExit(): String {
@@ -408,11 +465,14 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
         }
     }
 
-    private fun startWindowsReplica(tailscaleIp: String, replicaPort: Int, masterHost: String, masterPort: Int, password: String) {
-        when (resolveWindowsBackend()) {
+    private fun startWindowsReplica(tailscaleIp: String, replicaPort: Int, masterHost: String, masterPort: Int, password: String): Boolean {
+        return when (resolveWindowsBackend()) {
             WindowsBackend.DOCKER -> startDockerReplica(tailscaleIp, replicaPort, masterHost, masterPort, password)
             WindowsBackend.WSL -> startWslReplica(tailscaleIp, replicaPort, masterHost, masterPort, password)
-            null -> log.error("[RedisOrchestrator] Windows host cannot run replica without Docker or WSL.")
+            null -> {
+                log.error("[RedisOrchestrator] Windows host cannot run replica without Docker or WSL.")
+                false
+            }
         }
     }
 
@@ -430,7 +490,7 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
         }
     }
 
-    private fun startWslReplica(tailscaleIp: String, replicaPort: Int, masterHost: String, masterPort: Int, password: String) {
+    private fun startWslReplica(tailscaleIp: String, replicaPort: Int, masterHost: String, masterPort: Int, password: String): Boolean {
         val args = mutableListOf(
             "--port", replicaPort.toString(),
             "--replicaof", masterHost, masterPort.toString()
@@ -438,9 +498,11 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
         if (password.isNotBlank()) {
             args.addAll(listOf("--requirepass", password, "--masterauth", password))
         }
-        if (startWslRedis(tailscaleIp, replicaPort, args, "redis-replica.log")) {
+        val started = startWslRedis(tailscaleIp, replicaPort, args, "redis-replica.log")
+        if (started) {
             log.info("[RedisOrchestrator] Started WSL Redis Replica on {}:{} replicating {}:{}", tailscaleIp, replicaPort, masterHost, masterPort)
         }
+        return started
     }
 
     /**
@@ -471,7 +533,10 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
         val exitedEarly = runCatching { process!!.waitFor(EARLY_EXIT_WAIT_MS, java.util.concurrent.TimeUnit.MILLISECONDS) }.getOrDefault(false)
         if (exitedEarly && !isLoopbackPortOpen(port)) {
             log.error("[RedisOrchestrator] WSL Redis on port {} exited right after launch ({}).", port, describeLastExit())
-            windowsBackendCheckedAtMs = 0L // re-check WSL/Docker before the next launch
+            // Only re-probe WSL/Docker if redis-server didn't even write to its log (broken distro/launch).
+            if (!logFile.exists() || logFile.length() == 0L) {
+                windowsBackendCheckedAtMs = 0L
+            }
             return false
         }
         if (tailscaleIp != "127.0.0.1") {
@@ -691,7 +756,7 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
         }
     }
 
-    private fun startDockerReplica(tailscaleIp: String, replicaPort: Int, masterHost: String, masterPort: Int, password: String) {
+    private fun startDockerReplica(tailscaleIp: String, replicaPort: Int, masterHost: String, masterPort: Int, password: String): Boolean {
         probe(listOf(dockerExe, "rm", "-f", "obsidianscout-redis"), 30)
         val cmd = mutableListOf(dockerExe, "run", "-d", "--name", "obsidianscout-redis")
         cmd.addAll(dockerPortArgs(tailscaleIp, replicaPort))
@@ -706,11 +771,108 @@ class RedisOrchestrator(private val appConfig: AppConfig) {
         if (password.isNotBlank()) {
             cmd.addAll(listOf("--requirepass", password, "--masterauth", password))
         }
-        if (runCapture(cmd, 300).first == 0) {
+        return if (runCapture(cmd, 300).first == 0) {
             isDockerContainer = true
             log.info("[RedisOrchestrator] Started Docker Redis Replica container on port {}", replicaPort)
+            true
         } else {
             log.error("[RedisOrchestrator] Failed to start Docker Redis Replica container")
+            false
         }
+    }
+
+    /**
+     * Checks the installed Redis version and upgrades it automatically if it is older than 7.4.0
+     * (which is required to load RDB format version 12 from newer cluster masters).
+     * Runs at most once per process and shares [installing] so it never races with a manual UI install.
+     */
+    fun autoUpgradeIfNeeded(): Boolean {
+        if (upgradeAttempted) return false
+        if (!installing.compareAndSet(false, true)) return false
+        upgradeAttempted = true
+        try {
+            if (isWindows) {
+                return autoUpgradeWindows()
+            }
+            return autoUpgradeUnix()
+        } catch (e: Exception) {
+            log.warn("[RedisOrchestrator] Auto-upgrade check failed: {}", e.message)
+            return false
+        } finally {
+            installing.set(false)
+            installProgress = null
+        }
+    }
+
+    private fun autoUpgradeWindows(): Boolean {
+        // Docker uses redis:7-alpine; only WSL distro packages (like Ubuntu's 7.0.15) lag behind RDB v12.
+        if (resolveWindowsBackend() != WindowsBackend.WSL) return false
+        val versionOut = runCapture(listOf("wsl", "-e", "redis-server", "--version"), 30).second
+        val current = parseRedisVersion(versionOut) ?: return false
+        if (isVersionSupported(current)) return false
+
+        val verStr = "${current.first}.${current.second}.${current.third}"
+        log.warn(
+            "[RedisOrchestrator] WSL Redis {} is older than {}.{}.{} (required for RDB v12 replication). Auto-upgrading WSL Redis...",
+            verStr, MIN_REDIS_MAJOR, MIN_REDIS_MINOR, MIN_REDIS_PATCH
+        )
+        installProgress = "Auto-upgrading WSL Redis ($verStr -> 7.4+)..."
+        stop()
+        val (code, out) = runCapture(listOf("wsl", "-u", "root", "-e", "sh", "-c", UPGRADE_SCRIPT), INSTALL_TIMEOUT_SECONDS)
+        runCapture(listOf("wsl", "-u", "root", "-e", "sh", "-c", DISABLE_SERVICE_SCRIPT), 30)
+        if (code != 0) {
+            log.error("[RedisOrchestrator] WSL Redis auto-upgrade exited with code {}: {}", code, out.takeLast(1500))
+            return false
+        }
+        val afterOut = runCapture(listOf("wsl", "-e", "redis-server", "--version"), 30).second
+        val after = parseRedisVersion(afterOut)
+        if (after != null && isVersionSupported(after)) {
+            log.info("[RedisOrchestrator] Auto-upgraded WSL Redis from {} to {}.{}.{}.", verStr, after.first, after.second, after.third)
+            windowsBackendCheckedAtMs = 0L
+            return true
+        }
+        log.warn("[RedisOrchestrator] WSL Redis upgrade finished, but version is still '{}'.", afterOut.trim())
+        return false
+    }
+
+    private fun autoUpgradeUnix(): Boolean {
+        val bin = resolvedBinaryPath ?: return false
+        val versionOut = runCapture(listOf(bin, "--version"), 10).second
+        val current = parseRedisVersion(versionOut) ?: return false
+        if (isVersionSupported(current)) return false
+
+        val verStr = "${current.first}.${current.second}.${current.third}"
+        val isRoot = System.getProperty("user.name") == "root"
+        val canSudoNoPass = !isRoot && probe(listOf("sudo", "-n", "true"), 5) == 0
+        if (!isRoot && !canSudoNoPass) {
+            log.warn(
+                "[RedisOrchestrator] Local Redis {} is older than {}.{}.{} (required for RDB v12 replication), and passwordless sudo is unavailable. Upgrade Redis manually or via the Redis Cache page.",
+                verStr, MIN_REDIS_MAJOR, MIN_REDIS_MINOR, MIN_REDIS_PATCH
+            )
+            return false
+        }
+
+        log.warn(
+            "[RedisOrchestrator] Local Redis {} is older than {}.{}.{} (required for RDB v12 replication). Auto-upgrading Redis...",
+            verStr, MIN_REDIS_MAJOR, MIN_REDIS_MINOR, MIN_REDIS_PATCH
+        )
+        installProgress = "Auto-upgrading Redis ($verStr -> 7.4+)..."
+        stop()
+        val cmd = if (isRoot) listOf("sh", "-c", UPGRADE_SCRIPT) else listOf("sudo", "-n", "sh", "-c", UPGRADE_SCRIPT)
+        val (code, out) = runCapture(cmd, INSTALL_TIMEOUT_SECONDS)
+        val disableCmd = if (isRoot) listOf("sh", "-c", DISABLE_SERVICE_SCRIPT) else listOf("sudo", "-n", "sh", "-c", DISABLE_SERVICE_SCRIPT)
+        runCapture(disableCmd, 30)
+        if (code != 0) {
+            log.error("[RedisOrchestrator] Redis auto-upgrade exited with code {}: {}", code, out.takeLast(1500))
+            return false
+        }
+        val afterOut = runCapture(listOf(bin, "--version"), 10).second
+        val after = parseRedisVersion(afterOut)
+        if (after != null && isVersionSupported(after)) {
+            log.info("[RedisOrchestrator] Auto-upgraded local Redis from {} to {}.{}.{}.", verStr, after.first, after.second, after.third)
+            return true
+        }
+        log.warn("[RedisOrchestrator] Redis upgrade finished, but version is still '{}'.", afterOut.trim())
+        return false
     }
 }
