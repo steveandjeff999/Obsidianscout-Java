@@ -9,13 +9,15 @@ import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.net.DatagramPacket
+import java.net.DatagramSocket
 import java.net.InetAddress
-import java.util.Hashtable
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ThreadLocalRandom
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
-import javax.naming.Context
-import javax.naming.NameNotFoundException
-import javax.naming.directory.InitialDirContext
 
 /**
  * Search engine crawlers crawl lots of missing pages, which looks like a scan. When a request's user agent claims to
@@ -94,28 +96,226 @@ object VerifiedCrawlers {
     /** Thrown by a lookup when DNS gave no answer (timeout, server failure): nothing can be concluded. */
     class LookupUnavailable(message: String, cause: Throwable? = null) : Exception(message, cause)
 
+    private const val DNS_PORT = 53
+    private const val DNS_TIMEOUT_MS = 1000
+    private const val DNS_RETRIES = 1
+    private const val DNS_TYPE_A = 1
+    private const val DNS_TYPE_PTR = 12
+    private const val DNS_TYPE_AAAA = 28
+    private const val DNS_SERVER_CACHE_MS = 5 * 60_000L
+    private val DEFAULT_DNS_SERVERS = listOf("1.1.1.1", "8.8.8.8")
+    private val IPV4_REGEX = Regex("""\b(?:\d{1,3}\.){3}\d{1,3}\b""")
+
+    @Volatile private var cachedDnsServers: List<String> = emptyList()
+    @Volatile private var cachedDnsServersUntil: Long = 0L
+
+    private fun resolveDnsServers(now: Long = System.currentTimeMillis()): List<String> {
+        val current = cachedDnsServers
+        if (current.isNotEmpty() && now < cachedDnsServersUntil) return current
+        val discovered = discoverSystemDnsServers().ifEmpty { DEFAULT_DNS_SERVERS }
+        cachedDnsServers = discovered
+        cachedDnsServersUntil = now + DNS_SERVER_CACHE_MS
+        return discovered
+    }
+
+    private fun discoverSystemDnsServers(): List<String> = runCatching {
+        val os = System.getProperty("os.name", "").lowercase()
+        if (os.contains("win")) {
+            val proc = ProcessBuilder("netsh", "interface", "ipv4", "show", "dnsservers")
+                .redirectErrorStream(true)
+                .start()
+            proc.outputStream.close()
+            var out = ""
+            val reader = Thread { out = proc.inputStream.bufferedReader().readText() }.apply {
+                isDaemon = true
+                start()
+            }
+            if (!proc.waitFor(2, TimeUnit.SECONDS)) {
+                proc.destroyForcibly()
+                return emptyList()
+            }
+            reader.join(500)
+            IPV4_REGEX.findAll(out)
+                .map { it.value }
+                .filter { it != "0.0.0.0" && !it.startsWith("127.") }
+                .distinct()
+                .toList()
+        } else {
+            val resolv = File("/etc/resolv.conf")
+            if (!resolv.isFile) return emptyList()
+            resolv.readLines().mapNotNull { line ->
+                val trimmed = line.substringBefore('#').substringBefore(';').trim()
+                if (trimmed.startsWith("nameserver")) {
+                    trimmed.removePrefix("nameserver").trim().substringBefore('%').takeIf { it.isNotEmpty() }
+                } else null
+            }.distinct()
+        }
+    }.getOrDefault(emptyList())
+
     /**
-     * The records of one [type] for [name]. One type per query on purpose: asking JNDI for several types at once
+     * The records of one [type] for [name]. One type per query on purpose: asking for several types at once
      * sends a single ANY query, and many nameservers (Microsoft's among them, so every search.msn.com host) answer
      * ANY with nothing (RFC 8482), which made every real Bingbot look fake.
+     *
+     * Implemented directly over UDP (RFC 1035) rather than JNDI [InitialDirContext] because JNDI's `DnsContextFactory`
+     * invokes `sun.net.dns.ResolverConfigurationImpl.loadDNSconfig0()` via JNI, which segfaults in GraalVM native-image
+     * on Windows.
      */
     private fun dnsQuery(name: String, type: String): List<String> {
-        val env = Hashtable<String, String>().apply {
-            put(Context.INITIAL_CONTEXT_FACTORY, "com.sun.jndi.dns.DnsContextFactory")
-            put("com.sun.jndi.dns.timeout.initial", "1000")
-            put("com.sun.jndi.dns.timeout.retries", "1")
+        val qtype = when (type) {
+            "A" -> DNS_TYPE_A
+            "AAAA" -> DNS_TYPE_AAAA
+            "PTR" -> DNS_TYPE_PTR
+            else -> throw IllegalArgumentException("Unsupported DNS record type: $type")
         }
-        val ctx = try { InitialDirContext(env) } catch (e: Exception) { throw LookupUnavailable("DNS unavailable", e) }
-        try {
-            val attr = ctx.getAttributes(name, arrayOf(type)).get(type) ?: return emptyList()
-            return (0 until attr.size()).map { attr.get(it).toString() }
-        } catch (e: NameNotFoundException) {
-            return emptyList() // NXDOMAIN: a definite "no such name".
-        } catch (e: Exception) {
-            throw LookupUnavailable("DNS $type lookup for $name failed: ${e.message}", e)
-        } finally {
-            runCatching { ctx.close() }
+        val servers = (resolveDnsServers() + DEFAULT_DNS_SERVERS).distinct()
+        var lastError: Throwable? = null
+        val attempts = 1 + DNS_RETRIES
+        for (attempt in 0 until attempts) {
+            val server = servers[attempt % servers.size]
+            try {
+                val id = ThreadLocalRandom.current().nextInt(0x10000)
+                val query = buildDnsQuery(id, name, qtype)
+                val serverAddr = InetAddress.getByName(server)
+                DatagramSocket().use { socket ->
+                    socket.soTimeout = DNS_TIMEOUT_MS
+                    socket.connect(serverAddr, DNS_PORT)
+                    socket.send(DatagramPacket(query, query.size))
+                    val buf = ByteArray(1536)
+                    val packet = DatagramPacket(buf, buf.size)
+                    while (true) {
+                        packet.setLength(buf.size)
+                        socket.receive(packet)
+                        if (packet.length >= 12) {
+                            val respId = ((buf[0].toInt() and 0xFF) shl 8) or (buf[1].toInt() and 0xFF)
+                            if (respId == id) {
+                                return parseDnsResponse(buf, packet.length, id, qtype)
+                            }
+                        }
+                    }
+                }
+            } catch (e: LookupUnavailable) {
+                lastError = e
+            } catch (e: Exception) {
+                lastError = LookupUnavailable("DNS $type lookup for $name failed: ${e.message}", e)
+            }
         }
+        throw (lastError as? LookupUnavailable ?: LookupUnavailable("DNS $type lookup for $name failed", lastError))
+    }
+
+    internal fun buildDnsQuery(id: Int, name: String, qtype: Int): ByteArray {
+        val out = ByteArrayOutputStream(64)
+        // Header: ID, Flags (RD=1), QDCOUNT=1, ANCOUNT=0, NSCOUNT=0, ARCOUNT=0
+        out.write((id shr 8) and 0xFF)
+        out.write(id and 0xFF)
+        out.write(0x01); out.write(0x00)
+        out.write(0x00); out.write(0x01)
+        out.write(0x00); out.write(0x00)
+        out.write(0x00); out.write(0x00)
+        out.write(0x00); out.write(0x00)
+
+        for (label in name.trimEnd('.').split('.')) {
+            if (label.isEmpty()) continue
+            val bytes = label.toByteArray(Charsets.UTF_8)
+            if (bytes.size > 63) throw LookupUnavailable("DNS label too long: $label")
+            out.write(bytes.size)
+            out.write(bytes)
+        }
+        out.write(0x00)
+        // QTYPE, QCLASS=IN (1)
+        out.write((qtype shr 8) and 0xFF); out.write(qtype and 0xFF)
+        out.write(0x00); out.write(0x01)
+        return out.toByteArray()
+    }
+
+    internal fun parseDnsResponse(buf: ByteArray, length: Int, expectedId: Int, expectedType: Int): List<String> {
+        if (length < 12) throw LookupUnavailable("Truncated DNS header")
+        val id = ((buf[0].toInt() and 0xFF) shl 8) or (buf[1].toInt() and 0xFF)
+        if (id != expectedId) throw LookupUnavailable("Mismatched DNS transaction ID")
+        val flags = ((buf[2].toInt() and 0xFF) shl 8) or (buf[3].toInt() and 0xFF)
+        if ((flags and 0x0200) != 0) throw LookupUnavailable("Truncated DNS response")
+        val rcode = flags and 0x0F
+        if (rcode == 3) return emptyList() // NXDOMAIN: definite "no such name".
+        if (rcode != 0) throw LookupUnavailable("DNS server returned RCODE $rcode")
+
+        val qdCount = ((buf[4].toInt() and 0xFF) shl 8) or (buf[5].toInt() and 0xFF)
+        val anCount = ((buf[6].toInt() and 0xFF) shl 8) or (buf[7].toInt() and 0xFF)
+
+        var pos = 12
+        repeat(qdCount) {
+            pos = skipDnsName(buf, length, pos)
+            if (pos + 4 > length) throw LookupUnavailable("Truncated DNS question")
+            pos += 4
+        }
+
+        val results = mutableListOf<String>()
+        repeat(anCount) {
+            pos = skipDnsName(buf, length, pos)
+            if (pos + 10 > length) throw LookupUnavailable("Truncated DNS answer")
+            val rtype = ((buf[pos].toInt() and 0xFF) shl 8) or (buf[pos + 1].toInt() and 0xFF)
+            val rclass = ((buf[pos + 2].toInt() and 0xFF) shl 8) or (buf[pos + 3].toInt() and 0xFF)
+            val rdLength = ((buf[pos + 8].toInt() and 0xFF) shl 8) or (buf[pos + 9].toInt() and 0xFF)
+            pos += 10
+            if (pos + rdLength > length) throw LookupUnavailable("Truncated DNS rdata")
+
+            if (rclass == 1 && rtype == expectedType) {
+                when (rtype) {
+                    DNS_TYPE_A -> if (rdLength == 4) {
+                        results.add(InetAddress.getByAddress(buf.copyOfRange(pos, pos + 4)).hostAddress)
+                    }
+                    DNS_TYPE_AAAA -> if (rdLength == 16) {
+                        results.add(InetAddress.getByAddress(buf.copyOfRange(pos, pos + 16)).hostAddress)
+                    }
+                    DNS_TYPE_PTR -> {
+                        val ptrName = readDnsName(buf, length, pos)
+                        if (ptrName.isNotEmpty()) results.add(ptrName)
+                    }
+                }
+            }
+            pos += rdLength
+        }
+        return results
+    }
+
+    private fun skipDnsName(buf: ByteArray, length: Int, start: Int): Int {
+        var pos = start
+        var jumps = 0
+        while (pos < length) {
+            val len = buf[pos].toInt() and 0xFF
+            if (len == 0) return pos + 1
+            if ((len and 0xC0) == 0xC0) {
+                if (pos + 1 >= length) throw LookupUnavailable("Truncated DNS pointer")
+                return pos + 2
+            }
+            if ((len and 0xC0) != 0) throw LookupUnavailable("Invalid DNS label")
+            pos += 1 + len
+            if (++jumps > 128) throw LookupUnavailable("Malformed DNS name")
+        }
+        throw LookupUnavailable("Truncated DNS name")
+    }
+
+    private fun readDnsName(buf: ByteArray, length: Int, start: Int): String {
+        val sb = StringBuilder()
+        var pos = start
+        var jumps = 0
+        while (pos < length) {
+            val len = buf[pos].toInt() and 0xFF
+            if (len == 0) return sb.toString()
+            if ((len and 0xC0) == 0xC0) {
+                if (pos + 1 >= length) throw LookupUnavailable("Truncated DNS pointer")
+                val offset = ((len and 0x3F) shl 8) or (buf[pos + 1].toInt() and 0xFF)
+                if (offset >= length || ++jumps > 16) throw LookupUnavailable("Invalid DNS pointer")
+                pos = offset
+            } else {
+                if ((len and 0xC0) != 0) throw LookupUnavailable("Invalid DNS label")
+                pos += 1
+                if (pos + len > length) throw LookupUnavailable("Truncated DNS label")
+                if (sb.isNotEmpty()) sb.append('.')
+                sb.append(String(buf, pos, len, Charsets.UTF_8))
+                pos += len
+            }
+        }
+        throw LookupUnavailable("Truncated DNS name")
     }
 
     /** "1.2.3.4" -> "4.3.2.1.in-addr.arpa"; IPv6 -> nibbles under ip6.arpa. */

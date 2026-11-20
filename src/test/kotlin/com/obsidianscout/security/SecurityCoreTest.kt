@@ -531,6 +531,74 @@ class SecurityCoreTest {
         assertEquals("1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa", VerifiedCrawlers.arpaName("2001:db8::1"))
     }
 
+    @Test
+    fun `UDP DNS query and response parser handle A, AAAA, PTR, NXDOMAIN, and errors`() {
+        val query = VerifiedCrawlers.buildDnsQuery(0x1234, "crawl.googlebot.com", 1)
+        assertEquals(0x12.toByte(), query[0])
+        assertEquals(0x34.toByte(), query[1])
+        assertEquals(1, query[5].toInt()) // QDCOUNT = 1
+
+        // Helper to build a minimal DNS response with 1 question (echoed from query) + 1 answer
+        fun responseWithAnswer(id: Int, rcode: Int, rtype: Int, rdata: ByteArray?): ByteArray {
+            val q = VerifiedCrawlers.buildDnsQuery(id, "test.example", rtype)
+            val out = java.io.ByteArrayOutputStream()
+            out.write(q[0].toInt()); out.write(q[1].toInt())
+            out.write(0x81); out.write(rcode and 0x0F) // QR=1, RD=1, RCODE
+            out.write(0x00); out.write(0x01) // QDCOUNT=1
+            out.write(0x00); out.write(if (rdata != null) 0x01 else 0x00) // ANCOUNT
+            out.write(0x00); out.write(0x00) // NSCOUNT
+            out.write(0x00); out.write(0x00) // ARCOUNT
+            out.write(q, 12, q.size - 12) // Question
+            if (rdata != null) {
+                out.write(0xC0); out.write(0x0C) // Name pointer to offset 12
+                out.write((rtype shr 8) and 0xFF); out.write(rtype and 0xFF)
+                out.write(0x00); out.write(0x01) // CLASS=IN
+                out.write(0x00); out.write(0x00); out.write(0x00); out.write(0x3C) // TTL=60
+                out.write((rdata.size shr 8) and 0xFF); out.write(rdata.size and 0xFF)
+                out.write(rdata)
+            }
+            return out.toByteArray()
+        }
+
+        val aResp = responseWithAnswer(0x1234, 0, 1, byteArrayOf(66, 249.toByte(), 66, 1))
+        assertEquals(listOf("66.249.66.1"), VerifiedCrawlers.parseDnsResponse(aResp, aResp.size, 0x1234, 1))
+
+        val aaaaBytes = java.net.InetAddress.getByName("2001:4860:4801::1").address
+        val aaaaResp = responseWithAnswer(0x1235, 0, 28, aaaaBytes)
+        assertEquals(listOf("2001:4860:4801:0:0:0:0:1"), VerifiedCrawlers.parseDnsResponse(aaaaResp, aaaaResp.size, 0x1235, 28))
+
+        // PTR with label + pointer back to "example" in question at offset 17 (12 + 1 + 4)
+        val ptrRdata = byteArrayOf(5, 'c'.code.toByte(), 'r'.code.toByte(), 'a'.code.toByte(), 'w'.code.toByte(), 'l'.code.toByte(), 0xC0.toByte(), 17)
+        val ptrResp = responseWithAnswer(0x1236, 0, 12, ptrRdata)
+        assertEquals(listOf("crawl.example"), VerifiedCrawlers.parseDnsResponse(ptrResp, ptrResp.size, 0x1236, 12))
+
+        val nxResp = responseWithAnswer(0x1237, 3, 1, null)
+        assertEquals(emptyList<String>(), VerifiedCrawlers.parseDnsResponse(nxResp, nxResp.size, 0x1237, 1))
+
+        val servFail = responseWithAnswer(0x1238, 2, 1, null)
+        kotlin.test.assertFailsWith<VerifiedCrawlers.LookupUnavailable> {
+            VerifiedCrawlers.parseDnsResponse(servFail, servFail.size, 0x1238, 1)
+        }
+
+        // TC=1 (truncated UDP response) must be treated as LookupUnavailable, not NXDOMAIN/empty.
+        val truncatedResp = responseWithAnswer(0x1239, 0, 1, null).also { it[2] = (it[2].toInt() or 0x02).toByte() }
+        kotlin.test.assertFailsWith<VerifiedCrawlers.LookupUnavailable> {
+            VerifiedCrawlers.parseDnsResponse(truncatedResp, truncatedResp.size, 0x1239, 1)
+        }
+
+        // Reserved label type (0x40) in PTR rdata must fail with LookupUnavailable.
+        val badLabelPtr = responseWithAnswer(0x123A, 0, 12, byteArrayOf(0x41, 'a'.code.toByte(), 0x00))
+        kotlin.test.assertFailsWith<VerifiedCrawlers.LookupUnavailable> {
+            VerifiedCrawlers.parseDnsResponse(badLabelPtr, badLabelPtr.size, 0x123A, 12)
+        }
+
+        // Unterminated PTR name (missing 0x00 root label) must fail with LookupUnavailable.
+        val unterminatedPtr = responseWithAnswer(0x123B, 0, 12, byteArrayOf(3, 'f'.code.toByte(), 'o'.code.toByte(), 'o'.code.toByte()))
+        kotlin.test.assertFailsWith<VerifiedCrawlers.LookupUnavailable> {
+            VerifiedCrawlers.parseDnsResponse(unterminatedPtr, unterminatedPtr.size, 0x123B, 12)
+        }
+    }
+
     // ------------------------------------------------------------------ Cloudflare
 
     @Test
