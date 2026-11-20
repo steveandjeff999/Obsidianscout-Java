@@ -103,54 +103,90 @@ object VerifiedCrawlers {
     private const val DNS_TYPE_PTR = 12
     private const val DNS_TYPE_AAAA = 28
     private const val DNS_SERVER_CACHE_MS = 5 * 60_000L
+    /**
+     * Only used when the machine has no DNS server we can find. Lookups never move on to these when a configured
+     * server merely times out: that would send visitors' addresses to a third party and fail anyway where outbound
+     * DNS is firewalled, and a lookup that can't be answered is already harmless (UNKNOWN, nothing gets flagged).
+     */
     private val DEFAULT_DNS_SERVERS = listOf("1.1.1.1", "8.8.8.8")
     private val IPV4_REGEX = Regex("""\b(?:\d{1,3}\.){3}\d{1,3}\b""")
+    /** Candidate IPv6 literals (optionally %zone); each is then checked by [InetAddress], which never does DNS for a string containing ':'. */
+    private val IPV6_REGEX = Regex("""(?<![0-9A-Za-z:.])[0-9A-Fa-f]{0,4}(?::[0-9A-Fa-f]{0,4}){2,7}(?:%[0-9A-Za-z_.-]+)?""")
 
     @Volatile private var cachedDnsServers: List<String> = emptyList()
     @Volatile private var cachedDnsServersUntil: Long = 0L
+    private val dnsServersLock = Any()
 
-    private fun resolveDnsServers(now: Long = System.currentTimeMillis()): List<String> {
+    private fun resolveDnsServers(): List<String> {
         val current = cachedDnsServers
-        if (current.isNotEmpty() && now < cachedDnsServersUntil) return current
-        val discovered = discoverSystemDnsServers().ifEmpty { DEFAULT_DNS_SERVERS }
-        cachedDnsServers = discovered
-        cachedDnsServersUntil = now + DNS_SERVER_CACHE_MS
-        return discovered
+        if (current.isNotEmpty() && System.currentTimeMillis() < cachedDnsServersUntil) return current
+        // One refresh at a time: lookups that arrive meanwhile wait for its answer instead of each running netsh.
+        synchronized(dnsServersLock) {
+            val again = cachedDnsServers
+            if (again.isNotEmpty() && System.currentTimeMillis() < cachedDnsServersUntil) return again
+            val discovered = discoverSystemDnsServers().ifEmpty { DEFAULT_DNS_SERVERS }
+            cachedDnsServers = discovered
+            cachedDnsServersUntil = System.currentTimeMillis() + DNS_SERVER_CACHE_MS
+            return discovered
+        }
     }
 
     private fun discoverSystemDnsServers(): List<String> = runCatching {
         val os = System.getProperty("os.name", "").lowercase()
         if (os.contains("win")) {
-            val proc = ProcessBuilder("netsh", "interface", "ipv4", "show", "dnsservers")
-                .redirectErrorStream(true)
-                .start()
-            proc.outputStream.close()
-            var out = ""
-            val reader = Thread { out = proc.inputStream.bufferedReader().readText() }.apply {
-                isDaemon = true
-                start()
-            }
-            if (!proc.waitFor(2, TimeUnit.SECONDS)) {
-                proc.destroyForcibly()
-                return emptyList()
-            }
-            reader.join(500)
-            IPV4_REGEX.findAll(out)
-                .map { it.value }
-                .filter { it != "0.0.0.0" && !it.startsWith("127.") }
-                .distinct()
-                .toList()
+            // IPv4 servers first: they're the usual case and need no interface scope.
+            (parseNetshDnsServers(runNetsh("ipv4")) + parseNetshDnsServers(runNetsh("ipv6"))).distinct()
         } else {
             val resolv = File("/etc/resolv.conf")
-            if (!resolv.isFile) return emptyList()
-            resolv.readLines().mapNotNull { line ->
-                val trimmed = line.substringBefore('#').substringBefore(';').trim()
-                if (trimmed.startsWith("nameserver")) {
-                    trimmed.removePrefix("nameserver").trim().substringBefore('%').takeIf { it.isNotEmpty() }
-                } else null
-            }.distinct()
+            if (!resolv.isFile) emptyList() else parseResolvConf(resolv.readLines())
         }
     }.getOrDefault(emptyList())
+
+    /** Output of `netsh interface <family> show dnsservers`, or "" if it fails or takes too long. */
+    private fun runNetsh(family: String): String {
+        val proc = ProcessBuilder("netsh", "interface", family, "show", "dnsservers")
+            .redirectErrorStream(true)
+            .start()
+        proc.outputStream.close()
+        val out = java.util.concurrent.atomic.AtomicReference("")
+        val reader = Thread { out.set(proc.inputStream.bufferedReader().readText()) }.apply {
+            isDaemon = true
+            start()
+        }
+        if (!proc.waitFor(2, TimeUnit.SECONDS)) {
+            proc.destroyForcibly()
+            return ""
+        }
+        reader.join(500)
+        return out.get()
+    }
+
+    /** DNS server addresses in `netsh ... show dnsservers` output (any language: only the addresses are read). */
+    internal fun parseNetshDnsServers(output: String): List<String> {
+        val v4 = IPV4_REGEX.findAll(output).map { it.value }
+            .filter { it != "0.0.0.0" && !it.startsWith("127.") }
+        val v6 = IPV6_REGEX.findAll(output).map { it.value }
+            .filter { usableIpv6Server(it) }
+        return (v4 + v6).distinct().toList()
+    }
+
+    /** `nameserver` entries of a resolv.conf. */
+    internal fun parseResolvConf(lines: List<String>): List<String> = lines.mapNotNull { line ->
+        val trimmed = line.substringBefore('#').substringBefore(';').trim()
+        val parts = trimmed.split(Regex("\\s+"))
+        if (parts.size >= 2 && parts[0] == "nameserver") parts[1] else null
+    }.filter { if (':' in it) usableIpv6Server(it) else IPV4_REGEX.matches(it) }.distinct()
+
+    private fun usableIpv6Server(literal: String): Boolean {
+        if (literal.count { it == ':' } < 2) return false
+        val addr = runCatching { InetAddress.getByName(literal) }.getOrNull() as? java.net.Inet6Address ?: return false
+        if (addr.isLoopbackAddress || addr.isAnyLocalAddress) return false
+        // fec0:0:0:ffff::1-3 are the placeholders Windows lists on adapters with no IPv6 DNS configured.
+        if (addr.isSiteLocalAddress) return false
+        // A link-local server is only reachable with its interface scope.
+        if (addr.isLinkLocalAddress && '%' !in literal) return false
+        return true
+    }
 
     /**
      * The records of one [type] for [name]. One type per query on purpose: asking for several types at once
@@ -168,7 +204,7 @@ object VerifiedCrawlers {
             "PTR" -> DNS_TYPE_PTR
             else -> throw IllegalArgumentException("Unsupported DNS record type: $type")
         }
-        val servers = (resolveDnsServers() + DEFAULT_DNS_SERVERS).distinct()
+        val servers = resolveDnsServers()
         var lastError: Throwable? = null
         val attempts = 1 + DNS_RETRIES
         for (attempt in 0 until attempts) {
@@ -176,21 +212,24 @@ object VerifiedCrawlers {
             try {
                 val id = ThreadLocalRandom.current().nextInt(0x10000)
                 val query = buildDnsQuery(id, name, qtype)
-                val serverAddr = InetAddress.getByName(server)
+                val serverAddr = InetAddress.getByName(server) // Always a literal address, so no lookup happens here.
                 DatagramSocket().use { socket ->
                     socket.soTimeout = DNS_TIMEOUT_MS
                     socket.connect(serverAddr, DNS_PORT)
                     socket.send(DatagramPacket(query, query.size))
                     val buf = ByteArray(1536)
                     val packet = DatagramPacket(buf, buf.size)
+                    val deadline = System.currentTimeMillis() + DNS_TIMEOUT_MS
                     while (true) {
+                        // Stray packets mustn't keep extending the wait past one timeout.
+                        val left = deadline - System.currentTimeMillis()
+                        if (left <= 0) throw java.net.SocketTimeoutException("DNS reply timed out")
+                        socket.soTimeout = left.toInt()
                         packet.setLength(buf.size)
                         socket.receive(packet)
-                        if (packet.length >= 12) {
-                            val respId = ((buf[0].toInt() and 0xFF) shl 8) or (buf[1].toInt() and 0xFF)
-                            if (respId == id) {
-                                return parseDnsResponse(buf, packet.length, id, qtype)
-                            }
+                        // Ignore anything that isn't the reply to this exact question (late or forged packets).
+                        if (isReplyTo(buf, packet.length, query)) {
+                            return parseDnsResponse(buf, packet.length, id, qtype, query)
                         }
                     }
                 }
@@ -228,11 +267,42 @@ object VerifiedCrawlers {
         return out.toByteArray()
     }
 
-    internal fun parseDnsResponse(buf: ByteArray, length: Int, expectedId: Int, expectedType: Int): List<String> {
+    /**
+     * True when [buf] is a standard-query response (QR=1, OPCODE=0) with [query]'s transaction ID, carrying exactly
+     * [query]'s question. Names compare case-insensitively, since servers may echo a different case.
+     */
+    internal fun isReplyTo(buf: ByteArray, length: Int, query: ByteArray): Boolean {
+        if (length < query.size || query.size < 12) return false
+        if (buf[0] != query[0] || buf[1] != query[1]) return false
+        val flags = ((buf[2].toInt() and 0xFF) shl 8) or (buf[3].toInt() and 0xFF)
+        if ((flags and 0x8000) == 0) return false // QR: must be a response.
+        if (((flags shr 11) and 0x0F) != 0) return false // OPCODE: must be a standard query.
+        val qdCount = ((buf[4].toInt() and 0xFF) shl 8) or (buf[5].toInt() and 0xFF)
+        if (qdCount != 1) return false
+        for (i in 12 until query.size) {
+            val a = buf[i].toInt() and 0xFF
+            val b = query[i].toInt() and 0xFF
+            if (a != b && asciiLower(a) != asciiLower(b)) return false
+        }
+        return true
+    }
+
+    private fun asciiLower(c: Int): Int = if (c in 'A'.code..'Z'.code) c + 32 else c
+
+    internal fun parseDnsResponse(
+        buf: ByteArray,
+        length: Int,
+        expectedId: Int,
+        expectedType: Int,
+        query: ByteArray? = null
+    ): List<String> {
         if (length < 12) throw LookupUnavailable("Truncated DNS header")
         val id = ((buf[0].toInt() and 0xFF) shl 8) or (buf[1].toInt() and 0xFF)
         if (id != expectedId) throw LookupUnavailable("Mismatched DNS transaction ID")
+        if (query != null && !isReplyTo(buf, length, query)) throw LookupUnavailable("DNS reply doesn't match the question")
         val flags = ((buf[2].toInt() and 0xFF) shl 8) or (buf[3].toInt() and 0xFF)
+        if ((flags and 0x8000) == 0) throw LookupUnavailable("DNS packet is not a response")
+        if (((flags shr 11) and 0x0F) != 0) throw LookupUnavailable("DNS reply has unexpected opcode")
         if ((flags and 0x0200) != 0) throw LookupUnavailable("Truncated DNS response")
         val rcode = flags and 0x0F
         if (rcode == 3) return emptyList() // NXDOMAIN: definite "no such name".
