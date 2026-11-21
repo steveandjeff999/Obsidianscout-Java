@@ -226,7 +226,9 @@ object GistUpdateService {
     private data class ResolvedReleaseAsset(
         val name: String,
         val url: String,
-        val sha256: String?
+        val sha256: String?,
+        val checksumsUrl: String? = null,
+        val signatureUrl: String? = null
     )
 
 
@@ -259,7 +261,31 @@ object GistUpdateService {
         if (releaseAsset.sha256 != null && gistSha256 != null && gistSha256 != releaseAsset.sha256) {
             log.info("[GistUpdate] Gist sha256 is for a different package than ${releaseAsset.name}; using the release's checksum.")
         }
-        val effectiveSha256 = releaseAsset.sha256 ?: gistSha256.orEmpty()
+        var effectiveSha256 = releaseAsset.sha256 ?: gistSha256.orEmpty()
+
+        // Optional release signature: verified when this build pins a key and the release is signed. Missing either
+        // only logs a warning; a signature that doesn't verify stops the update.
+        when (val sig = ReleaseSignature.check(httpClient, releaseAsset.checksumsUrl, releaseAsset.signatureUrl, releaseAsset.name)) {
+            is ReleaseSignature.Result.Verified -> {
+                if (sig.sha256 == null) {
+                    log.error("[GistUpdate] Signed checksums.txt for $version does not list ${releaseAsset.name}. Update aborted.")
+                    return
+                }
+                if (effectiveSha256.isNotBlank() && effectiveSha256 != sig.sha256) {
+                    log.error("[GistUpdate] SHA-256 for ${releaseAsset.name} differs from the signed checksums.txt. Update aborted.")
+                    return
+                }
+                effectiveSha256 = sig.sha256
+                log.info("[GistUpdate] Release signature verified for $version.")
+            }
+            is ReleaseSignature.Result.Invalid -> {
+                log.error("[GistUpdate] Release signature check failed for $version: ${sig.reason}. Update aborted.")
+                return
+            }
+            is ReleaseSignature.Result.Unavailable ->
+                log.warn("[GistUpdate] Release signature not verified for $version (${sig.reason}); relying on SHA-256 only.")
+        }
+
         if (effectiveSha256.isBlank()) {
             log.error("[GistUpdate] Missing expected SHA-256 checksum for version $version (asset ${releaseAsset.name}). Update aborted.")
             return
@@ -421,6 +447,7 @@ object GistUpdateService {
         var fatjarCandidate: ResolvedReleaseAsset? = null
         var firstArchiveCandidate: ResolvedReleaseAsset? = null
         var checksumsTxtUrl: String? = null
+        var signatureUrl: String? = null
 
         val assets = releaseJson["assets"]?.jsonArray
         if (assets != null) {
@@ -433,6 +460,10 @@ object GistUpdateService {
 
                 if (name == "checksums.txt") {
                     checksumsTxtUrl = url
+                    continue
+                }
+                if (name == ReleaseSignature.SIGNATURE_ASSET) {
+                    signatureUrl = url
                     continue
                 }
 
@@ -462,7 +493,7 @@ object GistUpdateService {
         val resolvedSha256 = selected.sha256 ?: checksumsTxtUrl?.let { fetchChecksumForAsset(it, selected.name, httpClient) }
 
         log.info("[GistUpdate] Resolved download asset '${selected.name}' for platform '$platformKey': ${selected.url} (sha256 ${if (resolvedSha256 != null) "resolved" else "missing"})")
-        return selected.copy(sha256 = resolvedSha256)
+        return selected.copy(sha256 = resolvedSha256, checksumsUrl = checksumsTxtUrl, signatureUrl = signatureUrl)
     }
 
     private fun fetchChecksumForAsset(checksumsUrl: String, assetName: String, httpClient: HttpClient): String? {

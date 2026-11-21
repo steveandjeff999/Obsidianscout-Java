@@ -411,7 +411,7 @@
             const container = document.getElementById('preset-list');
             if (filtered.length === 0) {
                 if (allPresets.length === 0) {
-                    container.innerHTML = `<div class="card soft" style="grid-column: 1/-1; text-align: center; padding: 40px;"><p class="notice" style="font-size: 1.05rem;">No default config presets exist yet. All default configurations are manually created.<br><br><button class="btn primary" onclick="openModal()">+ Create Your First Preset</button></p></div>`;
+                    container.innerHTML = `<div class="card soft" style="grid-column: 1/-1; text-align: center; padding: 40px;"><p class="notice" style="font-size: 1.05rem;">No default config presets exist yet. All default configurations are manually created.<br><br><button class="btn primary" type="button" data-preset-action="create">+ Create Your First Preset</button></p></div>`;
                 } else {
                     container.innerHTML = `<div class="card soft" style="grid-column: 1/-1; text-align: center; padding: 40px;"><p class="notice">No default config presets match your filters.</p></div>`;
                 }
@@ -437,10 +437,10 @@
                             </div>
                         </div>
                         <div class="preset-actions">
-                            ${!p.isDefault ? `<button class="btn ghost btn-sm" style="color:var(--accent); font-weight:600;" onclick="setActivePreset('${p.id}')"><span class="material-symbols-outlined">star</span> Set Active</button>` : ''}
-                            <button class="btn ghost btn-sm" onclick="editPreset('${p.id}')">Edit</button>
-                            <button class="btn ghost btn-sm" onclick="duplicatePreset('${p.id}')">Duplicate</button>
-                            <button class="btn ghost btn-sm" style="color:#ef4444;" onclick="deletePreset('${p.id}', '${escapeHtml(p.name)}')">Delete</button>
+                            ${!p.isDefault ? `<button class="btn ghost btn-sm" style="color:var(--accent); font-weight:600;" data-preset-action="activate" data-preset-id="${escapeHtml(p.id)}"><span class="material-symbols-outlined">star</span> Set Active</button>` : ''}
+                            <button class="btn ghost btn-sm" data-preset-action="edit" data-preset-id="${escapeHtml(p.id)}">Edit</button>
+                            <button class="btn ghost btn-sm" data-preset-action="duplicate" data-preset-id="${escapeHtml(p.id)}">Duplicate</button>
+                            <button class="btn ghost btn-sm" style="color:#ef4444;" data-preset-action="delete" data-preset-id="${escapeHtml(p.id)}">Delete</button>
                         </div>
                     </div>
                 `;
@@ -743,25 +743,25 @@
                         <div class="visual-field-header">
                             <strong>Field #${idx + 1}: ${escapeHtml(labelVal || field.id || 'Untitled')}</strong>
                             <div style="display: flex; gap: 6px; align-items: center;">
-                                <button type="button" class="btn ghost btn-sm" title="Duplicate Field" onclick="duplicateVisualField(${idx})"><span class="material-symbols-outlined">content_copy</span> Duplicate</button>
-                                <button type="button" class="btn ghost btn-sm" title="Move Up" onclick="moveVisualField(${idx}, -1)" ${idx === 0 ? 'disabled' : ''}>⬆</button>
-                                <button type="button" class="btn ghost btn-sm" title="Move Down" onclick="moveVisualField(${idx}, 1)" ${idx === fields.length - 1 ? 'disabled' : ''}>⬇</button>
-                                <button type="button" class="btn ghost btn-sm" style="color:#ef4444;" title="Delete Field" onclick="removeVisualField(${idx})"><span class="material-symbols-outlined">delete</span></button>
+                                <button type="button" class="btn ghost btn-sm" title="Duplicate Field" data-field-action="duplicate" data-idx="${idx}"><span class="material-symbols-outlined">content_copy</span> Duplicate</button>
+                                <button type="button" class="btn ghost btn-sm" title="Move Up" data-field-action="up" data-idx="${idx}" ${idx === 0 ? 'disabled' : ''}>⬆</button>
+                                <button type="button" class="btn ghost btn-sm" title="Move Down" data-field-action="down" data-idx="${idx}" ${idx === fields.length - 1 ? 'disabled' : ''}>⬇</button>
+                                <button type="button" class="btn ghost btn-sm" style="color:#ef4444;" title="Delete Field" data-field-action="remove" data-idx="${idx}"><span class="material-symbols-outlined">delete</span></button>
                             </div>
                         </div>
 
                         <div class="visual-field-grid">
                             <div class="field">
                                 <label style="font-size:0.8rem;">Field Label</label>
-                                <input type="text" class="input" value="${escapeHtml(labelVal)}" oninput="updateVisualField(${idx}, 'label', this.value)" placeholder="e.g. Teleop Coral Scored" />
+                                <input type="text" class="input" value="${escapeHtml(labelVal)}" data-idx="${idx}" data-field-prop="label" placeholder="e.g. Teleop Coral Scored" />
                             </div>
                             <div class="field">
                                 <label style="font-size:0.8rem;">Field ID (Key)</label>
-                                <input type="text" class="input" value="${escapeHtml(field.id || '')}" oninput="updateVisualField(${idx}, 'id', this.value)" placeholder="e.g. teleop_coral" />
+                                <input type="text" class="input" value="${escapeHtml(field.id || '')}" data-idx="${idx}" data-field-prop="id" placeholder="e.g. teleop_coral" />
                             </div>
                             <div class="field">
                                 <label style="font-size:0.8rem;">Type</label>
-                                <select class="input" onchange="onFieldTypeChange(${idx}, this.value)">
+                                <select class="input" data-idx="${idx}" data-field-type>
                                     <option value="counter" ${typeVal === 'counter' ? 'selected' : ''}>Counter (+ / -)</option>
                                     <option value="number" ${typeVal === 'number' ? 'selected' : ''}>Number</option>
                                     <option value="rating" ${typeVal === 'rating' ? 'selected' : ''}>Rating (1-5)</option>
@@ -777,7 +777,7 @@
                             ${supportsPhs ? `
                             <div class="field">
                                 <label style="font-size:0.8rem;">Section / Phase</label>
-                                <select class="input" onchange="updateVisualField(${idx}, 'phase', this.value)">
+                                <select class="input" data-idx="${idx}" data-field-prop="phase">
                                     <option value="auto" ${phaseVal === 'auto' ? 'selected' : ''}>Autonomous</option>
                                     <option value="teleop" ${(!phaseVal || phaseVal === 'teleop' || phaseVal === 'general') ? 'selected' : ''}>Teleop</option>
                                     <option value="endgame" ${phaseVal === 'endgame' ? 'selected' : ''}>Endgame</option>
@@ -789,7 +789,7 @@
                             <div class="field">
                                 <label style="font-size:0.8rem;">Required</label>
                                 <label style="display: flex; align-items: center; gap: 8px; height: 38px; cursor: pointer; margin: 0;">
-                                    <input type="checkbox" ${field.required ? 'checked' : ''} onchange="updateVisualField(${idx}, 'required', this.checked)" />
+                                    <input type="checkbox" ${field.required ? 'checked' : ''} data-idx="${idx}" data-field-prop="required" data-kind="checked" />
                                     <span style="font-size: 0.85rem;">Is Required</span>
                                 </label>
                             </div>
@@ -800,38 +800,38 @@
                         <div class="visual-field-grid" style="margin-top: 6px; padding-top: 8px; border-top: 1px dashed var(--border);">
                             <div class="field">
                                 <label style="font-size:0.8rem;">Min</label>
-                                <input type="number" class="input" value="${field.min !== undefined && field.min !== null ? field.min : ''}" oninput="updateVisualField(${idx}, 'min', this.value !== '' ? Number(this.value) : null)" placeholder="0" />
+                                <input type="number" class="input" value="${escapeHtml(String(field.min !== undefined && field.min !== null ? field.min : ''))}" data-idx="${idx}" data-field-prop="min" data-kind="number" placeholder="0" />
                             </div>
                             <div class="field">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <label style="font-size:0.8rem;">Max</label>
                                     ${supportsNoLimit ? `
                                     <label style="display: flex; align-items: center; gap: 4px; font-size: 0.75rem; color: var(--muted); cursor: pointer;">
-                                        <input type="checkbox" ${isNoLimit ? 'checked' : ''} onchange="toggleCounterNoLimit(${idx}, this.checked)" /> No limit
+                                        <input type="checkbox" ${isNoLimit ? 'checked' : ''} data-idx="${idx}" data-field-toggle="no-limit" /> No limit
                                     </label>
                                     ` : ''}
                                 </div>
-                                <input type="number" id="field-${idx}-max" class="input" ${isNoLimit ? 'disabled' : ''} value="${field.max !== undefined && field.max !== null ? field.max : ''}" oninput="updateVisualField(${idx}, 'max', this.value !== '' ? Number(this.value) : null)" placeholder="10" />
+                                <input type="number" id="field-${idx}-max" class="input" ${isNoLimit ? 'disabled' : ''} value="${escapeHtml(String(field.max !== undefined && field.max !== null ? field.max : ''))}" data-idx="${idx}" data-field-prop="max" data-kind="number" placeholder="10" />
                             </div>
                             <div class="field">
                                 <label style="font-size:0.8rem;">Step</label>
-                                <input type="number" class="input" value="${field.step !== undefined && field.step !== null ? field.step : 1}" oninput="updateVisualField(${idx}, 'step', this.value !== '' ? Number(this.value) : null)" placeholder="1" />
+                                <input type="number" class="input" value="${escapeHtml(String(field.step !== undefined && field.step !== null ? field.step : 1))}" data-idx="${idx}" data-field-prop="step" data-kind="number" placeholder="1" />
                             </div>
                             ${typeVal === 'counter' ? `
                             <div class="field">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <label style="font-size:0.8rem;">Double Step</label>
                                     <label style="display: flex; align-items: center; gap: 4px; font-size: 0.75rem; color: var(--muted); cursor: pointer;">
-                                        <input type="checkbox" ${hasDoubleStep ? 'checked' : ''} onchange="toggleCounterDoubleStep(${idx}, this.checked)" /> Enable
+                                        <input type="checkbox" ${hasDoubleStep ? 'checked' : ''} data-idx="${idx}" data-field-toggle="double-step" /> Enable
                                     </label>
                                 </div>
-                                <input type="number" id="field-${idx}-doubleStep" class="input" ${!hasDoubleStep ? 'disabled' : ''} value="${hasDoubleStep ? (field.doubleStep ?? field.double_step) : ''}" oninput="updateVisualField(${idx}, 'doubleStep', this.value !== '' ? Number(this.value) : null)" placeholder="e.g. 5" />
+                                <input type="number" id="field-${idx}-doubleStep" class="input" ${!hasDoubleStep ? 'disabled' : ''} value="${escapeHtml(String(hasDoubleStep ? (field.doubleStep ?? field.double_step) : ''))}" data-idx="${idx}" data-field-prop="doubleStep" data-kind="number" placeholder="e.g. 5" />
                             </div>
                             ` : ''}
                             ${supportsPts ? `
                             <div class="field">
                                 <label style="font-size:0.8rem; font-weight: 700; color: var(--accent, #6366f1);">Points per action</label>
-                                <input type="number" step="any" class="input" value="${field.pointsPer !== undefined && field.pointsPer !== null ? field.pointsPer : ''}" oninput="updateVisualField(${idx}, 'pointsPer', this.value !== '' ? Number(this.value) : null)" placeholder="e.g. 3.0" style="border-color: rgba(99, 102, 241, 0.4);" />
+                                <input type="number" step="any" class="input" value="${escapeHtml(String(field.pointsPer !== undefined && field.pointsPer !== null ? field.pointsPer : ''))}" data-idx="${idx}" data-field-prop="pointsPer" data-kind="number" placeholder="e.g. 3.0" style="border-color: rgba(99, 102, 241, 0.4);" />
                             </div>
                             ` : ''}
                         </div>
@@ -841,7 +841,7 @@
                         <div class="visual-field-grid" style="margin-top: 6px; padding-top: 8px; border-top: 1px dashed var(--border);">
                             <div class="field" style="max-width: 250px;">
                                 <label style="font-size:0.8rem; font-weight: 700; color: var(--accent, #6366f1);">Points per action</label>
-                                <input type="number" step="any" class="input" value="${field.pointsPer !== undefined && field.pointsPer !== null ? field.pointsPer : ''}" oninput="updateVisualField(${idx}, 'pointsPer', this.value !== '' ? Number(this.value) : null)" placeholder="e.g. 5.0" style="border-color: rgba(99, 102, 241, 0.4);" />
+                                <input type="number" step="any" class="input" value="${escapeHtml(String(field.pointsPer !== undefined && field.pointsPer !== null ? field.pointsPer : ''))}" data-idx="${idx}" data-field-prop="pointsPer" data-kind="number" placeholder="e.g. 5.0" style="border-color: rgba(99, 102, 241, 0.4);" />
                             </div>
                         </div>
                         ` : ''}
@@ -850,7 +850,7 @@
                         <div class="options-builder">
                             <div class="options-builder-header">
                                 <span class="options-builder-title">${supportsPts ? 'Options (Label | Value | Points)' : 'Options (Label | Value)'}</span>
-                                <button type="button" class="btn secondary btn-sm" onclick="addSelectOption(${idx})">+ Add Option</button>
+                                <button type="button" class="btn secondary btn-sm" data-field-action="add-option" data-idx="${idx}">+ Add Option</button>
                             </div>
                             <div class="options-builder-list">
                                 ${(field.options && field.options.length > 0) ? field.options.map((opt, optIdx) => {
@@ -859,12 +859,12 @@
                                     const optPts = opt.points !== undefined && opt.points !== null ? opt.points : 0;
                                     return `
                                         <div class="option-item-row">
-                                            <input type="text" class="input" value="${escapeHtml(optLabel)}" placeholder="Label (e.g. High)" oninput="updateSelectOption(${idx}, ${optIdx}, 'label', this.value)" />
-                                            <input type="text" class="input" value="${escapeHtml(optVal)}" placeholder="Value" oninput="updateSelectOption(${idx}, ${optIdx}, 'value', this.value)" onblur="refillBlankOptionValue(${idx}, ${optIdx}, this)" />
+                                            <input type="text" class="input" value="${escapeHtml(optLabel)}" placeholder="Label (e.g. High)" data-idx="${idx}" data-opt="${optIdx}" data-opt-prop="label" />
+                                            <input type="text" class="input" value="${escapeHtml(optVal)}" placeholder="Value" data-idx="${idx}" data-opt="${optIdx}" data-opt-prop="value" />
                                             ${supportsPts ? `
-                                            <input type="number" step="any" class="input" value="${optPts}" placeholder="Pts" oninput="updateSelectOption(${idx}, ${optIdx}, 'points', Number(this.value))" title="Point Value" />
+                                            <input type="number" step="any" class="input" value="${escapeHtml(String(optPts))}" placeholder="Pts" data-idx="${idx}" data-opt="${optIdx}" data-opt-prop="points" title="Point Value" />
                                             ` : ''}
-                                            <button type="button" class="btn ghost btn-sm" style="color:#ef4444;" title="Delete Option" onclick="removeSelectOption(${idx}, ${optIdx})"><span class="material-symbols-outlined">delete</span></button>
+                                            <button type="button" class="btn ghost btn-sm" style="color:#ef4444;" title="Delete Option" data-field-action="remove-option" data-idx="${idx}" data-opt="${optIdx}"><span class="material-symbols-outlined">delete</span></button>
                                         </div>
                                     `;
                                 }).join('') : `<p class="notice" style="margin: 4px 0; font-size: 0.8rem;">No options defined. Click "+ Add Option" above.</p>`}
@@ -1293,7 +1293,67 @@
             return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[m]);
         }
 
+        // Rendered controls carry data-* attributes and are handled here: the page's CSP refuses inline event-handler attributes.
+        function wirePresetControls() {
+            document.getElementById('preset-list')?.addEventListener('click', (e) => {
+                const btn = e.target.closest('[data-preset-action]');
+                if (!btn) return;
+                const id = btn.dataset.presetId;
+                switch (btn.dataset.presetAction) {
+                    case 'create': openModal(); break;
+                    case 'activate': setActivePreset(id); break;
+                    case 'edit': editPreset(id); break;
+                    case 'duplicate': duplicatePreset(id); break;
+                    case 'delete': deletePreset(id, (allPresets.find(p => p.id === id) || {}).name || ''); break;
+                }
+            });
+
+            const list = document.getElementById('visual-fields-list');
+            if (!list) return;
+            const idxOf = (el) => Number(el.dataset.idx);
+            list.addEventListener('click', (e) => {
+                const btn = e.target.closest('[data-field-action]');
+                if (!btn || btn.disabled) return;
+                const idx = idxOf(btn);
+                switch (btn.dataset.fieldAction) {
+                    case 'duplicate': duplicateVisualField(idx); break;
+                    case 'up': moveVisualField(idx, -1); break;
+                    case 'down': moveVisualField(idx, 1); break;
+                    case 'remove': removeVisualField(idx); break;
+                    case 'add-option': addSelectOption(idx); break;
+                    case 'remove-option': removeSelectOption(idx, Number(btn.dataset.opt)); break;
+                }
+            });
+            // Text and number inputs update as you type.
+            list.addEventListener('input', (e) => {
+                const el = e.target;
+                if (el.tagName !== 'INPUT' || el.type === 'checkbox') return;
+                if (el.dataset.fieldProp) {
+                    const val = el.dataset.kind === 'number' ? (el.value !== '' ? Number(el.value) : null) : el.value;
+                    updateVisualField(idxOf(el), el.dataset.fieldProp, val);
+                } else if (el.dataset.optProp) {
+                    const val = el.dataset.optProp === 'points' ? Number(el.value) : el.value;
+                    updateSelectOption(idxOf(el), Number(el.dataset.opt), el.dataset.optProp, val);
+                }
+            });
+            // Selects and checkboxes update on change.
+            list.addEventListener('change', (e) => {
+                const el = e.target;
+                if (el.tagName !== 'SELECT' && el.type !== 'checkbox') return;
+                const idx = idxOf(el);
+                if (el.hasAttribute('data-field-type')) onFieldTypeChange(idx, el.value);
+                else if (el.dataset.fieldToggle === 'no-limit') toggleCounterNoLimit(idx, el.checked);
+                else if (el.dataset.fieldToggle === 'double-step') toggleCounterDoubleStep(idx, el.checked);
+                else if (el.dataset.fieldProp) updateVisualField(idx, el.dataset.fieldProp, el.dataset.kind === 'checked' ? el.checked : el.value);
+            });
+            list.addEventListener('focusout', (e) => {
+                const el = e.target;
+                if (el.dataset && el.dataset.optProp === 'value') refillBlankOptionValue(idxOf(el), Number(el.dataset.opt), el);
+            });
+        }
+
         window.addEventListener('DOMContentLoaded', async () => {
+            wirePresetControls();
             const me = await Obsidianscout.requireAuth();
             if (!me) return;
             await loadPresets();

@@ -108,6 +108,7 @@ fun runUpdateHelper() {
         var fatjar: ReleaseInfo? = null
         var firstArchive: ReleaseInfo? = null
         var checksumsUrl: String? = null
+        var signatureUrl: String? = null
         val assets = obj["assets"]?.jsonArray
         if (assets != null) {
             for (asset in assets) {
@@ -117,6 +118,10 @@ fun runUpdateHelper() {
                 if (url.isEmpty()) continue
                 if (name == "checksums.txt") {
                     checksumsUrl = url
+                    continue
+                }
+                if (name == ReleaseSignature.SIGNATURE_ASSET) {
+                    signatureUrl = url
                     continue
                 }
                 val isArchive = name.endsWith(".zip") || name.endsWith(".tar.gz") || name.endsWith(".tgz")
@@ -140,7 +145,7 @@ fun runUpdateHelper() {
         // Only real release packages: the source zipball has no server binary and no published checksum.
         val selected = best ?: fatjar ?: firstArchive
         if (selected != null) {
-            releases.add(selected.copy(checksumsUrl = checksumsUrl))
+            releases.add(selected.copy(checksumsUrl = checksumsUrl, signatureUrl = signatureUrl))
         }
     }
     
@@ -225,8 +230,26 @@ fun runUpdateHelper() {
     }
 
     // Verify SHA-256 against the release's per-asset digest, or its checksums.txt, before touching anything.
-    val expectedSha256 = selectedRelease.sha256
+    var expectedSha256 = selectedRelease.sha256
         ?: selectedRelease.checksumsUrl?.let { fetchReleaseChecksum(client, it, selectedRelease.assetName) }
+    when (val sig = ReleaseSignature.check(client, selectedRelease.checksumsUrl, selectedRelease.signatureUrl, selectedRelease.assetName)) {
+        is ReleaseSignature.Result.Verified -> {
+            if (sig.sha256 == null || (expectedSha256 != null && expectedSha256 != sig.sha256)) {
+                System.err.println("Error: ${selectedRelease.assetName} does not match the signed checksums.txt; refusing to install.")
+                tempDir.deleteRecursively()
+                exitProcess(1)
+            }
+            expectedSha256 = sig.sha256
+            println("Release signature verified.")
+        }
+        is ReleaseSignature.Result.Invalid -> {
+            System.err.println("Error: release signature check failed (${sig.reason}); refusing to install.")
+            tempDir.deleteRecursively()
+            exitProcess(1)
+        }
+        is ReleaseSignature.Result.Unavailable ->
+            println("Warning: release signature not verified (${sig.reason}); relying on SHA-256 only.")
+    }
     if (expectedSha256 == null) {
         System.err.println("Error: Release ${selectedRelease.tag} publishes no SHA-256 checksum for ${selectedRelease.assetName}; refusing to install an unverified package.")
         tempDir.deleteRecursively()
@@ -365,7 +388,8 @@ private data class ReleaseInfo(
     val url: String,
     val assetName: String,
     val sha256: String?,
-    val checksumsUrl: String? = null
+    val checksumsUrl: String? = null,
+    val signatureUrl: String? = null
 )
 
 private fun fetchReleaseChecksum(client: HttpClient, checksumsUrl: String, assetName: String): String? {

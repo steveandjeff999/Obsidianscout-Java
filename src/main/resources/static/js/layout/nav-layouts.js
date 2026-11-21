@@ -33,7 +33,7 @@ export function setupTopbarDropdowns(sidebar) {
     const brand = sidebar.querySelector(".sidebar-brand");
     if (brand) {
         brand.title = "ObsidianScout";
-        brand.innerHTML = `<img class="topbar-brand-icon" src="/assets/images/obsidian/obsidian-192.png" onerror="this.src='/favicon.ico'" alt="ObsidianScout">`;
+        brand.innerHTML = `<img class="topbar-brand-icon" src="/assets/images/obsidian/obsidian-192.png" data-fallback-src="/favicon.ico" alt="ObsidianScout">`;
     }
 
     const nav = sidebar.querySelector(".sidebar-nav");

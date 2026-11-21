@@ -78,7 +78,8 @@ private val consoleLog = org.slf4j.LoggerFactory.getLogger("com.obsidianscout.Ap
 private val documentHeaders = listOf(
     "X-Frame-Options" to "DENY",
     "X-XSS-Protection" to "1; mode=block",
-    "Content-Security-Policy" to "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://static.cloudflareinsights.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data: blob:; font-src 'self' data: https://cdnjs.cloudflare.com; connect-src 'self' https://cloudflareinsights.com; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self';",
+    // Rendered pages set their own policy with their inline scripts' hashes (see respondStaticHtml); this covers the rest.
+    "Content-Security-Policy" to com.obsidianscout.security.ContentSecurityPolicy.DEFAULT,
     "Referrer-Policy" to "strict-origin-when-cross-origin",
     "Permissions-Policy" to "geolocation=(), microphone=(), camera=(self)",
 )

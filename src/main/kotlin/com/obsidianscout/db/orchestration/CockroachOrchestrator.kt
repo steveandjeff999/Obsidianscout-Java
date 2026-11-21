@@ -285,6 +285,28 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
         consoleLog.info("[Cockroach] CockroachDB installation completed successfully.")
     }
 
+    /**
+     * Checks [archive] against the `.sha256sum` file Cockroach Labs publishes next to each binary. Best effort: if that
+     * file can't be fetched the install continues with a warning; a hash that doesn't match deletes the archive and fails.
+     */
+    private fun verifyPublishedChecksum(archive: File, downloadUrl: String) {
+        val expected = runCatching {
+            val conn = URI("$downloadUrl.sha256sum").toURL().openConnection().apply { connectTimeout = 15_000; readTimeout = 15_000 }
+            conn.getInputStream().use { it.readNBytes(4096) }.toString(Charsets.UTF_8)
+                .trim().split(Regex("\\s+")).firstOrNull()?.lowercase()?.takeIf { it.matches(Regex("^[0-9a-f]{64}$")) }
+        }.getOrNull()
+        if (expected == null) {
+            consoleLog.warn("[Cockroach] Could not fetch a published SHA-256 for ${archive.name}; continuing without checksum verification.")
+            return
+        }
+        val result = com.obsidianscout.utils.UpdateValidator.validateChecksum(archive, expected)
+        if (result is com.obsidianscout.utils.UpdateValidator.ValidationResult.Error) {
+            archive.delete()
+            throw IllegalStateException("CockroachDB download failed SHA-256 verification: ${result.message}")
+        }
+        consoleLog.info("[Cockroach] SHA-256 verified for ${archive.name}.")
+    }
+
     private fun downloadAndExtractLinuxTarball() {
         val tgzFile = File(rootDir, "cockroach.tgz")
         val archLabel = if (isArm) "ARM64" else "AMD64"
@@ -294,6 +316,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                 input.copyTo(output)
             }
         }
+        verifyPublishedChecksum(tgzFile, linuxDownloadUrl)
 
         consoleLog.info("[Cockroach] Extracting tarball using native tar...")
         val tarProcess = ProcessBuilder("tar", "-xzf", tgzFile.name, "-C", ".")
@@ -328,11 +351,16 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                 input.copyTo(output)
             }
         }
+        verifyPublishedChecksum(zipFile, windowsDownloadUrl)
 
         consoleLog.info("[Cockroach] Extracting zip file...")
         ZipInputStream(zipFile.inputStream().buffered()).use { zis ->
             var entry = zis.nextEntry
             while (entry != null) {
+                if (!com.obsidianscout.utils.UpdateValidator.isSafeZipPath(rootDir, entry.name)) {
+                    zipFile.delete()
+                    throw IllegalStateException("CockroachDB zip entry is outside the install directory: ${entry.name}")
+                }
                 val newFile = File(rootDir, entry.name)
                 if (entry.isDirectory) {
                     newFile.mkdirs()

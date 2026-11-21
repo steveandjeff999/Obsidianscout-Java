@@ -5,6 +5,24 @@
  * ==========================================================================
  */
 
+// Images with data-fallback-src swap to it when they fail to load. This replaces inline error-handler attributes, which
+// the Content-Security-Policy refuses. Error events don't bubble, so listen in the capture phase.
+document.addEventListener('error', (event) => {
+    const img = event.target;
+    if (!(img instanceof HTMLImageElement)) return;
+    const fallback = img.dataset.fallbackSrc;
+    if (!fallback || img.dataset.fallbackApplied) return;
+    img.dataset.fallbackApplied = '1';
+    img.src = fallback;
+}, true);
+// This module runs deferred, so an image may already have failed before the listener existed.
+document.querySelectorAll('img[data-fallback-src]').forEach((img) => {
+    if (img.complete && img.naturalWidth === 0 && !img.dataset.fallbackApplied) {
+        img.dataset.fallbackApplied = '1';
+        img.src = img.dataset.fallbackSrc;
+    }
+});
+
 // 1. Base Layer
 import {
     safeGetItem,

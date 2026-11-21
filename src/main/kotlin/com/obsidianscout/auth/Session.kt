@@ -61,7 +61,40 @@ data class UserSession(
 
 /** A passed session check as Redis holds it, with the cookie lifetime a re-issued cookie must keep. */
 @Serializable
-data class CachedSessionCheck(val session: UserSession, val keepMeLoggedIn: Boolean, val authVersion: Long)
+data class CachedSessionCheck(
+    val session: UserSession,
+    val keepMeLoggedIn: Boolean,
+    val authVersion: Long,
+    /** HMAC over the cache key and the other fields: anyone who can write to Redis must not be able to mint a role. */
+    val mac: String = ""
+)
+
+/**
+ * Signs and checks [CachedSessionCheck] entries. The key is derived from the cluster secret for this one purpose, so a
+ * cached entry can't be forged without the secret, moved to another session's key, or reused as any other signature.
+ */
+internal object SessionCheckCacheSigner {
+    private fun key(): String? {
+        val secret = ClusterSecretService.getSessionSecret()
+        if (secret.isBlank()) return null
+        return ClusterCryptoUtils.hmacSha256("obsidianscout/redis-session-check/v1", secret)
+    }
+
+    private fun signingData(cacheKey: String, check: CachedSessionCheck): String =
+        cacheKey + "\n" + check.keepMeLoggedIn + "\n" + check.authVersion + "\n" +
+            com.obsidianscout.config.JsonSupport.json.encodeToString(UserSession.serializer(), check.session)
+
+    /** The entry with its MAC set, or null when there is no secret to sign with (then nothing is cached). */
+    fun sign(cacheKey: String, check: CachedSessionCheck): CachedSessionCheck? {
+        val k = key() ?: return null
+        return check.copy(mac = ClusterCryptoUtils.hmacSha256(signingData(cacheKey, check.copy(mac = "")), k))
+    }
+
+    fun verify(cacheKey: String, check: CachedSessionCheck): Boolean {
+        val k = key() ?: return false
+        return ClusterCryptoUtils.verifyHmac(signingData(cacheKey, check.copy(mac = "")), check.mac, k)
+    }
+}
 
 /** How long a passed session check is reused. Pages poll every 10-30 seconds, so a few seconds missed almost every time. */
 private const val SESSION_CHECK_CACHE_SECONDS = 60L
@@ -113,7 +146,10 @@ suspend fun ApplicationCall.requireSession(): UserSession {
         val authVersion = if (sessionCacheKey != null) com.obsidianscout.db.DataVersion.authVersion() else null
         if (sessionCacheKey != null && authVersion != null) {
             val cached = com.obsidianscout.cache.RedisCache.readFromRedis<CachedSessionCheck>(sessionCacheKey)
-            if (cached != null && cached.authVersion == authVersion) {
+            if (cached != null && cached.authVersion == authVersion &&
+                cached.session.userId == session.userId && cached.session.sessionId == session.sessionId &&
+                SessionCheckCacheSigner.verify(sessionCacheKey, cached)
+            ) {
                 attributes.put(KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY, cached.keepMeLoggedIn)
                 runCatching { com.obsidianscout.security.SessionWatch.observe(this, cached.session) }
                 return cached.session
@@ -269,7 +305,9 @@ suspend fun ApplicationCall.requireSession(): UserSession {
             val secondsLeft = sessionRow[UserSessions.expiresAt]?.let { java.time.Duration.between(Instant.now(), it).seconds }
             val ttl = minOf(SESSION_CHECK_CACHE_SECONDS, secondsLeft ?: SESSION_CHECK_CACHE_SECONDS)
             if (ttl > 0) {
-                com.obsidianscout.cache.RedisCache.writeToRedis(sessionCacheKey, ttl, CachedSessionCheck(effectiveSession, keepMeLoggedIn, authVersion))
+                SessionCheckCacheSigner.sign(sessionCacheKey, CachedSessionCheck(effectiveSession, keepMeLoggedIn, authVersion))?.let {
+                    com.obsidianscout.cache.RedisCache.writeToRedis(sessionCacheKey, ttl, it)
+                }
             }
         }
         runCatching { com.obsidianscout.security.SessionWatch.observe(this, effectiveSession) }

@@ -246,6 +246,8 @@ object ScoutingService {
         config: ScoutingConfig,
         isPrescout: Boolean = false
     ): ScoutingEntryRecord {
+        @Suppress("NAME_SHADOWING")
+        val request = ChoiceAnswers.sanitize(config, request)
         val missing = config.fields.filter { it.required && !request.data.containsKey(it.id) }
         if (missing.isNotEmpty()) {
             val missingList = missing.joinToString(", ") { it.id }
@@ -421,6 +423,8 @@ object ScoutingService {
         request: ScoutingEntryRequest,
         config: ScoutingConfig
     ): ScoutingEntryRecord {
+        @Suppress("NAME_SHADOWING")
+        val request = ChoiceAnswers.sanitize(config, request)
         val entryUuid = runCatching { UUID.fromString(entryId) }.getOrElse {
             throw ApiException(HttpStatusCode.BadRequest, "Invalid entry ID format")
         }

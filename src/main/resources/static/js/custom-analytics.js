@@ -944,7 +944,7 @@
         container.innerHTML = `
             <div class="bi-kpi-wrapper">
                 <div class="bi-kpi-metric-val">${formatted}</div>
-                <div class="bi-kpi-subtext">${label} (${(widget.aggregation || "avg").toUpperCase()})</div>
+                <div class="bi-kpi-subtext">${escapeHtml(label)} (${escapeHtml((widget.aggregation || "avg").toUpperCase())})</div>
                 ${overallAvg > 0 ? `
                     <div class="bi-kpi-delta ${delta >= 0 ? "positive" : "negative"}">
                         ${delta >= 0 ? "▲" : "▼"} ${deltaFormatted} vs Event Mean (${overallAvg.toFixed(1)})
@@ -987,15 +987,15 @@
                 <table class="bi-table">
                     <thead>
                         <tr>
-                            <th>${getFieldLabel(dim)}</th>
+                            <th>${escapeHtml(getFieldLabel(dim))}</th>
                             <th>Matches</th>
-                            ${allMeasures.map(m => `<th>${getFieldLabel(m)} (${(widget.aggregation || "avg").toUpperCase()})</th>`).join("")}
+                            ${allMeasures.map(m => `<th>${escapeHtml(getFieldLabel(m))} (${escapeHtml((widget.aggregation || "avg").toUpperCase())})</th>`).join("")}
                         </tr>
                     </thead>
                     <tbody>
                         ${rows.map(r => `
-                            <tr data-team="${r.rawTeam}" style="cursor: pointer;">
-                                <td><strong>${r.dimension}</strong></td>
+                            <tr data-team="${escapeHtml(r.rawTeam)}" style="cursor: pointer;">
+                                <td><strong>${escapeHtml(r.dimension)}</strong></td>
                                 <td>${r.matchCount}</td>
                                 ${allMeasures.map(m => {
                                     const val = r[m];

@@ -103,7 +103,8 @@ import com.obsidianscout.db.ChatService
 import com.obsidianscout.db.ChatMessages
 
 /** A page with the shared sidebar and asset versions already applied. */
-private class RenderedPage(val html: String, val etag: String, val sourceStamp: String)
+/** [csp] allows exactly this page's own inline scripts, by hash. */
+private class RenderedPage(val html: String, val etag: String, val sourceStamp: String, val csp: String)
 
 /** fileName -> rendered page. Rebuilt only when the app version or a source file's modification time changes. */
 private val renderedPages = java.util.concurrent.ConcurrentHashMap<String, RenderedPage>()
@@ -131,10 +132,21 @@ private fun renderPage(fileName: String, version: String, stamp: String): Render
     val withSidebar = if (sidebar.isNullOrBlank()) html else html.replace(SIDEBAR_REGEX, sidebar)
     val versioned = injectAssetVersioning(injectEarlyTheme(withSidebar), version)
     val crc = java.util.zip.CRC32().apply { update(versioned.toByteArray()) }
-    return RenderedPage(versioned, "\"p-${java.lang.Long.toHexString(crc.value)}\"", stamp)
+    return RenderedPage(versioned, "\"p-${java.lang.Long.toHexString(crc.value)}\"", stamp,
+        com.obsidianscout.security.ContentSecurityPolicy.forPage(versioned))
 }
 
-private val HEAD_OPEN_REGEX = Regex("""<head(\s[^>]*)?>""", RegexOption.IGNORE_CASE)
+/** path -> (modification time, policy) for HTML files served unrendered by the static handler. */
+private val rawHtmlCsps = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, String>>()
+
+private fun rawHtmlCsp(key: String, lastModified: Long, read: () -> String): String {
+    rawHtmlCsps[key]?.takeIf { it.first == lastModified }?.let { return it.second }
+    val csp = com.obsidianscout.security.ContentSecurityPolicy.forPage(read())
+    rawHtmlCsps[key] = lastModified to csp
+    return csp
+}
+
+private val HEAD_OPEN_REGEX =Regex("""<head(\s[^>]*)?>""", RegexOption.IGNORE_CASE)
 
 /**
  * Paints the root dark before anything else loads. Pages set `theme-dark` on <body> from a script inside the body,
@@ -164,6 +176,7 @@ internal suspend fun ApplicationCall.respondStaticHtml(fileName: String, status:
     }
     response.headers.append("CDN-Cache-Control", "no-cache")
     response.headers.append("Cloudflare-CDN-Cache-Control", "no-cache")
+    response.headers.append("Content-Security-Policy", page.csp)
     if (status == HttpStatusCode.OK) {
         response.headers.append(HttpHeaders.ETag, page.etag)
         // A CDN that compresses the page weakens the ETag (W/"..."), so compare without that prefix.
@@ -414,14 +427,26 @@ fun Route.staticWebRoutes() {
 
         // Prefer filesystem static/ folder (native binary deployment) for correct MIME types.
         // Fall back to classpath resources for fat-JAR deployment.
+        // HTML served raw from here (the index.html fallback for unknown paths) gets a policy allowing its own inline
+        // scripts by hash; the default policy from App.kt has none, so those scripts would be refused.
         val staticDir = File("static")
         if (staticDir.exists() && staticDir.isDirectory) {
             staticFiles("/", staticDir) {
                 default("index.html")
+                modify { file, call ->
+                    if (file.name.endsWith(".html", ignoreCase = true)) {
+                        call.response.headers.append("Content-Security-Policy", rawHtmlCsp(file.path, file.lastModified()) { file.readText() })
+                    }
+                }
             }
         } else {
             staticResources("/", "static") {
                 default("index.html")
+                modify { url, call ->
+                    if (url.path.endsWith(".html", ignoreCase = true)) {
+                        call.response.headers.append("Content-Security-Policy", rawHtmlCsp(url.toString(), 0L) { url.readText() })
+                    }
+                }
             }
         }
     }

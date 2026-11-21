@@ -542,15 +542,15 @@ function renderMetricsTable(fieldStats) {
             maxVal = "Yes";
             totalVal = `${st.sum} matches`;
         } else if (["select", "radio"].includes(f.type)) {
-            avgRate = Object.entries(st.options).map(([k, v]) => `${k} (${v})`).join(", ") || "--";
+            avgRate = Object.entries(st.options).map(([k, v]) => `${escText(k)} (${escText(v)})`).join(", ") || "--";
             maxVal = "--";
             totalVal = `${st.count} entries`;
         }
 
         return `
             <tr>
-                <td><strong>${localize(f.label)}</strong></td>
-                <td><span class="meta-pill" style="font-size: 11px;">${phase.toUpperCase()}</span></td>
+                <td><strong>${escText(localize(f.label))}</strong></td>
+                <td><span class="meta-pill" style="font-size: 11px;">${escText(String(phase).toUpperCase())}</span></td>
                 <td><strong style="color: var(--accent);">${avgRate}</strong></td>
                 <td>${maxVal}</td>
                 <td>${totalVal}</td>
