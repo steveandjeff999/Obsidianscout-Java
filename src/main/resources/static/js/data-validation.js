@@ -45,14 +45,19 @@ function setupControlListeners() {
 function setupModalListeners() {
     const modal = document.getElementById("validation-modal");
     const closeBtn = document.getElementById("modal-close-btn");
+    // Closing also removes any playing match video, so it doesn't keep playing behind the page.
+    const close = () => {
+        modal.classList.remove("active");
+        modal.querySelectorAll(".match-video-frame iframe").forEach((f) => f.remove());
+    };
     if (modal && closeBtn) {
-        closeBtn.addEventListener("click", () => modal.classList.remove("active"));
+        closeBtn.addEventListener("click", close);
         modal.addEventListener("click", (e) => {
-            if (e.target === modal) modal.classList.remove("active");
+            if (e.target === modal) close();
         });
         document.addEventListener("keydown", (e) => {
             if (e.key === "Escape" && modal.classList.contains("active")) {
-                modal.classList.remove("active");
+                close();
             }
         });
     }
@@ -231,6 +236,12 @@ function renderMatchesTable() {
             <div style="font-weight: 700; font-size: 0.95rem;">${escapeHtml(match.label)}</div>
             <div class="metric-subtext">${escapeHtml(match.matchKey)}</div>
         `;
+        const videoLinks = Obsidianscout.createMatchVideoLinks ? Obsidianscout.createMatchVideoLinks(match.videos) : null;
+        if (videoLinks) {
+            videoLinks.style.marginLeft = "0";
+            videoLinks.style.marginTop = "4px";
+            matchTd.appendChild(videoLinks);
+        }
         tr.appendChild(matchTd);
 
         // Red Alliance Column
@@ -508,6 +519,10 @@ function openMatchDetailsModal(match) {
     subtitle.textContent = `Match Key: ${match.matchKey} | Event: ${match.eventKey.toUpperCase()}`;
 
     body.innerHTML = "";
+
+    // Watch the match while checking the scouted numbers against it.
+    const player = Obsidianscout.createMatchVideoPlayer ? Obsidianscout.createMatchVideoPlayer(match.videos, { label: match.label }) : null;
+    if (player) body.appendChild(player);
 
     // Red Alliance Breakdown
     body.appendChild(createAllianceModalBreakdown(match.redAlliance, match));

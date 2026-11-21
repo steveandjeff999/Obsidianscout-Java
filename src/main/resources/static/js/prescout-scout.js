@@ -468,6 +468,9 @@ function buildField(field) {
         case "counter":
             ({ wrapper: input, input: actualInput } = buildCounter(field));
             break;
+        case "timer":
+            ({ wrapper: input, input: actualInput } = window.ObsidianTimerField.build(field));
+            break;
         case "rating":
             ({ wrapper: input, input: actualInput } = buildRating(field));
             break;
@@ -872,7 +875,7 @@ function readFieldValue(field, input) {
     if (field.type === "checkbox") {
         return input.checked;
     }
-    if (field.type === "number" || field.type === "counter" || field.type === "rating") {
+    if (field.type === "number" || field.type === "counter" || field.type === "rating" || field.type === "timer") {
         return input.value === "" ? null : Number(input.value);
     }
     return input.value.trim();
@@ -956,7 +959,7 @@ function applyEntryToForm(entry, fields, form) {
             return;
         }
         input.value = value;
-        if (field.type === "rating") {
+        if (field.type === "rating" || field.type === "timer") {
             input.dispatchEvent(new Event("input", { bubbles: true }));
         }
     });
@@ -983,7 +986,7 @@ function clearFormFields(fields, form) {
             return;
         }
         input.value = (field.type === "rating" && field.min !== undefined && field.min !== null) ? String(field.min) : (field.type === "rating" ? "1" : "");
-        if (field.type === "rating") {
+        if (field.type === "rating" || field.type === "timer") {
             input.dispatchEvent(new Event("input", { bubbles: true }));
         }
     });

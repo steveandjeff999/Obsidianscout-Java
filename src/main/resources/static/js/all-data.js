@@ -648,6 +648,14 @@ function renderDetail(state, entry) {
         container.appendChild(warnBanner);
     }
 
+    // Match video (TBA), loaded in the background so the detail view isn't held up.
+    if (entry.matchKey && typeof Obsidianscout.appendEntryMatchVideo === "function") {
+        const videoSlot = document.createElement("div");
+        videoSlot.className = "entry-match-video";
+        container.appendChild(videoSlot);
+        Obsidianscout.appendEntryMatchVideo(videoSlot, entry);
+    }
+
     // Meta Group
     const metaGroup = document.createElement("div");
     metaGroup.className = "pit-detail-group";

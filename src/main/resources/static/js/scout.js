@@ -42,6 +42,13 @@ async function loadScoutPageData(me) {
         const eventKey = Obsidianscout.resolveEventKey(settings);
         
         const config = await Obsidianscout.request("/api/config");
+        // No canvas choice of the team's own: use the season's default canvas, if the site admins set one.
+        if (config && (config.layout === undefined || config.layout === null)) {
+            try {
+                const season = await Obsidianscout.request("/api/config/season-canvas");
+                if (season && season.layout) config.layout = season.layout;
+            } catch (e) { /* offline or unavailable: the classic list it is */ }
+        }
         window.activeFormConfig = config;
 
         // Restore original HTML
@@ -152,24 +159,72 @@ async function loadScoutPageData(me) {
                 const node = buildField(field);
                 if (node) {
                     node.dataset.phase = phase;
+                    node.dataset.fieldId = field.id;
                     fieldContainer.appendChild(node);
                 }
             });
 
         const tabsRow = document.getElementById("scouting-tabs");
+        // Phase tabs belong to the classic list; a canvas form has its own pages instead.
+        function refreshPhaseTabs(canvasOn) {
+            if (!tabsRow) return;
+            tabsRow.querySelectorAll(".tab").forEach(tab => {
+                const count = phaseCounts[tab.dataset.tab] || 0;
+                tab.classList.toggle("hidden", canvasOn || count === 0);
+            });
+        }
         if (tabsRow) {
-            const tabs = tabsRow.querySelectorAll(".tab");
-            tabs.forEach(tab => {
-                const phase = tab.dataset.tab;
-                const count = phaseCounts[phase] || 0;
-                if (count === 0) {
-                    tab.classList.add("hidden");
-                } else {
-                    tab.classList.remove("hidden");
-                }
+            refreshPhaseTabs(false);
+            tabsRow.querySelectorAll(".tab").forEach(tab => {
                 tab.addEventListener("click", () => {
                     switchTab(tab.dataset.tab);
                 });
+            });
+        }
+
+        // Canvas layout (admin-designed): shown instead of the list when the config asks for it. The classic inputs
+        // still exist underneath, so saving, drafts and validation work the same either way.
+        const CanvasForm = window.ObsidianCanvasForm;
+        const canvasHost = document.getElementById("canvas-form-host");
+        const styleToggle = document.getElementById("form-style-toggle");
+        const canvasAvailable = Boolean(CanvasForm && canvasHost && CanvasForm.hasCanvas(config));
+        const canvasLayout = canvasAvailable ? CanvasForm.normalizeLayout(config.layout) : null;
+        const FORM_STYLE_KEY = "obsidian-scout-form-style";
+        function prefersClassic() {
+            try { return localStorage.getItem(FORM_STYLE_KEY) === "classic"; } catch (e) { return false; }
+        }
+        function applyFormStyle() {
+            const useCanvas = canvasAvailable && !(canvasLayout.allowClassicToggle && prefersClassic());
+            if (useCanvas && !CanvasForm.isActive()) {
+                CanvasForm.mount(canvasHost, {
+                    config,
+                    form,
+                    fieldContainer,
+                    onPageChange: (page) => {
+                        if (window.GamepadService && page && page.phase) window.GamepadService.setPhase(page.phase);
+                    }
+                });
+            } else if (!useCanvas && CanvasForm && CanvasForm.isActive()) {
+                CanvasForm.active().unmount();
+            }
+            refreshPhaseTabs(useCanvas);
+            if (styleToggle) {
+                const canToggle = canvasAvailable && canvasLayout.allowClassicToggle;
+                styleToggle.classList.toggle("hidden", !canToggle);
+                styleToggle.dataset.canToggle = canToggle ? "1" : "";
+                styleToggle.innerHTML = useCanvas
+                    ? `<span class="material-symbols-outlined">view_list</span> ${t('scout.classic_view', 'Classic list')}`
+                    : `<span class="material-symbols-outlined">dashboard</span> ${t('scout.canvas_view', 'Canvas view')}`;
+            }
+        }
+        applyFormStyle();
+        if (styleToggle) {
+            styleToggle.addEventListener("click", () => {
+                const goClassic = CanvasForm && CanvasForm.isActive();
+                try { localStorage.setItem(FORM_STYLE_KEY, goClassic ? "classic" : "canvas"); } catch (e) { /* ignore */ }
+                applyFormStyle();
+                setFormEnabled(form, formBlocked, pointsPreviewCard, Boolean(teamSelect.value && matchSelect.value));
+                updatePointsPreview(fields, form, pointsPreview);
             });
         }
         const firstVisibleTab = tabsRow ? tabsRow.querySelector(".tab:not(.hidden)") : null;
@@ -189,6 +244,19 @@ async function loadScoutPageData(me) {
                 if (!activeForm) return;
 
                 // 1. System Actions
+                if (binding.actionType === 'switchTab' && window.ObsidianCanvasForm && ObsidianCanvasForm.isActive()) {
+                    const canvas = ObsidianCanvasForm.active();
+                    const pages = canvas.layout.pages;
+                    const cur = Math.max(0, pages.indexOf(canvas.currentPage()));
+                    if (binding.targetValue === 'prev') canvas.showPage(cur > 0 ? cur - 1 : pages.length - 1);
+                    else if (binding.targetValue === 'next') canvas.showPage(cur < pages.length - 1 ? cur + 1 : 0);
+                    else {
+                        const idx = pages.findIndex(p => p.phase === binding.targetValue);
+                        if (idx >= 0) canvas.showPage(idx);
+                    }
+                    return;
+                }
+
                 if (binding.actionType === 'switchTab') {
                     const tabs = Array.from(document.querySelectorAll("#scouting-tabs .tab:not(.hidden)"));
                     if (tabs.length === 0) return;
@@ -292,8 +360,10 @@ async function loadScoutPageData(me) {
             pointsPreview.endgame.parentElement?.classList.add("hidden");
         }
 
-        fieldContainer.addEventListener("input", () => updatePointsPreview(fields, form, pointsPreview));
-        fieldContainer.addEventListener("change", () => updatePointsPreview(fields, form, pointsPreview));
+        // Field widgets may sit on the canvas instead of in the list, so listen on both.
+        const isFormFieldEvent = (e) => Boolean(e.target && e.target.closest && e.target.closest("#form-fields, #canvas-form-host"));
+        form.addEventListener("input", (e) => { if (isFormFieldEvent(e)) updatePointsPreview(fields, form, pointsPreview); });
+        form.addEventListener("change", (e) => { if (isFormFieldEvent(e)) updatePointsPreview(fields, form, pointsPreview); });
         updatePointsPreview(fields, form, pointsPreview);
 
         if (clearButton) {
@@ -496,7 +566,7 @@ async function loadScoutPageData(me) {
                         const el = form.elements[f.id] || form.querySelector(`[name="${f.id}"]`);
                         if (el) {
                             el.value = val;
-                            if (f.type === "rating") {
+                            if (f.type === "rating" || f.type === "timer") {
                                 el.dispatchEvent(new Event("input", { bubbles: true }));
                             }
                         }
@@ -957,6 +1027,9 @@ function buildField(field) {
         case "counter":
             ({ wrapper: input, input: actualInput } = buildCounter(field));
             break;
+        case "timer":
+            ({ wrapper: input, input: actualInput } = window.ObsidianTimerField.build(field));
+            break;
         case "rating":
             ({ wrapper: input, input: actualInput } = buildRating(field));
             break;
@@ -1348,20 +1421,23 @@ function applyNumberBounds(input, field) {
 }
 
 function buildPayload(fields, form) {
+    const canvas = (window.ObsidianCanvasForm && ObsidianCanvasForm.isActive()) ? ObsidianCanvasForm.active() : null;
     // Marks every missing or out-of-range field at once and jumps to the first.
-    return Obsidianscout.collectValidatedPayload(fields, form, {
+    const payload = Obsidianscout.collectValidatedPayload(fields, form, {
         readValue: readFieldValue,
         getPhase: getFieldPhase,
-        switchTab,
+        switchTab: canvas ? null : switchTab,
         localize: (label) => (typeof Obsidianscout.localize === 'function' ? Obsidianscout.localize(label) : label)
     });
+    if (!payload && canvas) canvas.revealInvalid();
+    return payload;
 }
 
 function readFieldValue(field, input) {
     if (field.type === "checkbox") {
         return input.checked;
     }
-    if (field.type === "number" || field.type === "counter" || field.type === "rating") {
+    if (field.type === "number" || field.type === "counter" || field.type === "rating" || field.type === "timer") {
         return input.value === "" ? null : Number(input.value);
     }
     return input.value.trim();
@@ -1395,6 +1471,9 @@ function updatePointsPreview(fields, form, preview) {
             totals.endgame += points;
         }
     });
+
+    // Programmatic changes (clear, loading a saved entry, restoring a draft) end here; keep canvas buttons in step.
+    if (window.ObsidianCanvasForm) ObsidianCanvasForm.refreshAll();
 
     if (preview.auto) preview.auto.textContent = formatNumber(totals.auto);
     if (preview.teleop) preview.teleop.textContent = formatNumber(totals.teleop);
@@ -1445,7 +1524,7 @@ function applyEntryToForm(entry, fields, form) {
             return;
         }
         input.value = value;
-        if (field.type === "rating") {
+        if (field.type === "rating" || field.type === "timer") {
             input.dispatchEvent(new Event("input", { bubbles: true }));
         }
     });
@@ -1472,7 +1551,7 @@ function clearFormFields(fields, form) {
             return;
         }
         input.value = (field.type === "rating" && field.min !== undefined && field.min !== null) ? String(field.min) : (field.type === "rating" ? "1" : "");
-        if (field.type === "rating") {
+        if (field.type === "rating" || field.type === "timer") {
             input.dispatchEvent(new Event("input", { bubbles: true }));
         }
     });
@@ -1490,6 +1569,14 @@ function setFormEnabled(form, notice, pointsCard, enabled) {
     const fieldContainer = document.getElementById("form-fields");
     if (fieldContainer) {
         fieldContainer.classList.toggle("hidden", !enabled);
+    }
+    const canvasHost = document.getElementById("canvas-form-host");
+    if (canvasHost) {
+        canvasHost.classList.toggle("hidden", !enabled || !(window.ObsidianCanvasForm && ObsidianCanvasForm.isActive()));
+    }
+    const styleToggle = document.getElementById("form-style-toggle");
+    if (styleToggle) {
+        styleToggle.classList.toggle("hidden", !enabled || !styleToggle.dataset.canToggle);
     }
     if (pointsCard) {
         pointsCard.classList.toggle("hidden", !enabled);
@@ -1521,6 +1608,12 @@ function setFormEnabled(form, notice, pointsCard, enabled) {
 }
 
 function switchTab(activeTab) {
+    if (window.ObsidianCanvasForm && ObsidianCanvasForm.isActive()) {
+        // Canvas pages replace the phase tabs; fields left in the list below the canvas are all shown.
+        const page = ObsidianCanvasForm.active().currentPage();
+        if (window.GamepadService) window.GamepadService.setPhase((page && page.phase) || activeTab);
+        return;
+    }
     const tabs = Array.from(document.querySelectorAll("#scouting-tabs .tab"));
     const visibleTabs = tabs.filter(tab => !tab.classList.contains("hidden"));
 

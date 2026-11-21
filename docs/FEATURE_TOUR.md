@@ -103,7 +103,7 @@ The qualitative (subjective) scouting form. Rate driving, defense, strategy and 
 
 ### Scout (`/scout`)
 
-The main match scouting form. Pick a team and match, then record auto, teleop and endgame actions. The form is built from your team's scouting config and shows a live points preview. It works offline and syncs when the device reconnects.
+The main match scouting form. Pick a team and match, then record auto, teleop and endgame actions. The form is built from your team's scouting config and shows a live points preview. Timer fields time an action with Start and Stop, or, in cycle mode, average the time between Lap taps. It works offline and syncs when the device reconnects.
 
 ![Scout](/assets/images/docs/scout.webp)
 
@@ -113,7 +113,7 @@ The main match scouting form. Pick a team and match, then record auto, teleop an
 
 ### All Data (`/all-data`)
 
-Match, pit and qualitative entries in one searchable list. Filter by event, team, scout, match or entry type, open any entry to see its full payload, and export to CSV.
+Match, pit and qualitative entries in one searchable list. Filter by event, team, scout, match or entry type, open any entry to see its full payload (with a **Watch match** player when The Blue Alliance has a video), and export to CSV.
 
 ![All Data](/assets/images/docs/all-data.webp)
 
@@ -137,7 +137,7 @@ A dashboard builder. Add visuals (stat cards, bar, pie, line and more), create c
 
 ### Data Validation (`/data-validation`)
 
-Finds bad or suspicious data. It compares scouted alliance totals against official match scores and team averages against EPA, xP and OPR, and flags matches that are missing scouting or have large differences. See [Data Validation](DATA_VALIDATION.md).
+Finds bad or suspicious data. It compares scouted alliance totals against official match scores and team averages against EPA, xP and OPR, and flags matches that are missing scouting or have large differences. Matches with a video on The Blue Alliance show a link, and the breakdown has a player so you can check the numbers against the match. See [Data Validation](DATA_VALIDATION.md).
 
 ![Data Validation](/assets/images/docs/data-validation.webp)
 
@@ -219,7 +219,7 @@ Predicts every scheduled match at an event in one list. Choose the prediction mo
 
 ### Match Planning (`/match-planning`)
 
-A whiteboard for planning a match. Load a match to see both alliances on the field image, draw auto, teleop and endgame paths, and look at each team's stats and performance graph.
+A whiteboard for planning a match. Load a match to see both alliances on the field image, draw auto, teleop and endgame paths, and look at each team's stats and performance graph. **Match Videos** plays this match's video, or for an upcoming match each team's most recent match video at the event.
 
 ![Match Planning](/assets/images/docs/match-planning.webp)
 
@@ -307,7 +307,7 @@ Plan who scouts what. Create single assignments or use the bulk match wizard, pl
 
 ### Scout Report (`/scouter-report`)
 
-Per-scout activity for a chosen period: match, pit and qualitative entries, matches covered, assignment completion and late or missed assignments. It can export to CSV.
+Per-scout activity for a chosen period: match, pit and qualitative entries, matches covered, assignment completion and late or missed assignments. **Accuracy** compares the alliances each scout worked on with the official score (foul points removed when The Blue Alliance reports them): the percentage, the average points off, and whether they tend to over- or under-count. It uses the current season's events only, because entries are scored with the current form. It can export to CSV.
 
 ![Scout Report](/assets/images/docs/scouter-report.webp)
 

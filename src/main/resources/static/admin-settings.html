@@ -109,6 +109,8 @@
 
                         <button class="tab" id="btn-raw-editor" type="button" data-i18n="settings.raw_editor">Raw JSON</button>
 
+                        <button class="tab" id="btn-canvas-editor" type="button" data-i18n="settings.canvas_editor">Canvas Layout</button>
+
                     </div>
 
                     <!-- Live editing status (filled by config-collab.js) -->
@@ -174,6 +176,10 @@
                         </div>
 
                     </div>
+
+                    <!-- Canvas layout editor (match form only; filled by js/components/canvas-form-editor.js) -->
+
+                    <div id="canvas-editor-container" class="hidden"></div>
 
                     <!-- Raw JSON Textarea (Hidden by default) -->
 
@@ -805,6 +811,8 @@
     <script defer src="/js/services/config-collab.js"></script>
 <script defer src="/js/admin-slack.js"></script>
 <script defer src="/js/event-picker.js"></script>
+<script defer src="/js/components/canvas-form.js"></script>
+<script defer src="/js/components/canvas-form-editor.js"></script>
 <script defer src="/js/admin-settings.js"></script>
 
 </body>

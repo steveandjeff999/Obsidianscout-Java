@@ -228,6 +228,45 @@ fun Route.configRoutes() {
                     val updated = ConfigService.applyDefaultConfig(session.teamNumber, session.program, request.configType, request.presetName)
                     call.respond(updated)
                 }
+                // Canvas scouting forms: an image (field map, background) the admin places on the canvas. Stored as a
+                // blob and referenced from the config JSON by its /api/blobs/ URL, so configs stay small enough to
+                // edit live. The client falls back to embedding the image when file storage isn't running.
+                post("/canvas-image") {
+                    val session = call.requireAdminOrPage("admin-settings")
+                    if (!com.obsidianscout.blob.BlobService.isEnabled) {
+                        throw ApiException(HttpStatusCode.ServiceUnavailable, "File storage isn't running on this server")
+                    }
+                    val maxBytes = 6L * 1024 * 1024
+                    val multipart = call.receiveMultipart(formFieldLimit = maxBytes + 64 * 1024)
+                    var bytes: ByteArray? = null
+                    while (true) {
+                        val part = multipart.readPart() ?: break
+                        try {
+                            if (part is PartData.FileItem && bytes == null) {
+                                bytes = try {
+                                    part.streamProvider().use { com.obsidianscout.db.BackupService.readLimited(it, maxBytes) }
+                                } catch (e: Exception) {
+                                    throw ApiException(HttpStatusCode.PayloadTooLarge, "Images must be ${maxBytes / (1024 * 1024)} MB or smaller")
+                                }
+                            }
+                        } finally {
+                            part.release()
+                        }
+                    }
+                    val data = bytes ?: throw ApiException(HttpStatusCode.BadRequest, "No image uploaded")
+                    val format = com.obsidianscout.scouting.ImageMetadataStripper.detect(data)
+                        ?: throw ApiException(HttpStatusCode.UnsupportedMediaType, "Use a PNG, JPEG or WebP image")
+                    val clean = com.obsidianscout.scouting.ImageMetadataStripper.strip(data, format) ?: data
+                    val id = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        com.obsidianscout.blob.BlobService.put(clean, format.mime, com.obsidianscout.blob.BlobService.KIND_FORM_IMAGE, session.teamNumber, session.program)
+                    }
+                    call.respond(mapOf("url" to com.obsidianscout.blob.BlobService.url(id)))
+                }
+                // The season's default canvas (if a superadmin switched one on); used when the team has no layout of its own.
+                get("/season-canvas") {
+                    val session = call.requireSession()
+                    call.respond(com.obsidianscout.config.SeasonCanvasService.forTeam(session.teamNumber, session.program))
+                }
                 post("/reset") {
                     val session = call.requireAdminOrPage("admin-settings")
                     val request = call.receive<ResetConfigRequest>()

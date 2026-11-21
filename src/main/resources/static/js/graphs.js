@@ -2197,7 +2197,7 @@ function buildMetricOptions(config) {
             ? (Obsidianscout.localize(field.label) || field.id) 
             : (field.label || field.id);
 
-        if (type === "number" || type === "counter" || type === "rating") {
+        if (type === "number" || type === "counter" || type === "rating" || type === "timer") {
             options.push({ id: `field:${field.id}`, label, kind: "numeric", fieldId: field.id, field });
         } else if (type === "select" || type === "checkbox") {
             options.push({ id: `category:${field.id}`, label, kind: "category", fieldId: field.id, field });

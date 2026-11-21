@@ -79,9 +79,13 @@ object ApiCompat {
      * this level on.
      * 3: Match 13 Expected Points fields renamed from `exp` / `useMatch13Exp` / `totalExp` / `expDiff` /
      * `match13TeamExp` to `xP` / `useMatch13xP` / `totalxP` / `xPDiff` / `match13TeamxP`.
+     * 4: `timer` scouting field type (number of seconds, with a `mode`), the optional canvas `layout` on the match
+     * config, and match `videos`. Apps below app level 2 show a timer as a text box and drop `layout` and the
+     * timer `mode` when they save a config, so they get the update warning.
      */
-    const val API_LEVEL = 3
-    const val MIN_APP_API_LEVEL = 1
+    const val API_LEVEL = 4
+    /** 2: app knows the `timer` field type and keeps the config's canvas `layout` when it saves. */
+    const val MIN_APP_API_LEVEL = 2
 }
 
 @Serializable
@@ -1116,7 +1120,9 @@ data class MatchValidationRecord(
     val blueAlliance: AllianceValidationRecord,
     val isFullyScouted: Boolean,
     val hasAnomaly: Boolean,
-    val matchWarning: String? = null
+    val matchWarning: String? = null,
+    /** Match videos published by The Blue Alliance; empty when none are available. */
+    val videos: List<MatchVideo> = emptyList()
 )
 
 @Serializable

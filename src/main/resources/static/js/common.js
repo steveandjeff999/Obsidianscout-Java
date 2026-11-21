@@ -335,6 +335,12 @@ import {
 } from './components/submit-review.js';
 
 import {
+    createMatchVideoPlayer,
+    loadMatchVideos,
+    appendEntryMatchVideo
+} from './components/match-video.js';
+
+import {
     processImageUpload,
     isWebpSupported
 } from './utilities/media.js';
@@ -366,6 +372,9 @@ export function hideModal(modalIdOrEl) {
 
 // Export public API to window.Obsidianscout
 window.Obsidianscout = {
+    createMatchVideoPlayer,
+    loadMatchVideos: (eventKey, matchKey) => loadMatchVideos(request, eventKey, matchKey),
+    appendEntryMatchVideo: (container, entry) => appendEntryMatchVideo(request, container, entry),
     onInvalidate,
     liveRefresh,
     isQuietRefresh,

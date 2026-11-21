@@ -140,7 +140,9 @@ export function generateDefaultWidgets(config) {
         const type = fieldType(field);
         if (["section", "header", "label", "spacer"].includes(type)) continue;
         const title = ifBlank(labelText(field.label), field.id);
-        if (["counter", "number", "rating"].includes(type)) {
+        if (type === "timer") {
+            widgets.push({ id: `avg_${field.id}`, title: `Avg ${title} (s)`, type: "avg", fieldId: field.id });
+        } else if (["counter", "number", "rating"].includes(type)) {
             widgets.push({ id: `avg_${field.id}`, title: `Avg ${title}`, type: "avg", fieldId: field.id });
             if (type === "counter" || (field.pointsPer !== undefined && field.pointsPer !== null)) {
                 widgets.push({ id: `sum_${field.id}`, title: `Total ${title}`, type: "sum", fieldId: field.id });
@@ -403,7 +405,7 @@ export function buildComparison({ config, entries, teams, teamNumbers, eventKey:
         for (const field of fields) {
             const type = fieldType(field);
             if (skip.includes(type)) continue;
-            if (["counter", "number", "slider", "rating"].includes(type)) {
+            if (["counter", "number", "slider", "rating", "timer"].includes(type)) {
                 metrics[field.id] = weightedMean((e) => readNumber((e.data || {})[field.id])) ?? 0;
             } else if (["checkbox", "toggle", "boolean"].includes(type)) {
                 const share = weightedMean((e) => {

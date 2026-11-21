@@ -57,6 +57,12 @@ export function reviewRowForField(field, value) {
             const n = value === null || value === undefined || value === "" ? null : Number(value);
             return { label, value: n === null || Number.isNaN(n) ? "-" : String(n), blank: !n };
         }
+        case "timer": {
+            const n = value === null || value === undefined || value === "" ? null : Number(value);
+            if (n === null || Number.isNaN(n)) return { label, value: "-", blank: true };
+            const text = window.ObsidianTimerField ? window.ObsidianTimerField.formatSeconds(n) : n + "s";
+            return { label, value: String(field.mode || "").toLowerCase() === "cycle" ? text + " avg" : text, blank: !n };
+        }
         case "rating":
         case "stars": {
             const n = value === null || value === undefined || value === "" ? null : Number(value);

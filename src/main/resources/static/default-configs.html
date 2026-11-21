@@ -279,6 +279,12 @@
 
                 <div id="preset-list" class="preset-grid"></div>
             </div>
+
+            <div class="card mt-16" id="season-canvas-card">
+                <h2 style="margin-top: 0;">Season canvas defaults</h2>
+                <p class="notice">Optionally give every team a ready-made canvas scouting form for a season. Teams that haven't made their own canvas see it on the Scout page; teams can still copy it or use the classic list. Leave a season without one and teams design their own.</p>
+                <div id="season-canvas-root" class="grid gap-16"></div>
+            </div>
         </main>
     </div>
 
@@ -372,6 +378,9 @@
     <script type="module" src="/js/common.js"></script>
     <script src="/js/utilities/config-duplicates.js"></script>
     <script src="/js/services/config-collab.js"></script>
+    <script defer src="/js/components/canvas-form.js"></script>
+    <script defer src="/js/components/canvas-form-editor.js"></script>
+    <script defer src="/js/season-canvas-admin.js"></script>
     <script>
         let allPresets = [];
         let currentPresetConfig = { title: "", version: 1, fields: [], analytics: [] };
@@ -517,6 +526,11 @@
             return t;
         }
 
+        /** A canvas layout (see js/components/canvas-form.js) to keep, as an object spread, or nothing. */
+        function keepLayout(src) {
+            return src && src.layout && typeof src.layout === 'object' && !Array.isArray(src.layout) ? { layout: src.layout } : {};
+        }
+
         function cleanPresetConfigForSave(raw) {
             const usedIds = new Set((raw.fields || []).map(f => f.id).filter(Boolean));
             const cleanedFields = (raw.fields || []).map(f => {
@@ -529,7 +543,8 @@
                 title: (document.getElementById('config-title')?.value || raw.title || "ObsidianScout").trim(),
                 version: Number(document.getElementById('config-version')?.value || raw.version || 1),
                 fields: cleanedFields,
-                analytics: raw.analytics || []
+                analytics: raw.analytics || [],
+                ...keepLayout(raw)
             };
         }
 
@@ -589,7 +604,8 @@
             return {
                 title: typeof doc.title === 'string' ? doc.title.trim() : 'ObsidianScout',
                 version: Number(doc.version || 1),
-                analytics: Array.isArray(doc.analytics) ? doc.analytics : []
+                analytics: Array.isArray(doc.analytics) ? doc.analytics : [],
+                ...keepLayout(doc)
             };
         }
 
@@ -608,7 +624,8 @@
                 title: (document.getElementById('config-title').value || '').trim(),
                 version: Number(document.getElementById('config-version').value || 1),
                 fields: (currentPresetConfig.fields || []).map(cleanPresetField),
-                analytics: currentPresetConfig.analytics || []
+                analytics: currentPresetConfig.analytics || [],
+                ...keepLayout(currentPresetConfig)
             };
         }
 

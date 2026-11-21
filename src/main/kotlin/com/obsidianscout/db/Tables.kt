@@ -100,6 +100,20 @@ object DeletedDefaultConfigs : Table("deleted_default_configs") {
     override val primaryKey = PrimaryKey(name, program, configType)
 }
 
+/**
+ * A canvas scouting form a superadmin set as the default for one season (program + year). Teams whose match config
+ * has no `layout` of its own show this canvas; teams that made their own choice (even "classic") keep theirs.
+ */
+object SeasonCanvasDefaults : Table("season_canvas_defaults") {
+    val program = varchar("program", 8)
+    val year = integer("year")
+    val layoutJson = text("layout_json")
+    val updatedBy = varchar("updated_by", 64).nullable()
+    val updatedAt = timestamp("updated_at")
+
+    override val primaryKey = PrimaryKey(program, year)
+}
+
 object ScoutingEntries : UUIDTable("scouting_entries") {
     val ownerTeamNumber = integer("owner_team_number")
     val program = varchar("program", 8).default("FRC")

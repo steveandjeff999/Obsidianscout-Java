@@ -45,7 +45,15 @@ data class ScouterReportRow(
     val assignmentCompletionPct: Double? = null,
     val firstSubmission: String? = null,
     val lastSubmission: String? = null,
-    val events: List<ScouterEventCount> = emptyList()
+    val events: List<ScouterEventCount> = emptyList(),
+    /** Fully scouted alliances with an official score that this scouter worked on (current season only). */
+    val accuracyAlliances: Int = 0,
+    /** 0-100. How close those alliances' scouted totals came to the official score. */
+    val accuracyPct: Double? = null,
+    /** Mean absolute points off per alliance. */
+    val accuracyAvgError: Double? = null,
+    /** Mean signed points off: positive = over-counted, negative = under-counted. */
+    val accuracyBias: Double? = null
 )
 
 @Serializable
@@ -72,7 +80,9 @@ data class ScouterReport(
     val includePrescout: Boolean,
     val generatedAt: String,
     val totals: ScouterReportTotals,
-    val scouters: List<ScouterReportRow>
+    val scouters: List<ScouterReportRow>,
+    /** Season whose events the accuracy columns cover, or null when accuracy couldn't be worked out. */
+    val accuracySeason: Int? = null
 )
 
 @Serializable
@@ -250,11 +260,48 @@ object ScouterReportService {
                 .map { ReportUser(it[Users.id].value.toString(), it[Users.username], it[Users.role]) }
 
             val (eventYears, eventNames) = loadEventInfo(teamNumber, program)
-            aggregate(
+            val report = aggregate(
                 scope, eventKey, year, teamNumber, program, includePrescout,
                 users + strayUsers, entries, assignments, eventYears, eventNames
             )
+            withAccuracy(report, teamNumber, program, entries, eventYears)
         }
+    }
+
+    /**
+     * Adds the accuracy columns. Entries are scored with the current scouting form, so only the
+     * latest season's events (the one that form is for) are checked.
+     */
+    private fun withAccuracy(
+        report: ScouterReport,
+        teamNumber: Int,
+        program: String,
+        entries: List<ReportEntry>,
+        eventYears: Map<String, Int>
+    ): ScouterReport {
+        val matchEntries = entries.filter { it.kind == EntryKind.MATCH && !it.isPrescout && !it.eventKey.isNullOrBlank() }
+        val season = matchEntries.mapNotNull { resolveYear(it.eventKey, eventYears, it.createdAt) }.maxOrNull() ?: return report
+        val wanted = report.eventKey
+        val events = matchEntries.mapNotNull { it.eventKey?.trim()?.lowercase() }.distinct().filter { key ->
+            resolveYear(key, eventYears, null) == season &&
+                (wanted == null || key == wanted) &&
+                (report.year == null || report.year == season)
+        }
+        if (events.isEmpty()) return report
+        val accuracy = runCatching { ScouterAccuracyService.compute(teamNumber, program, events) }.getOrElse { return report }
+        if (accuracy.isEmpty()) return report.copy(accuracySeason = season)
+        return report.copy(
+            accuracySeason = season,
+            scouters = report.scouters.map { row ->
+                val a = accuracy[row.userId] ?: return@map row
+                row.copy(
+                    accuracyAlliances = a.alliances,
+                    accuracyPct = a.accuracyPct,
+                    accuracyAvgError = a.avgAbsError,
+                    accuracyBias = a.avgBias
+                )
+            }
+        )
     }
 
     fun listOptions(teamNumber: Int, program: String): ScouterReportOptions = readTransaction {
@@ -330,7 +377,8 @@ object ScouterReportService {
             "Scouter", "Role", "Match Entries", "Matches Scouted", "Pit Entries", "Qual Entries", "Total Entries",
             "Events", "Teams Scouted", "Avg Completeness %", "Entries With Discrepancy",
             "Assignments", "Assignments Completed", "Assignments Skipped", "Assignment Completion %",
-            "First Submission", "Last Submission"
+            "First Submission", "Last Submission",
+            "Accuracy %", "Alliances Checked", "Avg Points Off", "Bias (+ over / - under)"
         )
         val rows = report.scouters.map { r ->
             listOf(
@@ -338,7 +386,9 @@ object ScouterReportService {
                 r.qualEntries.toString(), r.totalEntries.toString(), r.eventsScouted.toString(), r.teamsScouted.toString(),
                 r.avgCompletenessPct?.toString().orEmpty(), r.discrepancyEntries.toString(),
                 r.assignmentsTotal.toString(), r.assignmentsCompleted.toString(), r.assignmentsSkipped.toString(),
-                r.assignmentCompletionPct?.toString().orEmpty(), r.firstSubmission.orEmpty(), r.lastSubmission.orEmpty()
+                r.assignmentCompletionPct?.toString().orEmpty(), r.firstSubmission.orEmpty(), r.lastSubmission.orEmpty(),
+                r.accuracyPct?.toString().orEmpty(), r.accuracyAlliances.toString(),
+                r.accuracyAvgError?.toString().orEmpty(), r.accuracyBias?.toString().orEmpty()
             )
         }
         return CSVHelper.toCSV(headers, rows)

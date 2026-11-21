@@ -64,7 +64,15 @@ data class ScoutingConfig(
     @SerialName("first_username") val firstUsername: String? = null,
     @SerialName("first_key") val firstKey: String? = null,
     @SerialName("event_code") val eventCode: String? = null,
-    @SerialName("enable_robot_role_collection") val enableRobotRoleCollection: Boolean = false
+    @SerialName("enable_robot_role_collection") val enableRobotRoleCollection: Boolean = false,
+    /**
+     * Optional canvas layout for the match scouting form (see /js/components/canvas-form.js). The fields above stay
+     * the source of truth for what is collected; the layout only says where widgets and tap buttons sit. Kept as raw
+     * JSON so older apps and servers simply ignore it, and omitted from output when absent.
+     */
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.NEVER)
+    val layout: JsonObject? = null
 )
 
 @Serializable
@@ -118,7 +126,7 @@ object ConfigService {
         val defaultsDir = getDefaultsDirectory()
 
         transaction {
-            SchemaUtils.create(DefaultConfigs, DeletedDefaultConfigs, ScoutingConfigs, PitScoutingConfigs, QualitativeScoutingConfigs)
+            SchemaUtils.create(DefaultConfigs, DeletedDefaultConfigs, ScoutingConfigs, PitScoutingConfigs, QualitativeScoutingConfigs, com.obsidianscout.db.SeasonCanvasDefaults)
 
             val deletedPresets = DeletedDefaultConfigs.selectAll().map { row ->
                 Triple(

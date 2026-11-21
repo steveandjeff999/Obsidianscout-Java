@@ -306,10 +306,23 @@ object BlobMigrationService {
             for ((table, col) in listOf(
                 PitScoutingEntries to PitScoutingEntries.dataJson,
                 ScoutingEntries to ScoutingEntries.dataJson,
-                QualitativeScoutingEntries to QualitativeScoutingEntries.dataJson
+                QualitativeScoutingEntries to QualitativeScoutingEntries.dataJson,
+                // Canvas form images live in config JSON (team configs, presets, alliances and saved revisions).
+                com.obsidianscout.db.ScoutingConfigs to com.obsidianscout.db.ScoutingConfigs.configJson,
+                com.obsidianscout.db.PitScoutingConfigs to com.obsidianscout.db.PitScoutingConfigs.configJson,
+                com.obsidianscout.db.QualitativeScoutingConfigs to com.obsidianscout.db.QualitativeScoutingConfigs.configJson,
+                com.obsidianscout.db.ConfigRevisions to com.obsidianscout.db.ConfigRevisions.configJson,
+                com.obsidianscout.db.DefaultConfigs to com.obsidianscout.db.DefaultConfigs.configJson,
+                com.obsidianscout.db.SeasonCanvasDefaults to com.obsidianscout.db.SeasonCanvasDefaults.layoutJson
             )) {
                 table.select(col).where { col like "%${BlobService.URL_PREFIX}%" }.forEach { row ->
                     BlobService.URL_IN_TEXT_REGEX.findAll(row[col]).forEach { m -> runCatching { UUID.fromString(m.groupValues[1]) }.getOrNull()?.let { ids += it } }
+                }
+            }
+            val alliances = com.obsidianscout.db.ScoutingAlliances
+            for (col in listOf(alliances.matchConfigJson, alliances.pitConfigJson, alliances.qualitativeConfigJson)) {
+                alliances.select(col).where { col like "%${BlobService.URL_PREFIX}%" }.forEach { row ->
+                    BlobService.URL_IN_TEXT_REGEX.findAll(row[col] ?: "").forEach { m -> runCatching { UUID.fromString(m.groupValues[1]) }.getOrNull()?.let { ids += it } }
                 }
             }
         }

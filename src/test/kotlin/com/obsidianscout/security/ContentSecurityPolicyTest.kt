@@ -22,6 +22,13 @@ class ContentSecurityPolicyTest {
     }
 
     @Test
+    fun framesAreLimitedToTheYoutubePrivacyEmbed() {
+        val frameSrc = ContentSecurityPolicy.DEFAULT.substringAfter("frame-src ").substringBefore(";")
+        assertEquals("https://www.youtube-nocookie.com", frameSrc)
+        assertTrue(ContentSecurityPolicy.DEFAULT.contains("frame-ancestors 'self'"))
+    }
+
+    @Test
     fun hashesOnlyInlineExecutableScriptsWithLineEndingsNormalised() {
         val html = "<head><script>a()\r\nb()</script><script src=\"/x.js\"></script>" +
             "<script type=\"module\">import './y.js'</script><script type=\"application/ld+json\">{}</script>" +

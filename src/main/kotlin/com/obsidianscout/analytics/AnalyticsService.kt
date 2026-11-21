@@ -177,7 +177,7 @@ object AnalyticsService {
             config.fields.forEach { field ->
                 val fType = field.type.lowercase()
                 if (fType in listOf("label", "divider", "section", "header")) return@forEach
-                if (fType in listOf("counter", "number", "slider", "rating")) {
+                if (fType in listOf("counter", "number", "slider", "rating", "timer")) {
                     metrics[field.id] = weightedMean { readNumber(it.data[field.id]) } ?: 0.0
                 } else if (fType in listOf("checkbox", "toggle", "boolean")) {
                     val share = weightedMean { e -> readBoolean(e.data[field.id])?.let { if (it) 1.0 else 0.0 } }
@@ -289,6 +289,9 @@ object AnalyticsService {
                     if (fieldType == "counter" || field.pointsPer != null) {
                         widgets.add(AnalyticsWidget(id = "sum_${field.id}", title = "Total $titleLabel", type = "sum", fieldId = field.id))
                     }
+                }
+                "timer" -> {
+                    widgets.add(AnalyticsWidget(id = "avg_${field.id}", title = "Avg $titleLabel (s)", type = "avg", fieldId = field.id))
                 }
                 "checkbox" -> {
                     widgets.add(AnalyticsWidget(id = "rate_${field.id}", title = "$titleLabel Rate", type = "rate", fieldId = field.id))

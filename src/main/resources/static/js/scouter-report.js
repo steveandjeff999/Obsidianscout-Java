@@ -94,7 +94,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const tbody = document.querySelector("#scouter-table tbody");
         const quiet = Obsidianscout.isQuietRefresh();
         if (!quiet) {
-            tbody.innerHTML = `<tr><td colspan="12" class="notice">${esc(t("scouter-report.loading", "Building report..."))}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="13" class="notice">${esc(t("scouter-report.loading", "Building report..."))}</td></tr>`;
         }
         try {
             report = await Obsidianscout.request(`/api/admin/scouter-report${queryString()}`);
@@ -185,6 +185,19 @@ function rateCell(pct, done, total) {
     return `<span class="rate-bar"><span style="width:${width}%"></span></span>${esc(pct)}% <span class="notice">(${done}/${total})</span>`;
 }
 
+function accuracyCell(s) {
+    if (s.accuracyPct == null || !s.accuracyAlliances) return `<span class="notice">-</span>`;
+    const bias = Number(s.accuracyBias || 0);
+    const biasText = bias > 0
+        ? t("scouter-report.accuracy_over", "over-counts by {n} pts on average").replace("{n}", bias)
+        : bias < 0
+            ? t("scouter-report.accuracy_under", "under-counts by {n} pts on average").replace("{n}", Math.abs(bias))
+            : t("scouter-report.accuracy_even", "no lean either way");
+    const title = `${s.accuracyAlliances} ${t("scouter-report.accuracy_alliances", "alliances checked")} · ±${s.accuracyAvgError} ${t("scouter-report.accuracy_pts", "pts off per alliance")} · ${biasText}`;
+    const width = Math.max(0, Math.min(100, s.accuracyPct));
+    return `<span title="${esc(title)}"><span class="rate-bar"><span style="width:${width}%"></span></span>${esc(s.accuracyPct)}% <span class="notice">(±${esc(s.accuracyAvgError)}, n=${s.accuracyAlliances})</span></span>`;
+}
+
 function compareRows(a, b) {
     const av = a[sortBy];
     const bv = b[sortBy];
@@ -236,7 +249,10 @@ function render() {
     ].join("");
 
     const label = scopeLabel(report);
-    meta.textContent = `${t("scouter-report.team", "Team")} ${report.teamNumber} · ${label} · ${t("scouter-report.generated", "Generated")} ${formatDate(report.generatedAt)}${report.includePrescout ? ` · ${t("scouter-report.with_prescout", "includes prescout")}` : ""}`;
+    const accuracyNote = report.accuracySeason
+        ? ` · ${t("scouter-report.accuracy_note", "Accuracy uses {season} events").replace("{season}", report.accuracySeason)}`
+        : "";
+    meta.textContent = `${t("scouter-report.team", "Team")} ${report.teamNumber} · ${label} · ${t("scouter-report.generated", "Generated")} ${formatDate(report.generatedAt)}${report.includePrescout ? ` · ${t("scouter-report.with_prescout", "includes prescout")}` : ""}${accuracyNote}`;
     printHeading.textContent = `${t("scouter-report.title", "Scout Report")} - ${label}`;
 
     const hideInactive = document.getElementById("hide-inactive").checked;
@@ -264,6 +280,7 @@ function render() {
             <td class="num">${s.teamsScouted}</td>
             <td class="num">${s.avgCompletenessPct == null ? "-" : `${s.avgCompletenessPct}%`}</td>
             <td class="num">${s.discrepancyEntries}</td>
+            <td class="num">${accuracyCell(s)}</td>
             <td class="num">${rateCell(s.assignmentCompletionPct, s.assignmentsCompleted, s.assignmentsTotal)}</td>
             <td>${esc(formatDate(s.lastSubmission))}</td>
         </tr>`;
@@ -275,7 +292,7 @@ function render() {
                 <td class="num">${e.qualEntries}</td>
                 <td class="num">${e.matchEntries + e.pitEntries + e.qualEntries}</td>
             </tr>`).join("");
-        return `${main}<tr class="event-breakdown"><td colspan="12">
+        return `${main}<tr class="event-breakdown"><td colspan="13">
             <table class="breakdown-table">
                 <thead><tr>
                     <th>${esc(t("scouter-report.event", "Event"))}</th>

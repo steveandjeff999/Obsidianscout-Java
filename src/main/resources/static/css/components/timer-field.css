@@ -1,0 +1,85 @@
+/* Timer form element (js/components/timer-field.js) */
+.timer-field {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+}
+
+.timer-field .timer-value-input {
+    display: none;
+}
+
+.timer-field .timer-readout {
+    min-width: 120px;
+}
+
+.timer-field .timer-display {
+    font-family: var(--font-mono);
+    font-size: 26px;
+    font-weight: 500;
+    color: var(--ink);
+    line-height: 1.1;
+}
+
+.timer-field.is-running .timer-display {
+    color: var(--accent);
+}
+
+.timer-field .timer-sub {
+    font-size: 13px;
+    color: var(--muted);
+    min-height: 16px;
+}
+
+.timer-field .timer-controls {
+    display: inline-flex;
+    gap: 6px;
+}
+
+.timer-field .timer-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 48px;
+    min-width: 64px;
+    padding: 0 12px;
+    border-radius: var(--radius-sm, var(--radius));
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--ink);
+    font-weight: 600;
+    font-size: 15px;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.timer-field .timer-btn .material-symbols-outlined {
+    font-size: 20px;
+}
+
+.timer-field .timer-btn:active {
+    transform: scale(0.96);
+}
+
+.timer-field .timer-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+    transform: none;
+}
+
+.timer-field .timer-start {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-primary, #fff);
+    min-width: 96px;
+}
+
+.timer-field .timer-lap {
+    min-width: 88px;
+}
+
+.timer-field .timer-btn.hidden {
+    display: none;
+}

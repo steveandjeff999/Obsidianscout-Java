@@ -924,6 +924,29 @@ fun Route.adminRoutes() {
                         }
                     }
                 }
+                // Season canvas defaults: the canvas scouting form teams get for a season until they choose their own.
+                route("/season-canvas") {
+                    get {
+                        call.requireSuperAdmin()
+                        call.respond(com.obsidianscout.config.SeasonCanvasService.list(call.request.queryParameters["program"] ?: "FRC"))
+                    }
+                    get("/{program}/{year}") {
+                        call.requireSuperAdmin()
+                        val found = com.obsidianscout.config.SeasonCanvasService.get(call.parameters["program"] ?: "", call.parameters["year"]?.toIntOrNull())
+                            ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "No canvas default for that season")
+                        call.respond(found)
+                    }
+                    put("/{program}/{year}") {
+                        val session = call.requireSuperAdmin()
+                        val body = call.receive<com.obsidianscout.config.SeasonCanvasUpdate>()
+                        call.respond(com.obsidianscout.config.SeasonCanvasService.put(call.parameters["program"] ?: "", call.parameters["year"]?.toIntOrNull(), body.layout, session.username))
+                    }
+                    delete("/{program}/{year}") {
+                        call.requireSuperAdmin()
+                        com.obsidianscout.config.SeasonCanvasService.delete(call.parameters["program"] ?: "", call.parameters["year"]?.toIntOrNull())
+                        call.respond(HttpStatusCode.NoContent)
+                    }
+                }
                 route("/cluster") {
                     get("/status") {
                         val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()

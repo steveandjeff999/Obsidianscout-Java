@@ -13,7 +13,7 @@ import { localize } from '../base/i18n.js';
 const LAYOUT_TYPES = new Set(['section', 'divider', 'header']);
 const DISPLAY_ONLY_TYPES = new Set(['static_text', 'label', 'info']);
 const CHECKBOX_TYPES = new Set(['checkbox', 'toggle', 'boolean']);
-const NUMBER_TYPES = new Set(['counter', 'number', 'stepper', 'slider', 'range', 'rating', 'stars']);
+const NUMBER_TYPES = new Set(['counter', 'number', 'stepper', 'slider', 'range', 'rating', 'stars', 'timer']);
 const SELECT_TYPES = new Set(['select', 'dropdown', 'choice', 'radio']);
 const TEXTAREA_TYPES = new Set(['textarea', 'notes']);
 const IMAGE_TYPES = new Set(['image', 'image_upload', 'photo']);

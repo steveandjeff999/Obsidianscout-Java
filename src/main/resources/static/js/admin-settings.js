@@ -18,6 +18,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // DOM references declared in outer scope so they can be re-bound and accessed by helper functions
     let editor, saveButton, exportButton, importInput;
     let btnVisual, btnRaw, containerVisual, containerRaw;
+    let btnCanvas, containerCanvas, canvasEditor = null;
     let configTitleInput, configVersionInput, btnAddField, visualFieldsList, configModeButtons;
     let adminPanelWrapper = null;
     let adminPanel = null;
@@ -224,6 +225,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             btnRaw = document.getElementById("btn-raw-editor");
             containerVisual = document.getElementById("visual-editor-container");
             containerRaw = document.getElementById("raw-editor-container");
+            btnCanvas = document.getElementById("btn-canvas-editor");
+            containerCanvas = document.getElementById("canvas-editor-container");
             configTitleInput = document.getElementById("config-title");
             configVersionInput = document.getElementById("config-version");
             btnAddField = document.getElementById("btn-add-field");
@@ -259,6 +262,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                         btnVisual.classList.add("active");
                         containerRaw.classList.add("hidden");
                         containerVisual.classList.remove("hidden");
+                        hideCanvasEditor();
                     } catch (err) {
                         Obsidianscout.showToast("Failed to parse config properties", "error");
                     }
@@ -270,6 +274,27 @@ document.addEventListener("DOMContentLoaded", async () => {
                     btnRaw.classList.add("active");
                     containerVisual.classList.add("hidden");
                     containerRaw.classList.remove("hidden");
+                    hideCanvasEditor();
+                });
+            }
+
+            // Canvas layout editor (match form only): places field widgets, tap buttons and images on a canvas.
+            if (btnCanvas && containerCanvas && btnVisual && containerRaw) {
+                btnCanvas.addEventListener("click", () => {
+                    if (!containerRaw.classList.contains("hidden")) {
+                        btnVisual.click(); // applies the raw JSON first, or refuses if it doesn't parse
+                        if (containerVisual.classList.contains("hidden")) return;
+                    }
+                    btnVisual.classList.remove("active");
+                    btnRaw.classList.remove("active");
+                    btnCanvas.classList.add("active");
+                    containerVisual.classList.add("hidden");
+                    containerRaw.classList.add("hidden");
+                    containerCanvas.classList.remove("hidden");
+                    renderCanvasTab();
+                    loadSeasonCanvas().then(() => {
+                        if (!containerCanvas.classList.contains("hidden")) renderCanvasTab();
+                    });
                 });
             }
 
@@ -1316,6 +1341,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!rawType) return "text";
         const t = String(rawType).toLowerCase().trim();
         if (t === "counter") return "counter";
+        if (t === "timer" || t === "stopwatch" || t === "cycle_timer") return "timer";
         if (t === "number" || t === "int" || t === "integer" || t === "float") return "number";
         if (t === "rating" || t === "stars" || t === "star") return "rating";
         if (t === "checkbox" || t === "toggle" || t === "bool" || t === "boolean") return "checkbox";
@@ -1341,7 +1367,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             fields: fields,
             analytics: Array.isArray(parsed.analytics) ? parsed.analytics : [],
             // The server and app use the snake_case key; older web saves wrote camelCase.
-            enableRobotRoleCollection: !!(parsed.enableRobotRoleCollection || parsed.enable_robot_role_collection)
+            enableRobotRoleCollection: !!(parsed.enableRobotRoleCollection || parsed.enable_robot_role_collection),
+            // Optional canvas layout (match form); kept as-is so saving from any editor never drops it.
+            ...(parsed.layout && typeof parsed.layout === "object" && !Array.isArray(parsed.layout) ? { layout: parsed.layout } : {})
         };
     }
 
@@ -1824,7 +1852,120 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     });
 
+    let canvasSeasonNote = null, canvasEditorRoot = null;
+    let seasonCanvas = null, seasonCanvasRequest = null;
+
+    /** The season default canvas a superadmin may have set ({ year, layout|null }), fetched once per page. */
+    function loadSeasonCanvas() {
+        if (!seasonCanvasRequest) {
+            seasonCanvasRequest = Obsidianscout.request("/api/config/season-canvas")
+                .then((r) => { seasonCanvas = r || null; })
+                .catch(() => { seasonCanvas = null; });
+        }
+        return seasonCanvasRequest;
+    }
+
+    function ensureCanvasEditor() {
+        if (canvasEditor || !containerCanvas || !window.ObsidianCanvasEditor) return canvasEditor;
+        containerCanvas.innerHTML = "";
+        canvasSeasonNote = document.createElement("div");
+        canvasSeasonNote.className = "cfe-season-note";
+        canvasEditorRoot = document.createElement("div");
+        containerCanvas.append(canvasSeasonNote, canvasEditorRoot);
+        canvasEditor = window.ObsidianCanvasEditor.create(canvasEditorRoot, {
+            getLayout: () => currentConfig.layout,
+            getFields: () => currentConfig.fields || [],
+            onChange: (layout) => {
+                currentConfig.layout = layout;
+                updateRawFromVisual();
+            }
+        });
+        return canvasEditor;
+    }
+
+    function teamHasOwnLayout() {
+        return !!(currentConfig.layout && typeof currentConfig.layout === "object" && !Array.isArray(currentConfig.layout));
+    }
+
+    function setTeamLayout(layout) {
+        if (layout === null) delete currentConfig.layout;
+        else currentConfig.layout = layout;
+        updateRawFromVisual();
+        renderCanvasTab();
+    }
+
+    /**
+     * The Canvas Layout tab: the editor, plus where the season default (set by superadmins) stands. A team with no
+     * layout of its own follows that default; any choice it makes here (its own canvas, or the classic list) wins.
+     */
+    function renderCanvasTab() {
+        if (!ensureCanvasEditor()) return;
+        const season = seasonCanvas && seasonCanvas.layout ? seasonCanvas : null;
+        const mk = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text) el.textContent = text; return el; };
+        const btn = (cls, iconName, label, onClick) => {
+            const b = mk("button", cls);
+            b.type = "button";
+            b.innerHTML = `<span class="material-symbols-outlined" aria-hidden="true">${iconName}</span>`;
+            b.append(document.createTextNode(" " + label));
+            b.addEventListener("click", onClick);
+            return b;
+        };
+        canvasSeasonNote.innerHTML = "";
+
+        if (season && !teamHasOwnLayout()) {
+            canvasEditorRoot.classList.add("hidden");
+            const card = mk("div", "card soft cfe-season-card");
+            card.append(
+                mk("h3", null, `Your scouts are using the ${season.year} default canvas`),
+                mk("p", "cfe-hint", `The site admins designed a canvas for the ${season.year} season. Teams that haven't made their own choice see it on the Scout page. Anything on it tied to a field your form doesn't have is left out, and those fields are listed under the canvas instead.`),
+                mk("p", "cfe-hint", "Your season year is set on the API keys tab. Pick what your team wants:"));
+            const row = mk("div", "cfe-row");
+            row.append(
+                btn("btn", "edit", "Make my own copy to change", () => setTeamLayout(JSON.parse(JSON.stringify(season.layout)))),
+                btn("btn secondary", "dashboard_customize", "Design my own from my fields", () => setTeamLayout({ mode: "classic", pages: [] })),
+                btn("btn ghost", "view_list", "Use the classic list instead", () => {
+                    setTeamLayout({ mode: "classic", pages: [] });
+                    Obsidianscout.showToast(`Your scouts now get the classic list instead of the ${season.year} default canvas.`, "success");
+                }));
+            card.append(row,
+                mk("p", "cfe-hint", "Staying on the default needs no action: if the site admins change it, your scouts get the update automatically."));
+            canvasSeasonNote.append(card);
+            return;
+        }
+
+        canvasEditorRoot.classList.remove("hidden");
+        if (season) {
+            const note = mk("div", "cfe-season-inline");
+            note.append(
+                mk("span", null, `The site admins have a ${season.year} default canvas. Your team is using its own setting below instead.`),
+                btn("btn ghost", "undo", `Go back to the ${season.year} default`, () => {
+                    if (!confirm(`Switch back to the ${season.year} default canvas? Your team's own canvas design will be removed (you can export it first from Raw JSON).`)) return;
+                    setTeamLayout(null);
+                }));
+            canvasSeasonNote.append(note);
+        }
+        canvasEditor.reload();
+    }
+
+    function hideCanvasEditor() {
+        if (btnCanvas) btnCanvas.classList.remove("active");
+        if (containerCanvas) containerCanvas.classList.add("hidden");
+    }
+
+    /** Canvas layouts are for the match form; keeps the tab and an open editor in step with the config. */
+    function syncCanvasEditor() {
+        if (!btnCanvas) return;
+        const allowed = activeConfigKind === "game" && !!window.ObsidianCanvasEditor;
+        btnCanvas.classList.toggle("hidden", !allowed);
+        if (!allowed) {
+            if (containerCanvas && !containerCanvas.classList.contains("hidden")) showVisualEditor();
+            return;
+        }
+        if (canvasEditor && containerCanvas && !containerCanvas.classList.contains("hidden")) renderCanvasTab();
+    }
+
     function showVisualEditor() {
+        hideCanvasEditor();
         if (!btnVisual || !btnRaw || !containerVisual || !containerRaw) {
             return;
         }
@@ -1835,6 +1976,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     function renderVisualFields() {
+        syncCanvasEditor();
         if (!visualFieldsList) return;
         visualFieldsList.classList.remove("view-only-editor");
         visualFieldsList.innerHTML = "";
@@ -2021,6 +2163,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             { value: "counter", label: "COUNTER (+ / -)" },
             { value: "number", label: "NUMBER" },
             { value: "rating", label: "RATING (1-5)" },
+            { value: "timer", label: "TIMER (STOPWATCH / CYCLES)" },
             { value: "checkbox", label: "CHECKBOX / TOGGLE" },
             { value: "select", label: "DROPDOWN (SELECT)" },
             { value: "section", label: "SECTION HEADER" },
@@ -2029,7 +2172,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             { value: "image", label: "IMAGE (PHOTO UPLOAD)" }
         ];
 
-        const typesList = [...standardTypes];
+        // Timers are for match scouting only; pit and qualitative pages have no timer widget.
+        // A timer already in one of those forms is still listed (below) so the admin can change it.
+        const typesList = standardTypes.filter(t => t.value !== "timer" || activeConfigKind === "game");
         if (!typesList.some(t => t.value === canonicalType)) {
             typesList.push({ value: canonicalType, label: String(field.type).toUpperCase() });
         }
@@ -2071,6 +2216,14 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
             if (field.type !== "select") {
                 delete field.options;
+            }
+            if (field.type === "timer") {
+                delete field.min;
+                delete field.max;
+                delete field.step;
+                if (!field.mode) field.mode = "stopwatch";
+            } else {
+                delete field.mode;
             }
             updateRawFromVisual();
             renderVisualFields();
@@ -2370,6 +2523,33 @@ document.addEventListener("DOMContentLoaded", async () => {
             body.appendChild(divPoints);
         }
         
+        // 6b. Timer mode
+        if (field.type === "timer") {
+            const tt = (k, d) => (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t(k, d) : d;
+            const divMode = document.createElement("div");
+            divMode.className = "field";
+            const labelMode = document.createElement("label");
+            labelMode.textContent = tt('settings.timer_mode', 'Timer mode');
+            const selectMode = document.createElement("select");
+            [
+                { value: "stopwatch", label: tt('settings.timer_mode_stopwatch', 'Stopwatch: total seconds (start / stop)') },
+                { value: "cycle", label: tt('settings.timer_mode_cycle', 'Cycle timer: average seconds per lap') }
+            ].forEach((m) => {
+                const opt = document.createElement("option");
+                opt.value = m.value;
+                opt.textContent = m.label;
+                opt.selected = (field.mode || "stopwatch") === m.value;
+                selectMode.appendChild(opt);
+            });
+            selectMode.addEventListener("change", (e) => {
+                field.mode = e.target.value;
+                updateRawFromVisual();
+            });
+            divMode.appendChild(labelMode);
+            divMode.appendChild(selectMode);
+            body.appendChild(divMode);
+        }
+
         // 7. Select options list builder
         if (field.type === "select") {
             const optBuilder = document.createElement("div");
@@ -2765,7 +2945,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             analytics: config.analytics || [],
             enableRobotRoleCollection: enableRoles,
             // Scouting forms read the snake_case key.
-            ...(activeConfigKind === "qual" ? { enable_robot_role_collection: enableRoles } : {})
+            ...(activeConfigKind === "qual" ? { enable_robot_role_collection: enableRoles } : {}),
+            ...(activeConfigKind === "game" && config.layout && typeof config.layout === "object" && !Array.isArray(config.layout) ? { layout: config.layout } : {})
         };
     }
 
@@ -2780,12 +2961,12 @@ function wireTabs() {
     const tabs = document.querySelectorAll(".tab");
     const panels = document.querySelectorAll("[data-panel]");
     tabs.forEach((tab) => {
-        if (tab.id === "btn-visual-editor" || tab.id === "btn-raw-editor" || tab.dataset.configKind) {
+        if (tab.id === "btn-visual-editor" || tab.id === "btn-raw-editor" || tab.id === "btn-canvas-editor" || tab.dataset.configKind) {
             return;
         }
         tab.addEventListener("click", () => {
             tabs.forEach((item) => {
-                if (item.id !== "btn-visual-editor" && item.id !== "btn-raw-editor" && !item.dataset.configKind) {
+                if (item.id !== "btn-visual-editor" && item.id !== "btn-raw-editor" && item.id !== "btn-canvas-editor" && !item.dataset.configKind) {
                     item.classList.remove("active");
                 }
             });

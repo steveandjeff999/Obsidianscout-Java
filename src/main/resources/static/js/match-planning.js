@@ -1037,11 +1037,63 @@
         // 4. Render Draggable Square Team Markers on field
         renderFieldMarkers();
 
+        // 4b. Match videos (this match, or each team's most recent one at the event)
+        renderMatchVideos(match);
+
         // 5. Load stats for all 6 teams in this match
         await loadAllTeamStats(match);
 
         // 6. Start resilient polling sync
         scheduleNextPoll(10000);
+    }
+
+    function renderMatchVideos(match) {
+        const card = document.getElementById("match-video-card");
+        const list = document.getElementById("match-video-list");
+        const note = document.getElementById("match-video-note");
+        if (!card || !list || typeof Obsidianscout.createMatchVideoPlayer !== "function") return;
+        list.replaceChildren();
+
+        const addRow = (labelText, videos, title) => {
+            const player = Obsidianscout.createMatchVideoPlayer(videos, { label: title });
+            if (!player) return false;
+            const row = document.createElement("div");
+            row.className = "match-video-row";
+            const label = document.createElement("div");
+            label.className = "match-video-row-label";
+            label.textContent = labelText;
+            row.append(label, player);
+            list.appendChild(row);
+            return true;
+        };
+
+        const matchTitle = (m) => Obsidianscout.localize(m.label) || m.label || m.matchKey;
+        let shown = 0;
+        if (Array.isArray(match.videos) && match.videos.length) {
+            if (addRow(matchTitle(match), match.videos, matchTitle(match))) shown++;
+            note.textContent = "Video of this match from The Blue Alliance.";
+        } else {
+            // Upcoming match: each robot's latest match at this event that has a video.
+            const timeOf = (m) => m.actualTime || m.scheduledTime || 0;
+            const withVideo = (state.matches || [])
+                .filter((m) => m.matchKey !== match.matchKey && Array.isArray(m.videos) && m.videos.length)
+                .sort((a, b) => timeOf(b) - timeOf(a));
+            const stations = [
+                ...(match.redTeams || []).map((k) => ({ key: k, color: "Red" })),
+                ...(match.blueTeams || []).map((k) => ({ key: k, color: "Blue" }))
+            ];
+            stations.forEach(({ key, color }) => {
+                const num = extractNumericTeamStr(key);
+                if (!num) return;
+                const last = withVideo.find((m) =>
+                    [...(m.redTeams || []), ...(m.blueTeams || [])].some((k) => extractNumericTeamStr(k) === num));
+                if (!last) return;
+                const display = typeof Obsidianscout.formatTeam === "function" ? Obsidianscout.formatTeam(key) : num;
+                if (addRow(`${color} ${display} · ${matchTitle(last)}`, last.videos, `${display} ${matchTitle(last)}`)) shown++;
+            });
+            note.textContent = "Each team's most recent match at this event with a video on The Blue Alliance.";
+        }
+        card.classList.toggle("hidden", shown === 0);
     }
 
     function updateDriverStations(match) {

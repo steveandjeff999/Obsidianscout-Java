@@ -52,8 +52,10 @@ object BlobService {
     const val KIND_EVENT_FILE = "event_file"
     const val KIND_PIT_PHOTO = "pit_photo"
     const val KIND_SCOUTING_PHOTO = "scouting_photo"
+    /** Images an admin placed on a canvas scouting form (backgrounds, field maps). Referenced from config JSON. */
+    const val KIND_FORM_IMAGE = "form_image"
     /** Kinds served by GET /api/blobs/{id} to anyone holding the (unguessable) URL, like the base64 they replace. */
-    val PUBLIC_URL_KINDS = setOf(KIND_PIT_PHOTO, KIND_SCOUTING_PHOTO)
+    val PUBLIC_URL_KINDS = setOf(KIND_PIT_PHOTO, KIND_SCOUTING_PHOTO, KIND_FORM_IMAGE)
 
     private const val BACKEND_SEAWEED = "seaweed"
     private const val BACKEND_LOCAL = "local"

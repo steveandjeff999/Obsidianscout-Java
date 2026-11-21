@@ -13,7 +13,8 @@ object ContentSecurityPolicy {
 
     private const val REST = "worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; " +
         "img-src 'self' data: blob:; font-src 'self' data: https://cdnjs.cloudflare.com; " +
-        "connect-src 'self' https://cloudflareinsights.com; frame-ancestors 'self'; object-src 'none'; " +
+        "connect-src 'self' https://cloudflareinsights.com; frame-src https://www.youtube-nocookie.com; " +
+        "frame-ancestors 'self'; object-src 'none'; " +
         "base-uri 'self'; form-action 'self';"
 
     /** For everything that isn't a rendered page (assets, errors, non-JSON API responses). No inline script at all. */

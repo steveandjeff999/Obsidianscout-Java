@@ -398,7 +398,7 @@ function renderAnalytics() {
                 let pts = 0;
                 let numVal = 0;
 
-                if (["counter", "number", "slider", "rating"].includes(f.type)) {
+                if (["counter", "number", "slider", "rating", "timer"].includes(f.type)) {
                     numVal = parseFloat(val) || 0;
                     pts = numVal * (f.pointsPer || 0);
                     if (fieldStats[f.id]) {
@@ -531,7 +531,7 @@ function renderMetricsTable(fieldStats) {
         let maxVal = "--";
         let totalVal = "--";
 
-        if (["counter", "number", "slider", "rating"].includes(f.type)) {
+        if (["counter", "number", "slider", "rating", "timer"].includes(f.type)) {
             const avg = st.count > 0 ? (st.sum / st.count) : 0;
             avgRate = avg.toFixed(1);
             maxVal = st.max.toFixed(0);

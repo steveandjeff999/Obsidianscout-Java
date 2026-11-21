@@ -307,7 +307,11 @@ object ValidationService {
                     blueAlliance = blueAlliance,
                     isFullyScouted = isMatchFullyScouted,
                     hasAnomaly = hasMatchAnomaly,
-                    matchWarning = matchWarning
+                    matchWarning = matchWarning,
+                    videos = if (dataJson.contains("\"videos\"")) {
+                        runCatching { MatchCanonical.extractVideos(JsonSupport.json.parseToJsonElement(dataJson).jsonObject) }
+                            .getOrDefault(emptyList())
+                    } else emptyList()
                 )
             }
 
